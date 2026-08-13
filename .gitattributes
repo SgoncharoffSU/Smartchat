@@ -1,0 +1,9 @@
+# Единые переводы строк (LF) для кросс-платформенной работы Windows <-> Linux (code-server)
+* text=auto eol=lf
+
+# Скрипты и конфиги — строго LF, без CRLF
+*.sh text eol=lf
+*.md text eol=lf
+*.ts text eol=lf
+*.js text eol=lf
+*.json text eol=lf
