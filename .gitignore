@@ -1,0 +1,31 @@
+# Зависимости и сборка
+node_modules/
+dist/
+
+# Секреты и персональные данные (запрещено коммитить)
+.env
+data/
+
+# Служебные скрипты, логи и артефакты исследования — не часть проекта
+*.log
+*.txt
+*.py
+*.tar.gz
+_*
+avito_*
+cabinet/
+.vscode/
+PROJECT_NOTES.md
+DevPortal.js
+ctx.js
+developers.js
+mods.js
+paths.js
+find_bundle.js
+find_spec.js
+extract_avito.js
+fetch_avito.js
+fetch_devportal.js
+grep_devportal.js
+inspect*.js
+research_avito.js
