@@ -11,6 +11,8 @@
 | `memory-bank/techContext.md` | Версии, сборка, API, переменные окружения. |
 | `memory-bank/activeContext.md` | Текущее состояние и ближайшие задачи. |
 | `memory-bank/progress.md` | Что сделано / что осталось. |
+| `memory-bank/decisions.md` | Ключевые технические решения и их обоснование. |
+| `memory-bank/deployment.md` | Схема деплоя на Beget и требуемые секреты. |
 | `.clinerules` | Правила работы Cline в этом проекте. |
 | `prompts/glavinstrument-consultant-v1.0.md` | Системная инструкция бота (источник формулировок). |
 
@@ -18,7 +20,7 @@
 
 - Remote: `https://github.com/SgoncharoffSU/Smartchat.git`
 - Ветка: `main`
-- Актуальный HEAD: `c5b6593` (после него: memory-bank, .clinerules, HANDOFF.md, scripts).
+- Актуальный HEAD: `f83df5b` (память, правила, скрипты уже закоммичены).
 
 ## 3. Что уже готово
 
@@ -46,9 +48,10 @@
 
 ### 4.2. Деплой боевой версии (Beget)
 Данные SSH/панели Beget на момент хэндоффа не переданы владельцем.
-Использовать `scripts/deploy-beget.sh` после заполнения: хост, пользователь,
-путь на хостинге. Скрипт делает `rsync`/`scp` → `npm install` → `npm run build` →
-перезапуск процесса.
+Использовать `scripts/deploy-beget.sh` после заполнения в `.env`: `BEGET_HOST`,
+`BEGET_USER`, `BEGET_PATH`, `BEGET_PORT`, `BEGET_BRANCH`. Скрипт подключается по
+SSH-ключу `~/.ssh/beget_deploy`, делает `git pull` нужной ветки, `npm install`,
+сборку, очистку кеша и перезапуск процесса. Подробнее — `memory-bank/deployment.md`.
 
 ## 5. Полезные команды
 

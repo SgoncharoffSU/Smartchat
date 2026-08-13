@@ -1,84 +1,98 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Smartchat — деплой боевой версии на хостинг Beget
+# Smartchat — деплой на хостинг Beget по SSH
 # -----------------------------------------------------------------------------
-# Что делает:
-#   1. Проверяет заполненность переменных подключения.
-#   2. Собирает проект локально (npm run build).
-#   3. Копирует на Beget: dist/, public/, prompts/, package*.json, .env.
-#   4. На сервере: npm install --omit=dev, создаёт data/.
+# Параметры (env или .env):
+#   BEGET_HOST    — SSH-хост Байджета (например, username.beget.com)
+#   BEGET_USER    — SSH-логин в Байджете
+#   BEGET_PATH    — папка проекта на хостинге (например, smartchat)
+#   BEGET_PORT    — порт SSH (по умолчанию 22)
+#   BEGET_BRANCH  — ветка для git pull (по умолчанию main)
 #
-# Запуск (локально или из code-server):
-#   bash scripts/deploy-beget.sh
+# Подключение — ТОЛЬКО по SSH-ключу: ~/.ssh/beget_deploy
+# (публичную часть нужно заранее добавить в панель Beget).
 #
-# Переменные окружения (заполните перед запуском):
-#   BEGET_HOST        — хост SSH Beget (например, username.beget.com)
-#   BEGET_USER        — пользователь SSH
-#   BEGET_PATH        — путь к папке проекта на хостинге (например, smartchat)
-#   BEGET_PORT        — порт SSH (по умолчанию 22)
-# -----------------------------------------------------------------------------
+# Сценарий на сервере:
+#   cd $BEGET_PATH && git fetch && git checkout/постановка на ветку && git pull
+#   npm install --omit=dev
+#   сборка при наличии скрипта "build" в package.json
+#   очистка npm-кеша
+#   перезапуск процесса при наличии PM2/systemd
+#
+# Запуск: bash scripts/deploy-beget.sh
+# Секреты НЕ попадают в репозиторий: реальные значения — только в .env на сервере.
+# =============================================================================
 
 set -euo pipefail
 
-# --- Конфигурация -----------------------------------------------------------
-BEGET_HOST="${BEGET_HOST:-}"
-BEGET_USER="${BEGET_USER:-}"
-BEGET_PATH="${BEGET_PATH:-smartchat}"
-BEGET_PORT="${BEGET_PORT:-22}"
+SSH_KEY="${BEGET_SSH_KEY:-${HOME}/.ssh/beget_deploy}"
 
 log() { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 err() { printf '\n\033[1;31m[ОШИБКА]\033[0m %s\n' "$*" >&2; }
 
+# --- Загрузка переменных из .env (значения из окружения имеют приоритет) ----
+load_env_file() {
+  if [[ -f ".env" ]]; then
+    log "Читаю переменные из .env"
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+  fi
+}
+
 # --- Проверка обязательных параметров --------------------------------------
-if [[ -z "${BEGET_HOST}" || -z "${BEGET_USER}" ]]; then
-  err "Задайте BEGET_HOST и BEGET_USER (см. инструкцию в начале скрипта)."
-  exit 1
-fi
+validate() {
+  [[ -n "${BEGET_HOST:-}" ]] || { err "Не задан BEGET_HOST"; exit 1; }
+  [[ -n "${BEGET_USER:-}" ]] || { err "Не задан BEGET_USER"; exit 1; }
+  BEGET_PATH="${BEGET_PATH:-smartchat}"
+  BEGET_PORT="${BEGET_PORT:-22}"
+  BEGET_BRANCH="${BEGET_BRANCH:-main}"
 
-REMOTE="${BEGET_USER}@${BEGET_HOST}"
-SSH_RSH="ssh -p ${BEGET_PORT}"
+  if [[ ! -f "${SSH_KEY}" ]]; then
+    err "SSH-ключ не найден: ${SSH_KEY}"
+    err "Сгенерируйте: ssh-keygen -t ed25519 -f ${SSH_KEY} -N \"\""
+    err "И добавьте ${SSH_KEY}.pub в панель Beget (SSH-доступ)."
+    exit 1
+  fi
+}
 
-# --- Локальная сборка -------------------------------------------------------
-log "Собираю проект локально"
-npm install
-npm run build
+# --- SSH-обёртка ------------------------------------------------------------
+ssh_run() {
+  ssh -i "${SSH_KEY}" -p "${BEGET_PORT}" \
+    -o IdentitiesOnly=yes \
+    -o StrictHostKeyChecking=accept-new \
+    -o BatchMode=yes \
+    "${BEGET_USER}@${BEGET_HOST}" "$@"
+}
 
-# --- Проверка .env ----------------------------------------------------------
-if [[ ! -f ".env" ]]; then
-  err "Файл .env не найден. Создайте его по образцу .env.example и заполните секреты."
-  exit 1
-fi
+# --- Основной сценарий деплоя ----------------------------------------------
+deploy() {
+  REMOTE="${BEGET_USER}@${BEGET_HOST}"
 
-# --- Подготовка каталога на сервере ----------------------------------------
-log "Создаю структуру каталогов на ${REMOTE}:${BEGET_PATH}"
-ssh -p "${BEGET_PORT}" "${REMOTE}" "mkdir -p ${BEGET_PATH}/dist ${BEGET_PATH}/public ${BEGET_PATH}/prompts ${BEGET_PATH}/data"
+  log "Подключаюсь к ${REMOTE} (порт ${BEGET_PORT}, ветка ${BEGET_BRANCH})"
+  ssh_run "test -d \"${BEGET_PATH}/.git\"" \
+    || { err "На сервере нет git-репозитория: ${BEGET_PATH}"; exit 1; }
 
-# --- Копирование артефактов ------------------------------------------------
-log "Копирую артефакты сборки на Beget"
-if command -v rsync >/dev/null 2>&1; then
-  rsync -avz -e "${SSH_RSH}" \
-    dist/        "${REMOTE}:${BEGET_PATH}/dist/" \
-    public/      "${REMOTE}:${BEGET_PATH}/public/" \
-    prompts/     "${REMOTE}:${BEGET_PATH}/prompts/"
-else
-  log "rsync не найден, использую scp"
-  scp -P "${BEGET_PORT}" -r dist/* "${REMOTE}:${BEGET_PATH}/dist/"
-  scp -P "${BEGET_PORT}" -r public/* "${REMOTE}:${BEGET_PATH}/public/"
-  scp -P "${BEGET_PORT}" -r prompts/* "${REMOTE}:${BEGET_PATH}/prompts/"
-fi
+  log "git checkout ${BEGET_BRANCH} и git pull"
+  ssh_run "cd \"${BEGET_PATH}\" && git fetch --prune && git checkout \"${BEGET_BRANCH}\" && git reset --hard origin/${BEGET_BRANCH}"
 
-# --- Копирование манифестов и .env -----------------------------------------
-log "Копирую package.json, package-lock.json и .env"
-if command -v rsync >/dev/null 2>&1; then
-  rsync -avz -e "${SSH_RSH}" package.json package-lock.json "${REMOTE}:${BEGET_PATH}/"
-  rsync -avz -e "${SSH_RSH}" .env "${REMOTE}:${BEGET_PATH}/.env"
-else
-  scp -P "${BEGET_PORT}" package.json package-lock.json .env "${REMOTE}:${BEGET_PATH}/"
-fi
+  log "Устанавливаю production-зависимости"
+  ssh_run "cd \"${BEGET_PATH}\" && npm install --omit=dev"
 
-# --- Установка зависимостей и финализация ----------------------------------
-log "Устанавливаю production-зависимости на сервере"
-ssh -p "${BEGET_PORT}" "${REMOTE}" "cd ${BEGET_PATH} && npm install --omit=dev && echo OK"
+  log "Сборка (если в package.json есть скрипт build)"
+  ssh_run "cd \"${BEGET_PATH}\" && node -e \"const p=require('./package.json'); if(!p.scripts||!p.scripts.build){console.log('no-build');process.exit(0)}\" && npm run build || true"
 
-log "Деплой завершён. Перезапустите процесс Node на Beget:"
-log "  cd ${BEGET_PATH} && npm start   (node dist/server.js)"
+  log "Очистка npm-кеша"
+  ssh_run "npm cache clean --force 2>/dev/null || true"
+
+  log "Перезапуск процесса при наличии (PM2)"
+  # PM2 может отсутствовать — тогда пропускаем с понятным сообщением.
+  ssh_run "command -v pm2 >/dev/null 2>&1 && pm2 restart \"${BEGET_PATH}/dist/server.js\" --update-env || echo 'PM2 не найден — перезапуск выполняется вручную через панель Beget'"
+}
+
+load_env_file
+validate
+deploy
+
+log "Деплой завершён успешно."

@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Smartchat — настройка среды разработки code-server на VPS (Ubuntu/Debian)
+# Smartchat — установка code-server на Ubuntu/Debian VPS
 # -----------------------------------------------------------------------------
 # Что делает:
-#   1. Обновляет систему и ставит базовые пакеты (curl, git, build-essential).
-#   2. Устанавливает Node.js 20 LTS из официального репозитория NodeSource.
-#   3. Устанавливает code-server (браузерная VS Code) из официального скрипта.
-#   4. Создаёт systemd-юнит code-server для автозапуска.
-#   5. Клонирует репозиторий Smartchat в ~/Smartchat и ставит зависимости.
+#   1. Обновляет apt и ставит git, curl, nodejs 20, npm, tmux, rsync.
+#   2. Устанавливает code-server официальным скриптом code-server.dev.
+#   3. Настраивает systemd-сервис code-server для текущего пользователя.
+#   4. Создаёт ~/.config/code-server/config.yaml:
+#        bind-addr: 127.0.0.1:8080
+#        auth: password
+#        пароль генерируется НАДЁЖНО и печатается ОДИН раз в конце.
+#   5. Печатает инструкцию по безопасному доступу (SSH-туннель / Tailscale).
+#
+# Идемпотентен: повторный запуск не дублирует установку и не перезаписывает уже
+# сгенерированный пароль (конфиг сохраняется, если пароль уже задан).
 #
 # Запуск (на сервере):
 #   bash scripts/setup-code-server.sh
@@ -15,94 +21,142 @@
 
 set -euo pipefail
 
-# --- Конфигурация (можно переопределить окружением) -------------------------
 CODE_SERVER_PORT="${CODE_SERVER_PORT:-8080}"
-CODE_SERVER_PASSWORD="${CODE_SERVER_PASSWORD:-}"
-GIT_REPO="${GIT_REPO:-https://github.com/SgoncharoffSU/Smartchat.git}"
-GIT_BRANCH="${GIT_BRANCH:-main}"
+CODE_SERVER_USER="${SUDO_USER:-${USER:-$(id -un)}}"
+CONFIG_DIR="/home/${CODE_SERVER_USER}/.config/code-server"
+CONFIG_FILE="${CONFIG_DIR}/config.yaml"
+CODESERVER_BIN="$(command -v code-server || true)"
 
 log() { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 err() { printf '\n\033[1;31m[ОШИБКА]\033[0m %s\n' "$*" >&2; }
 
-# --- Проверка прав ----------------------------------------------------------
-if [[ "$(id -u)" -ne 0 ]]; then
-  err "Запускайте от root: sudo bash scripts/setup-code-server.sh"
-  exit 1
-fi
+require_root() {
+  if [[ "$(id -u)" -ne 0 ]]; then
+    err "Запускайте от root: sudo bash scripts/setup-code-server.sh"
+    exit 1
+  fi
+}
 
-# --- 1. Базовые пакеты ------------------------------------------------------
-log "Обновляю систему и ставлю базовые пакеты"
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -y
-apt-get install -y curl wget git build-essential ca-certificates gnupg
+install_packages() {
+  export DEBIAN_FRONTEND=noninteractive
+  log "Обновляю apt и устанавливаю базовые пакеты"
+  apt-get update -y
+  apt-get install -y curl ca-certificates gnupg tmux rsync
 
-# --- 2. Node.js 20 LTS ------------------------------------------------------
-log "Устанавливаю Node.js 20 LTS (NodeSource)"
-if ! command -v node >/dev/null 2>&1; then
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-  apt-get install -y nodejs
-else
-  log "Node.js уже установлен: $(node -v)"
-fi
-node -v
-npm -v
+  # git
+  if ! command -v git >/dev/null 2>&1; then
+    apt-get install -y git
+  else
+    log "git уже установлен: $(git --version)"
+  fi
 
-# --- 3. code-server ---------------------------------------------------------
-log "Устанавливаю code-server"
-if ! command -v code-server >/dev/null 2>&1; then
-  curl -fsSL https://code-server.dev/install.sh | sh
-else
-  log "code-server уже установлен: $(code-server --version | head -1)"
-fi
+  # Node.js 20 + npm (NodeSource)
+  if ! command -v node >/dev/null 2>&1; then
+    log "Устанавливаю Node.js 20 LTS (NodeSource)"
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
+  else
+    log "Node.js уже установлен: $(node -v)"
+  fi
+  node -v || true
+  npm -v || true
+}
 
-# --- 4. systemd-юнит --------------------------------------------------------
-log "Создаю systemd-юнит code-server"
-CODE_SERVER_BIN="$(command -v code-server)"
+install_code_server() {
+  log "Устанавливаю code-server"
+  if [[ -z "${CODESERVER_BIN}" ]]; then
+    curl -fsSL https://code-server.dev/install.sh | sh
+    CODESERVER_BIN="$(command -v code-server || true)"
+  else
+    log "code-server уже установлен: $(code-server --version | head -1)"
+  fi
+  if [[ -z "${CODESERVER_BIN}" ]]; then
+    err "Не удалось определить путь к code-server после установки."
+    exit 1
+  fi
+}
 
-cat > /etc/systemd/system/code-server.service <<EOF
+create_config() {
+  log "Создаю конфиг code-server: ${CONFIG_FILE}"
+  [[ -d "${CONFIG_DIR}" ]] || mkdir -p "${CONFIG_DIR}"
+
+  # Не перезаписываем уже существующий пароль — иначе он потеряется при повторном
+  # запуске и мы не сможем показать его пользователю.
+  local existing_password=""
+  if [[ -f "${CONFIG_FILE}" ]]; then
+    existing_password="$(awk '/^password:/ {print $2}' "${CONFIG_FILE}" || true)"
+  fi
+
+  local password="${CODE_SERVER_PASSWORD:-${existing_password}}"
+  if [[ -z "${password}" ]]; then
+    password="$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=')"
+  fi
+
+  cat > "${CONFIG_FILE}" <<EOF
+bind-addr: 127.0.0.1:${CODE_SERVER_PORT}
+auth: password
+password: ${password}
+cert: false
+EOF
+
+  chown -R "${CODE_SERVER_USER}:${CODE_SERVER_USER}" "${CONFIG_DIR}"
+  # Ограничиваем доступ к файлу с паролем
+  chmod 600 "${CONFIG_FILE}"
+
+  # Сохраняем в переменную для печати в конце
+  CODE_SERVER_PASSWORD="${password}"
+}
+
+setup_systemd() {
+  log "Создаю systemd-юнит code-server для пользователя ${CODE_SERVER_USER}"
+  cat > /etc/systemd/system/code-server.service <<EOF
 [Unit]
 Description=code-server (Smartchat dev environment)
 After=network.target
 
 [Service]
 Type=simple
-User=${SUDO_USER:-root}
-Environment=PASSWORD=${CODE_SERVER_PASSWORD}
-ExecStart=${CODE_SERVER_BIN} --bind-addr 0.0.0.0:${CODE_SERVER_PORT} --auth password
+User=${CODE_SERVER_USER}
+ExecStart=${CODESERVER_BIN} --config ${CONFIG_FILE}
 Restart=always
 RestartSec=3
-# Директория проекта (workspace)
-WorkingDirectory=/home/${SUDO_USER:-root}
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable --now code-server
-log "code-server запущен на порту ${CODE_SERVER_PORT}"
+  systemctl daemon-reload
+  systemctl enable --now code-server
+  log "code-server запущен: 127.0.0.1:${CODE_SERVER_PORT} (systemd: $(systemctl is-active code-server))"
+}
 
-# --- 5. Клонирование и установка зависимостей ------------------------------
-TARGET_DIR="${TARGET_DIR:-/home/${SUDO_USER:-root}/Smartchat}"
-log "Клонирую репозиторий в ${TARGET_DIR}"
-if [[ ! -d "${TARGET_DIR}/.git" ]]; then
-  git clone --branch "${GIT_BRANCH}" "${GIT_REPO}" "${TARGET_DIR}"
-fi
+print_summary() {
+  echo
+  echo "============================================================================"
+  log "УСТАНОВКА ЗАВЕРШЕНА"
+  echo "   Пароль code-server (печатается ОДИН раз):"
+  echo "       ${CODE_SERVER_PASSWORD}"
+  echo "   Сохранён в: ${CONFIG_FILE}"
+  echo "============================================================================"
+  echo
+  log "Безопасный доступ с планшета"
+  echo "1. SSH-туннель (с локальной машины, порт 8080):"
+  echo "   ssh -N -L 8080:localhost:8080 ${CODE_SERVER_USER}@<IP-сервера>"
+  echo "   затем откройте в браузере: http://localhost:8080"
+  echo
+  echo "2. Через Tailscale (если оба устройства в tailnet):"
+  echo "   откройте http://<tailscale-ip-сервера>:8080"
+  echo
+  echo "3. Порт 8080 слушается только на 127.0.0.1 — недоступен извне напрямую."
+  echo "   Не открывайте его наружу без HTTPS-прокси (nginx + cert)."
+  echo
+  echo "Сменить пароль: nano ${CONFIG_FILE} && sudo systemctl restart code-server"
+  echo
+}
 
-log "Устанавливаю npm-зависимости и собираю проект"
-cd "${TARGET_DIR}"
-npm install
-npm run build
-
-# --- 6. Итоговые инструкции -------------------------------------------------
-echo
-log "Готово. Дальнейшие шаги:"
-echo "  1. Откройте в браузере: http://<IP-сервера>:${CODE_SERVER_PORT}"
-if [[ -n "${CODE_SERVER_PASSWORD}" ]]; then
-  echo "     Пароль: задан через CODE_SERVER_PASSWORD"
-else
-  echo "     Пароль: смотрите в ~/.config/code-server/config.yaml"
-fi
-echo "  2. Откройте папку ${TARGET_DIR}"
-echo "  3. Создайте .env: cp .env.example .env  (секреты в Git НЕ коммитить)"
-echo "  4. Проверьте: npm run dev  (или npm start после npm run build)"
+require_root
+install_packages
+install_code_server
+create_config
+setup_systemd
+print_summary
