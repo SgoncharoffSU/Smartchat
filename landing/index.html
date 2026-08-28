@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="ИИ-консультант для сайта: разбирается в запросе посетителя, отвечает по базе знаний вашего бизнеса и доводит до заявки, звонка или оплаты. Аналитика воронки, A/B-тест приветствий, установка одной строкой кода. 15 дней бесплатно."/>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <meta property="og:type" content="website"/>
+  <meta property="og:site_name" content="Умный Чат"/>
+  <meta property="og:title" content="Умный Чат — ИИ-консультант для сайта, который доводит до заявки"/>
+  <meta property="og:description" content="Разбирается в запросе посетителя, отвечает по базе знаний вашего бизнеса и доводит до заявки, звонка или оплаты. 15 дней бесплатно."/>
+  <meta property="og:url" content="https://chat.glavinstrument.com/"/>
+  <meta property="og:image" content="https://chat.glavinstrument.com/logo.jpg"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Умный Чат — ИИ-консультант для сайта, который доводит до заявки"/>
+  <meta name="twitter:description" content="Разбирается в запросе посетителя, отвечает по базе знаний вашего бизнеса и доводит до заявки, звонка или оплаты. 15 дней бесплатно."/>
+  <meta name="twitter:image" content="https://chat.glavinstrument.com/logo.jpg"/>
+  <title>Умный Чат — ИИ-консультант для сайта, который доводит до заявки</title>
+  <style>
+    :root{
+      --navy:#10142c; --navy2:#171c40; --navy-b:#2b3164; --navy-b2:#3a4180;
+      --lime:#d4fa3f; --lavender:#b7bdf6;
+      --light:#eef0f3; --card:#ffffff;
+      --ink:#0f1222; --muted:#636b80; --muted-dark:#9aa0c4;
+      --border:#e1e3ea; --eyebrow:#54742d;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    html{scroll-behavior:smooth;}
+    /* No overflow-x:hidden on html/body: in Chromium, setting overflow on
+       either (even just one axis) makes body its own scroll container, and
+       position:sticky children then stick to THAT container instead of the
+       viewport — computed value stays "sticky" but nothing visibly sticks.
+       Nothing on the page actually overflows horizontally (the hero's
+       decorative circle is already clipped by .hero's own overflow:hidden),
+       so this was never load-bearing. */
+    html,body{max-width:100%;}
+    body{background:var(--light);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;line-height:1.6;}
+    a{color:inherit;}
+    .eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px;}
+    .eyebrow-dark{color:var(--lime);}
+    .eyebrow-light{color:var(--eyebrow);}
+    .wrap{max-width:1180px;margin:0 auto;padding:0 32px;}
+    section{padding:88px 0;}
+    h1,h2,h3{letter-spacing:-0.5px;font-weight:800;}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 26px;border-radius:11px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;border:none;transition:transform .15s,opacity .15s;white-space:nowrap;}
+    .btn:hover{transform:translateY(-1px);}
+    .btn-lime{background:var(--lime);color:var(--navy);}
+    .btn-lime:hover{opacity:.92;}
+    .btn-outline-dark{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.28);}
+    .btn-outline-dark:hover{border-color:#fff;}
+    .btn-outline-light{background:transparent;color:var(--ink);border:1px solid #c7cad4;}
+    .btn-outline-light:hover{border-color:var(--ink);}
+    .btn-navy{background:var(--navy);color:#fff;}
+
+    /* HEADER */
+    header{position:sticky;top:0;z-index:100;background:rgba(16,20,44,.92);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.08);}
+    .hdr-inner{max-width:1180px;margin:0 auto;padding:0 32px;height:72px;display:flex;align-items:center;justify-content:space-between;}
+    .logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+    .logo-icon-img{height:38px;width:auto;object-fit:contain;flex-shrink:0;}
+    /* Header sits on the dark navy bg year-round now (no more light/dark
+       toggle) — the source SVG is solid black, traced for a light
+       background, so it needs inverting to read against navy. The footer
+       uses the same image on a light background and stays un-inverted. */
+    header .logo-icon-img{filter:invert(1);}
+    .logo-text{display:flex;flex-direction:column;line-height:1.15;}
+    .logo-title{font-size:15px;font-weight:800;color:#fff;}
+    .logo-sub{font-size:10px;font-weight:700;color:var(--muted-dark);letter-spacing:.6px;}
+    nav.main-nav{display:flex;align-items:center;gap:30px;}
+    nav.main-nav a{font-size:14px;color:#c7cbe6;text-decoration:none;}
+    nav.main-nav a:hover{color:#fff;}
+    .hdr-actions{display:flex;align-items:center;gap:10px;}
+    .hdr-actions a.link{font-size:14px;color:#c7cbe6;text-decoration:none;padding:8px 4px;}
+    .hdr-actions a.link:hover{color:#fff;}
+    @media(max-width:900px){nav.main-nav{display:none;}}
+
+    /* HERO */
+    .hero{background:var(--navy);position:relative;overflow:hidden;padding:96px 0 110px;}
+    .hero::before{content:"";position:absolute;top:-220px;right:-220px;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(111,121,242,.35) 0%,transparent 70%);pointer-events:none;}
+    .hero-grid{max-width:1180px;margin:0 auto;padding:0 32px;display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center;position:relative;z-index:1;}
+    /* Fixed, realistic height (close to the real widget's own 560px open
+       window, see widget/loader/widget.js) instead of stretching to match
+       whatever height the text column happens to be — stretching to an
+       arbitrary taller box distorted the card into proportions that don't
+       read as a chat window at all. Messages anchored to the BOTTOM of the
+       body (flex-end), same as a real chat: any slack sits above them, not
+       as dead space below the last message and above the input bar. Scoped
+       to the hero only — screen 03's browser-mock chat-card keeps its own
+       fixed-size, absolutely-positioned layout untouched. */
+    .hero-chat{display:flex;}
+    /* Empty on purpose — this is real estate for the actual chat widget
+       iframe (see widget/loader/widget.js's data-hero-target), not a mockup.
+       Sized to match the real widget's own open-window proportions so
+       nothing visibly resizes once the iframe finishes loading into it. */
+    /* No background here on purpose: while the widget iframe is mid-flight
+       back from the launcher corner (expandHeroChat in widget.js), this slot
+       sits empty for up to ~1s. A solid fill would show as a stray blank
+       card floating in the hero; transparent just blends into the hero's
+       own background until the iframe actually arrives. */
+    .hero-chat-slot{width:100%;max-width:400px;height:600px;margin:0 auto;border-radius:20px;overflow:hidden;}
+    .hero h1{font-size:clamp(30px,3.6vw,46px);line-height:1.14;color:#fff;margin-bottom:22px;}
+    /* The 30-46px clamp above was only ever verified against the FULL
+       container width — it was never actually checked against hero-grid's
+       real 2-column split (1.05fr/.95fr, this text sharing the row with the
+       docked chat mockup beside it), where the available column is roughly
+       HALF the container. Confirmed empirically (Puppeteer sweep, 769-1920px)
+       to wrap into 2 lines at every one of those widths with the plain
+       clamp above — this scales it down enough to stay on one line there
+       too, same min-width:0 story as the ≤768px fix further down. */
+    @media(min-width:769px){
+      .hero-grid>div{min-width:0;}
+      .hero h1{white-space:nowrap;font-size:clamp(20px,calc(3.2vw - 3px),34px);}
+    }
+    .hero p.lead{font-size:16.5px;color:#b7bdd6;max-width:520px;margin-bottom:34px;line-height:1.7;}
+    .hero-btns{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:44px;}
+    .hero-bullets{display:flex;flex-direction:column;gap:14px;}
+    .hero-bullet{display:flex;gap:10px;font-size:13.5px;color:#c7cbe6;}
+    .hero-bullet b{color:#fff;font-weight:700;display:block;font-size:14px;}
+    .hero-bullet .dot{width:6px;height:6px;border-radius:50%;background:var(--lime);flex-shrink:0;margin-top:7px;}
+
+    /* CHAT MOCK (shared: hero + demo) */
+    .chat-card{background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 30px 70px rgba(5,8,25,.45);width:100%;max-width:380px;}
+    .chat-hd{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid #eef0f4;}
+    .chat-avatar{width:38px;height:38px;border-radius:50%;background:#6f79f2;color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .chat-name{font-size:14.5px;font-weight:700;color:#12142a;}
+    .chat-status{font-size:12px;color:#8a8f9e;display:flex;align-items:center;gap:5px;}
+    .chat-status .dot{width:6px;height:6px;border-radius:50%;background:#22c55e;}
+    .chat-body{padding:18px;display:flex;flex-direction:column;gap:10px;min-height:140px;}
+    .bubble{max-width:86%;padding:11px 15px;border-radius:14px;font-size:13.5px;line-height:1.5;}
+    .bubble-bot{background:#f3f4f7;color:#181b2c;align-self:flex-start;border-bottom-left-radius:4px;}
+    .bubble-user{background:#12142a;color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}
+    .chat-ft{display:flex;align-items:center;gap:10px;padding:14px 16px;border-top:1px solid #eef0f4;}
+    .chat-input-mock{flex:1;background:#f6f7f9;border:1px solid #e7e9ee;border-radius:999px;padding:9px 15px;color:#9aa0b2;font-size:13px;}
+    .chat-send{width:36px;height:36px;min-width:36px;border-radius:50%;background:var(--lime);border:none;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+
+    /* LIGHT SECTION HEADERS */
+    .sec-head{display:grid;grid-template-columns:1.3fr 1fr;gap:40px;align-items:end;margin-bottom:44px;}
+    .sec-head>*{min-width:0;}
+    .sec-head h2{font-size:clamp(24px,3vw,34px);color:var(--ink);}
+    /* var(--lime) (#d4fa3f) is unreadable here (~1.3:1 contrast on this
+       section's light #eef0f3) — a darkened version of that exact hue
+       read as a dull olive instead of "the same accent, adapted for a
+       light background" (seen live, looked wrong). This is the vivid
+       green already used elsewhere on THIS light-background page (see
+       .stat-box .conv) — reads as a real, intentional brand green here,
+       not just literally the same hue as the dark-section lime. */
+    .hl-green{color:#16a34a;}
+    /* Keeps "ИИ-чат помогает его выбрать и купить." as one line instead of
+       wrapping mid-phrase — same min-width:0 story as .hero-grid above:
+       without it, white-space:nowrap on a grid/flex descendant just forces
+       the ancestor wider instead of actually keeping the line together.
+       Only while .sec-head is its single-column layout (≤820px, see the
+       media query below) — confirmed empirically to fit one line there at
+       every width down to 320px with no font-size help needed. ABOVE 820px
+       .sec-head goes back to a 2-up grid (h2 sharing the row with the
+       paragraph beside it), where nowrap instead forced this exact text to
+       spill sideways over that paragraph — letting it wrap normally there
+       is standard for a heading with room to spare, and was the actual
+       "залезает на текст" overlap. */
+    @media(max-width:820px){
+      .value-h2-line2{white-space:nowrap;}
+    }
+    /* Above 820px .sec-head is the 2-up grid (h2 sharing the row with the
+       paragraph), so the h2 column is narrower than the viewport — a plain
+       vw-based font-size wrapped this line awkwardly at ~900-1050px even
+       though it looked fine at 1180px+. container-type ties the font to the
+       COLUMN's actual width instead of the viewport, so it just fits at
+       every width (4.6cqw keeps ~3.5% slack, measured against this exact
+       phrase's rendered width). */
+    @media(min-width:821px){
+      .value-h2{container-type:inline-size;}
+      .value-h2-line2{white-space:nowrap;font-size:clamp(16px,4.6cqw,29px);}
+    }
+    .sec-head .sec-note{font-size:14px;color:var(--muted);line-height:1.65;}
+    @media(max-width:820px){.sec-head{grid-template-columns:1fr;}}
+
+    /* SCREEN 02 — value cards */
+    .value-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:36px;}
+    .value-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:26px 22px;}
+    .value-num{font-size:12px;font-weight:800;color:#b6bacb;margin-bottom:34px;}
+    .value-card h3{font-size:15.5px;margin-bottom:9px;}
+    .value-card p{font-size:13px;color:var(--muted);line-height:1.6;}
+    .stat-banner{background:var(--navy);border-radius:18px;padding:30px 34px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;}
+    .stat-banner .big{display:flex;align-items:baseline;gap:14px;}
+    .stat-banner .big .lbl{font-size:12px;color:var(--muted-dark);font-weight:700;text-transform:uppercase;}
+    .stat-banner .big .num{font-size:38px;font-weight:900;color:var(--lime);}
+    .stat-banner .mid{flex:1;min-width:260px;}
+    .stat-banner .mid p{color:#fff;font-size:14.5px;font-weight:600;}
+    .stat-banner .mid span{color:var(--muted-dark);font-size:12px;}
+    @media(max-width:900px){.value-grid{grid-template-columns:repeat(2,1fr);}}
+    @media(max-width:560px){.value-grid{grid-template-columns:1fr;}}
+
+    /* SCREEN 03 — demo */
+    .demo-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:56px;align-items:start;}
+    .pill-row{display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap;}
+    .pill{padding:9px 18px;border-radius:999px;font-size:13.5px;font-weight:600;border:1px solid #d3d6e0;background:#fff;color:var(--ink);cursor:pointer;}
+    .pill.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+    .demo-checkform{display:flex;gap:10px;margin-top:6px;}
+    .demo-checkform input{flex:1;padding:12px 16px;border-radius:11px;border:1px solid #d3d6e0;font-size:14px;font-family:inherit;background:#fff;}
+    .browser-mock{background:#e4e6ec;border-radius:18px;padding:14px;position:relative;}
+    .browser-bar{display:flex;align-items:center;gap:8px;padding:4px 6px 14px;}
+    .browser-dot{width:9px;height:9px;border-radius:50%;background:#c3c6d1;}
+    .browser-url{flex:1;text-align:center;background:#fff;border-radius:999px;padding:6px 10px;font-size:12px;color:#8a8f9e;margin:0 auto;max-width:220px;}
+    .browser-content{background:#eff0f5;border-radius:12px;height:480px;position:relative;padding:22px;overflow:hidden;}
+    .ghost-line{background:#d7d9e2;border-radius:6px;height:12px;margin-bottom:10px;}
+    .browser-content .chat-card{position:absolute;bottom:16px;right:16px;width:280px;max-width:calc(100% - 32px);}
+    .browser-content .chat-body{min-height:0;padding:14px;}
+    .browser-content .bubble{font-size:12.5px;padding:9px 12px;}
+    @media(max-width:900px){.demo-grid{grid-template-columns:1fr;}}
+
+    /* SCREEN 04 — setup (dark) */
+    .setup-section{background:var(--navy);}
+    .setup-section .eyebrow-light{color:var(--lime);}
+    .setup-section h2, .setup-section .sec-note-title{color:#fff;}
+    .setup-section .sec-head .sec-note{color:#b0b5d2;}
+    .setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+    .knowledge-card{background:var(--navy2);border:1px solid var(--navy-b);border-radius:18px;padding:28px;}
+    .knowledge-card .kc-eyebrow{color:var(--lime);font-size:11.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;}
+    .knowledge-card h3{color:#fff;font-size:19px;margin-bottom:8px;}
+    .knowledge-card>p{color:#b0b5d2;font-size:13.5px;margin-bottom:20px;line-height:1.6;}
+    /* Mirrors the cabinet's real "Разделы" sidebar — a plain list of
+       category name + entry count, with "На модерации" as its own row
+       exactly like the real one gets a dedicated pseudo-category when it
+       has entries (see cabinet's renderCategoryList/kbCategoryClickable). */
+    .kb-cat-row{display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:12px;padding:13px 16px;margin-bottom:10px;font-size:14px;font-weight:700;color:#12142a;}
+    .kb-cat-row:last-child{margin-bottom:0;}
+    .kb-cat-count{background:#f0f1f5;color:#6b7280;font-size:12px;font-weight:700;border-radius:999px;padding:3px 11px;}
+    .kb-cat-row.kb-cat-pending .kb-cat-count{background:#fff3e0;color:#c2410c;}
+    .mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+    .mini-card{background:var(--navy2);border:1px solid var(--navy-b);border-radius:18px;padding:18px;min-width:0;}
+    .mini-card .mc-eyebrow{color:var(--lime);font-size:10.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;}
+    .mini-card h4{color:#fff;font-size:15.5px;line-height:1.4;font-weight:700;}
+    /* Same brand-color text-pill convention already used for these three
+       services in the cabinet (cabinet/style.css's .crm-logo classes) —
+       kept as plain colored badges rather than sourcing actual logo image
+       assets, so there's nothing to fetch/host and it stays legible at this
+       tiny size. */
+    .crm-logos{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center;}
+    .crm-logo{display:inline-block;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:700;color:#fff;}
+    .crm-logo-bitrix24{background:#2fc7f7;}
+    .crm-logo-amocrm{background:#dd4a3d;}
+    /* Telegram is recognized by its paper-plane mark, not its wordmark —
+       unlike Bitrix24/amoCRM (text-only brand names), spelling out
+       "Telegram" here just reads as a plain label rather than a logo. */
+    .crm-logo-icon{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;flex:none;}
+    .crm-logo-telegram{background:#229ED9;}
+    .setup-list{list-style:none;margin:14px 0 0;padding:0;}
+    .setup-list li{font-size:12.5px;color:#c7cbe6;padding-left:14px;position:relative;margin-bottom:6px;}
+    .setup-list li:last-child{margin-bottom:0;}
+    .setup-list li:before{content:"–";position:absolute;left:0;color:var(--lime);}
+    .goal-mock-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
+    .goal-mock{background:var(--navy);border:1px solid var(--navy-b2);border-radius:999px;padding:9px 14px;font-size:12px;color:var(--muted-dark);}
+    .abcd{display:flex;gap:8px;margin-top:16px;}
+    .abcd span{width:28px;height:28px;border-radius:8px;background:var(--navy);border:1px solid var(--navy-b2);color:#c7cbe6;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+    .abcd span.on{background:var(--lime);color:var(--navy);border-color:var(--lime);}
+    @media(max-width:900px){.setup-grid{grid-template-columns:1fr;}.mini-grid{grid-template-columns:1fr;}}
+
+    /* SCREEN 05 — analytics */
+    .analytics-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:30px;}
+    .an-top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:20px;}
+    .an-top .an-label{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px;}
+    .an-top .an-goal{font-size:16px;font-weight:800;color:#4740c9;margin-top:4px;}
+    .goal-demo-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
+    .goal-demo-pill-wrap{position:relative;display:inline-flex;align-items:center;gap:5px;}
+    .goal-demo-pill{padding:7px 16px;border-radius:999px;font-size:13px;font-weight:700;background:#f0f1f5;color:#4740c9;border:1px solid #e3e4ee;white-space:nowrap;}
+    .goal-demo-info{width:20px;height:20px;border-radius:999px;border:1px solid var(--border);background:#fff;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;flex:none;font-family:inherit;line-height:1;padding:0;}
+    .goal-demo-popup{position:absolute;top:calc(100% + 8px);left:0;z-index:20;width:240px;max-width:calc(100vw - 24px);background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.45;color:#333;box-shadow:0 12px 32px rgba(15,23,42,.14);display:none;}
+    .goal-demo-popup.show{display:block;}
+    .period-row{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;}
+    .period-pill{padding:7px 16px;border-radius:999px;font-size:12.5px;font-weight:600;background:#f0f1f5;color:var(--muted);border:none;font-family:inherit;cursor:pointer;}
+    .period-pill.active{background:#4740c9;color:#fff;}
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px;}
+    .stat-box{border-radius:14px;overflow:hidden;background:#f8f9fb;border:1px solid var(--border);}
+    .stat-box .bar{height:4px;}
+    .stat-box .bar.c1{background:#38bdf8;}
+    .stat-box .bar.c2{background:#22c55e;}
+    .stat-box .bar.c3{background:#22c55e;}
+    .stat-box .inner{padding:18px 20px;}
+    .stat-box .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.4px;}
+    .stat-box .num{font-size:30px;font-weight:900;margin:6px 0 4px;}
+    .stat-box .sub{font-size:12px;color:var(--muted);}
+    .stat-box .conv{font-size:12px;color:#16a34a;font-weight:700;margin-top:2px;}
+    .an-bottom{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+    .an-bottom-card{background:#f8f9fb;border:1px solid var(--border);border-radius:14px;padding:20px 22px;}
+    .an-bottom-card .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.4px;margin-bottom:8px;}
+    .an-bottom-card p{font-size:13px;color:var(--muted);margin-bottom:14px;}
+    .attn-badge{display:inline-flex;align-items:center;gap:8px;background:#fff3e0;border-radius:10px;padding:10px 16px;}
+    .attn-badge .n{font-size:22px;font-weight:900;color:#c2410c;}
+    .attn-badge .t{font-size:12px;color:#9a5b1f;white-space:nowrap;}
+    .bars-mini{display:flex;align-items:flex-end;gap:8px;height:56px;}
+    .bars-mini div{width:16px;border-radius:5px 5px 0 0;background:#c9cce0;}
+    .bars-mini div.hi{background:var(--lime);}
+    .funnel-legend{text-align:center;font-size:12.5px;color:var(--muted);margin-top:20px;}
+    .funnel-legend span{margin:0 8px;}
+    @media(max-width:900px){.stat-row{grid-template-columns:1fr;}.an-bottom{grid-template-columns:1fr;}}
+
+    /* SCREEN 06 — quick start */
+    .steps-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:32px;}
+    .step-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:26px 22px;}
+    .step-circle{width:36px;height:36px;border-radius:50%;border:1.5px solid #c7cad4;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;margin-bottom:30px;color:var(--ink);}
+    .step-card h3{font-size:15.5px;margin-bottom:8px;}
+    .step-card p{font-size:13px;color:var(--muted);line-height:1.6;}
+    .start-banner{background:#e8f6c9;border-radius:16px;padding:24px 30px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;}
+    .start-banner p{font-weight:700;font-size:14.5px;}
+    .start-banner span{font-size:12.5px;color:#4d5b2a;}
+    @media(max-width:900px){.steps-grid{grid-template-columns:repeat(2,1fr);}}
+    @media(max-width:560px){.steps-grid{grid-template-columns:1fr;}}
+
+    /* SCREEN 07 — final CTA (dark) */
+    .final-cta{background:var(--navy);}
+    .final-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:50px;align-items:center;}
+    .final-grid h2{color:#fff;font-size:clamp(26px,3.4vw,40px);margin-bottom:16px;}
+    .final-grid p.lead{color:#b7bdd6;font-size:15.5px;max-width:480px;margin-bottom:26px;}
+    .final-note{font-size:12.5px;color:var(--muted-dark);margin-top:12px;}
+    .includes-card{background:var(--navy2);border:1px solid var(--navy-b);border-radius:18px;padding:28px;}
+    .includes-card .ic-eyebrow{color:var(--lime);font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;}
+    .includes-item{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--navy-b);font-size:13.5px;color:#dfe1f2;}
+    .includes-item:last-child{border-bottom:none;}
+    .includes-check{width:22px;height:22px;border-radius:6px;background:var(--lime);flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+    @media(max-width:900px){.final-grid{grid-template-columns:1fr;}}
+
+    /* SCREEN 08 — FAQ */
+    .faq-grid{display:grid;grid-template-columns:.8fr 1.2fr;gap:56px;}
+    .faq-item{border-bottom:1px solid var(--border);padding:22px 0;cursor:pointer;}
+    .faq-q{display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:15.5px;font-weight:700;}
+    .faq-q .sign{font-size:20px;color:var(--muted);flex-shrink:0;width:20px;text-align:center;}
+    .faq-a{font-size:13.5px;color:var(--muted);margin-top:12px;line-height:1.65;max-width:640px;}
+    .faq-item:not(.open) .faq-a{display:none;}
+    @media(max-width:820px){.faq-grid{grid-template-columns:1fr;}}
+
+    footer{background:var(--light);border-top:1px solid var(--border);padding:34px 0;}
+    .footer-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;}
+    .footer-inner .flogo{display:flex;align-items:center;gap:10px;}
+    .footer-inner .flogo .logo-title{color:var(--ink);}
+    .footer-inner .flogo .logo-sub{color:var(--muted);}
+    .footer-tag{font-size:13px;color:var(--muted);}
+    .footer-links{display:flex;gap:20px;align-items:center;font-size:13px;color:var(--muted);flex-wrap:wrap;row-gap:8px;}
+    .footer-links a{text-decoration:none;color:var(--muted);}
+    .footer-links a:hover{color:var(--ink);}
+
+    /* Privacy policy popup — the page itself (cabinet/privacy.html) stays the
+       single source of truth; this just fetches and displays its content
+       inline instead of navigating away from the landing page. */
+    .modal-overlay{position:fixed;inset:0;background:rgba(10,12,26,.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;}
+    .modal-overlay[hidden]{display:none;}
+    .modal-box{background:#fff;border-radius:18px;max-width:680px;width:100%;max-height:82vh;overflow-y:auto;padding:36px 40px;position:relative;color:var(--ink);}
+    .modal-box h1{font-size:21px;margin-bottom:4px;}
+    .modal-box h2{font-size:15px;margin:24px 0 8px;color:var(--ink);}
+    .modal-box p,.modal-box li{font-size:13.5px;line-height:1.65;color:var(--muted);}
+    .modal-box ul{padding-left:20px;margin:8px 0;}
+    .modal-box .updated{color:#9ca3af;font-size:12.5px;margin-bottom:22px;}
+    .modal-close{position:absolute;top:18px;right:20px;background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:var(--muted);}
+    .modal-close:hover{color:var(--ink);}
+    .modal-loading{font-size:13.5px;color:var(--muted);}
+
+    @media(max-width:768px){
+      .wrap,.hdr-inner{padding:0 20px;}
+      section{padding:60px 0;}
+      .hero{padding:56px 0 70px;}
+      .hero-grid{grid-template-columns:1fr;gap:40px;}
+    }
+    @media(max-width:480px){
+      .hdr-inner{padding:0 14px;}
+      .logo{gap:6px;}
+      .logo-title{font-size:12.5px;}
+      .logo-sub{font-size:8.5px;}
+      .hdr-actions{gap:10px;}
+      .hdr-actions a.link{font-size:12.5px;padding:6px 2px;font-weight:700;}
+      .hdr-actions .btn{padding:8px 14px;font-size:12.5px;}
+      /* Fits "ИИ-ассистент для продаж" on one line at typical phone widths —
+         the general clamp() below floors at 30px on any narrow viewport
+         (its vw term only kicks in above ~830px), which is too big to fit
+         this exact heading in one line on a phone-width column.
+         min-width:0 is the actual load-bearing fix, not the font-size: a
+         grid item's default min-width is auto (its content's min-content
+         size), so white-space:nowrap text wider than the track was making
+         the WHOLE grid column expand to fit it — pushing the real page
+         width out past the viewport — instead of staying put so the text
+         just needs to actually be narrow enough to fit inside it. */
+      .hero-grid>div{min-width:0;}
+      .hero h1{font-size:clamp(17px,5vw,26px);white-space:nowrap;}
+      /* "ИИ-чат помогает его выбрать и купить." is longer than the hero h1
+         line above, so it needs its own (smaller) scale to stay on one line
+         without overflowing — sized independently of line 1's font-size. */
+      .value-h2-line2{font-size:clamp(13px,3.6vw,18px);}
+      /* "Попробовать бесплатно" is the same nowrap-forces-overflow story as
+         the hero h1 and value-h2-line2 above — shrink it enough to fit the
+         narrow column instead of poking past the edge. */
+      .hero-btns .btn{font-size:13px;padding:11px 18px;}
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-inner">
+    <a class="logo" href="/">
+      <img src="logo.svg" alt="Умный Чат" class="logo-icon-img">
+      <span class="logo-text">
+        <span class="logo-title">ГлавИнструмент</span>
+        <span class="logo-sub">УМНЫЙ ЧАТ</span>
+      </span>
+    </a>
+    <nav class="main-nav">
+      <a href="#value">Что умеет</a>
+      <a href="#setup">Настройка</a>
+      <a href="#analytics">Аналитика</a>
+      <a href="#start">Подключение</a>
+    </nav>
+    <div class="hdr-actions">
+      <a class="link" href="https://chat.glavinstrument.com/cabinet/login.html">Войти</a>
+      <a class="btn btn-outline-dark" href="https://chat.glavinstrument.com/cabinet/signup.html">Регистрация</a>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-grid">
+    <div>
+      <span class="eyebrow eyebrow-dark">ИИ-ЧАТ ДЛЯ ВАШЕГО САЙТА</span>
+      <h1>ИИ-ассистент для продаж</h1>
+      <p class="lead">Умный Чат отвечает посетителю сразу — разбирается в запросе, использует знания о вашем бизнесе и доводит до звонка, заявки или оплаты, даже когда менеджер занят или сайт работает без выходных.</p>
+      <div class="hero-btns">
+        <a class="btn btn-lime" href="https://chat.glavinstrument.com/cabinet/signup.html">Попробовать 15 дней бесплатно</a>
+        <a class="btn btn-outline-dark" href="#" onclick="return openSmartchat(event)">Пообщаться с ботом</a>
+      </div>
+      <div class="hero-bullets">
+        <div class="hero-bullet"><span class="dot"></span><span><b>15 дней бесплатно</b>без банковской карты и обязательств</span></div>
+        <div class="hero-bullet"><span class="dot"></span><span><b>Настройка под вас</b>база знаний, цель разговора и стиль общения</span></div>
+        <div class="hero-bullet"><span class="dot"></span><span><b>Аналитика воронки</b>видно не только заявки, но и на каком этапе теряются клиенты</span></div>
+      </div>
+    </div>
+    <div class="hero-chat">
+      <div class="hero-chat-slot" id="heroChatSlot"></div>
+    </div>
+  </div>
+</section>
+
+<section id="value">
+  <div class="wrap">
+    <span class="eyebrow eyebrow-light">БОЛЬШЕ ПОЛЬЗЫ ОТ САЙТА</span>
+    <div class="sec-head">
+      <h2 class="value-h2">Сайт показывает продукт.<br><span class="value-h2-line2">ИИ-чат помогает его <span class="hl-green">выбрать</span> и <span class="hl-green">купить</span>.</span></h2>
+      <p class="sec-note">Даже заинтересованный посетитель может уйти, если не находит нужный ответ: какой вариант выбрать, сколько он стоит и как оформить заказ. ИИ-чат отвечает в момент выбора и помогает перейти к покупке.</p>
+    </div>
+    <div class="value-grid">
+      <div class="value-card">
+        <div class="value-num">01</div>
+        <h3>Отвечает без ожидания</h3>
+        <p>Ночью, в выходные и когда весь отдел продаж на звонках — чат уже разговаривает с посетителем. Первая реакция часто решает, у кого купят.</p>
+      </div>
+      <div class="value-card">
+        <div class="value-num">02</div>
+        <h3>Помогает разобраться</h3>
+        <p>Объясняет разницу между вариантами применительно к задаче конкретного человека — на основе базы знаний о продукте, ценах и условиях.</p>
+      </div>
+      <div class="value-card">
+        <div class="value-num">03</div>
+        <h3>Ведёт к нужному действию</h3>
+        <p>Цель разговора настраивается под ваш процесс продаж: заявка в чате, звонок, запись на консультацию или расчёт стоимости.</p>
+      </div>
+      <div class="value-card">
+        <div class="value-num">04</div>
+        <h3>Передаёт готовый запрос</h3>
+        <p>Менеджер получает контакт, суть задачи и историю разговора. Вопрос без ответа сразу виден в «Требует внимания», а уведомления в Telegram можно включить по желанию.</p>
+      </div>
+    </div>
+    <div class="stat-banner">
+      <div class="big"><span class="num" style="font-size:22px;">РЕЗУЛЬТАТ В ЦИФРАХ</span></div>
+      <div class="mid">
+        <p>Смотрите, сколько заявок приносит чат</p>
+        <span>В аналитике видно, сколько посетителей начали диалог, оставили контакты и дошли до целевого действия. Оценивайте результат по данным своего сайта, а не по цифрам из чужих кейсов.</span>
+      </div>
+      <a class="btn btn-outline-dark" href="#analytics">Как считается →</a>
+    </div>
+  </div>
+</section>
+
+<section id="demo">
+  <div class="wrap">
+    <span class="eyebrow eyebrow-light">ДЕМО ДИАЛОГА</span>
+    <div class="sec-head">
+      <h2>Покажите клиенту не форму, а живой разговор</h2>
+      <p class="sec-note">Не каждый клиент готов сразу оставлять телефон. Сначала человеку важно понять, подходит ли ему предложение. В чате он может задать вопросы, уточнить детали и только потом перейти к заявке.</p>
+    </div>
+    <div class="demo-grid">
+      <div>
+        <div class="pill-row">
+          <button class="pill active" type="button" data-niche="Мебель">Мебель</button>
+          <button class="pill" type="button" data-niche="Переезды">Переезды</button>
+          <button class="pill" type="button" data-niche="Строительство">Строительство</button>
+        </div>
+        <div class="demo-checkform">
+          <button class="btn btn-navy" type="button" onclick="return openSmartchat(event)">Пообщаться с ботом →</button>
+        </div>
+      </div>
+      <div class="browser-mock">
+        <div class="browser-bar">
+          <span class="browser-dot"></span><span class="browser-dot"></span><span class="browser-dot"></span>
+          <div class="browser-url" id="browserUrl">ваш-сайт.рф</div>
+        </div>
+        <div class="browser-content">
+          <div class="ghost-line" style="width:70%"></div>
+          <div class="ghost-line" style="width:45%"></div>
+          <div class="ghost-line" style="width:60%;margin-bottom:22px;"></div>
+          <div class="ghost-line" style="width:38%"></div>
+          <div class="ghost-line" style="width:52%"></div>
+          <div class="chat-card">
+            <div class="chat-hd">
+              <div class="chat-avatar">А</div>
+              <div>
+                <div class="chat-name">Алексей</div>
+                <div class="chat-status"><span class="dot"></span>На связи прямо сейчас</div>
+              </div>
+            </div>
+            <div class="chat-body" id="demoChatBody">
+              <div class="bubble bubble-user">Добрый день! Выбрал у вас на сайте кухню Вайба. Подскажите, какой срок изготовления, примерно?</div>
+              <div class="bubble bubble-bot">Мы изготавливаем кухни в течение 14 дней независимо от сложности проекта. Вы уже выбрали цвет и наполнение?</div>
+              <div class="bubble bubble-user">Да, ваш менеджер помог разобраться, забыл только срок изготовления уточнить.</div>
+              <div class="bubble bubble-bot">Отлично! Если появятся вопросы, обращайтесь.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="setup-section" id="setup">
+  <div class="wrap">
+    <span class="eyebrow eyebrow-dark">НАСТРОЙКА БЕЗ ПРОГРАММИСТА</span>
+    <div class="sec-head">
+      <h2>Настройте чат как полноценного менеджера по продажам</h2>
+      <p class="sec-note">Вы решаете, что чат знает, как выглядит, какую цель преследует и какими фразами открывает разговор — без строчки кода и без разработчика.</p>
+    </div>
+    <div class="setup-grid">
+      <div class="knowledge-card">
+        <div class="kc-eyebrow">ЗНАНИЯ</div>
+        <h3>Загрузите сайт и материалы компании</h3>
+        <p>Вставьте ссылку на сайт или текст о продукте — ИИ сам разберёт это на базу знаний. Слабый ответ можно отметить прямо в диалоге и тут же исправить.</p>
+        <div class="kb-cat-row"><span>Продукты и цены</span><span class="kb-cat-count">14</span></div>
+        <div class="kb-cat-row"><span>Доставка и условия</span><span class="kb-cat-count">6</span></div>
+        <div class="kb-cat-row kb-cat-pending"><span>На модерации</span><span class="kb-cat-count">3</span></div>
+      </div>
+      <div class="mini-grid">
+        <div class="mini-card">
+          <div class="mc-eyebrow">ОФОРМЛЕНИЕ ЧАТА</div>
+          <h4>Выберите:</h4>
+          <ul class="setup-list">
+            <li>имя</li>
+            <li>цвет бота</li>
+            <li>манеру общения</li>
+            <li>образ компании</li>
+          </ul>
+        </div>
+        <div class="mini-card">
+          <div class="mc-eyebrow">ЦЕЛЬ</div>
+          <h4>Выберите, чем должен закончиться разговор</h4>
+          <div class="goal-mock-row">
+            <div class="goal-demo-pill-wrap">
+              <span class="goal-mock">Продать в чате</span>
+              <button type="button" class="goal-demo-info" aria-label="Что это значит">?</button>
+              <div class="goal-demo-popup">Бот доводит разговор до продажи прямо в чате — называет цену и оформляет заказ, не переводя на менеджера.</div>
+            </div>
+            <div class="goal-demo-pill-wrap">
+              <span class="goal-mock">Вывести клиента на звонок</span>
+              <button type="button" class="goal-demo-info" aria-label="Что это значит">?</button>
+              <div class="goal-demo-popup">Бот договаривается о звонке с менеджером — уточняет удобное время и берёт номер телефона.</div>
+            </div>
+            <div class="goal-demo-pill-wrap">
+              <span class="goal-mock">Получить регистрацию</span>
+              <button type="button" class="goal-demo-info" aria-label="Что это значит">?</button>
+              <div class="goal-demo-popup">Бот доводит посетителя до регистрации или заявки на сайте и подтверждает, что это сделано.</div>
+            </div>
+            <div class="goal-demo-pill-wrap">
+              <span class="goal-mock">Записать на консультацию</span>
+              <button type="button" class="goal-demo-info" aria-label="Что это значит">?</button>
+              <div class="goal-demo-popup">Бот записывает на консультацию со специалистом — уточняет тему и удобное время, берёт контакт.</div>
+            </div>
+          </div>
+        </div>
+        <div class="mini-card">
+          <div class="mc-eyebrow">ТЕСТИРОВАНИЕ</div>
+          <h4>Сравнивайте стили общения по конверсии</h4>
+          <div class="abcd"><span>A</span><span class="on">B</span><span>C</span><span>D</span></div>
+        </div>
+        <div class="mini-card">
+          <div class="mc-eyebrow">ИНТЕГРАЦИИ</div>
+          <div class="goal-demo-pill-wrap" style="align-items:flex-start;">
+            <h4 style="margin:0;">Передавайте заявки в сервисы команды</h4>
+            <button type="button" class="goal-demo-info" aria-label="Что это значит" style="margin-top:2px;flex:none;">?</button>
+            <div class="goal-demo-popup">Заявки сразу попадают в мини-CRM личного кабинета, а по желанию — ещё и в Bitrix24, amoCRM или уведомлением в Telegram/email. Настраивается в паре кликов, без программиста.</div>
+          </div>
+          <div class="crm-logos">
+            <span class="crm-logo crm-logo-bitrix24">Bitrix24</span>
+            <span class="crm-logo crm-logo-amocrm">amoCRM</span>
+            <span class="crm-logo-icon crm-logo-telegram" aria-label="Telegram" title="Telegram">
+              <svg viewBox="0 0 240 240" width="15" height="15" fill="none"><path d="M180 72L159 172c-1.5 7-5.5 8.5-11 5.5l-30-22-14.5 14c-1.5 1.5-3 3-6 3l2-31 56-51c2.5-2-0.5-3.5-4-1.5l-69 43-30-9c-6.5-2-6.5-6.5 1.5-9.5l117-45c5.5-2 10 1 8 9.5z" fill="#fff"/></svg>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="analytics">
+  <div class="wrap">
+    <span class="eyebrow eyebrow-light">ПОНЯТНАЯ АНАЛИТИКА</span>
+    <div class="sec-head">
+      <h2>Видно не только заявки, но и на каком этапе теряются клиенты</h2>
+      <p class="sec-note">Если результат просел, воронка показывает конкретный этап: чат не увидели, диалог не начали или контакт не оставили.</p>
+    </div>
+    <div class="analytics-card">
+      <div class="an-top">
+        <div>
+          <div class="an-label">Цель чата</div>
+          <div class="an-goal">Получить регистрацию</div>
+        </div>
+      </div>
+      <div class="period-row" id="periodRow">
+        <button type="button" class="period-pill" data-period="Вчера">Вчера</button>
+        <button type="button" class="period-pill active" data-period="Неделя">Неделя</button>
+        <button type="button" class="period-pill" data-period="Месяц">Месяц</button>
+        <button type="button" class="period-pill" data-period="Всё время">Всё время</button>
+      </div>
+      <div class="stat-row">
+        <div class="stat-box"><div class="bar c1"></div><div class="inner"><div class="lbl">Показов</div><div class="num" id="statShowings">2 480</div><div class="sub">Чат увидели на сайте</div></div></div>
+        <div class="stat-box"><div class="bar c2"></div><div class="inner"><div class="lbl">Диалогов</div><div class="num" id="statDialogs">496</div><div class="conv" id="statDialogsConv">Конверсия в диалог 20%</div></div></div>
+        <div class="stat-box"><div class="bar c3"></div><div class="inner"><div class="lbl">Заявок</div><div class="num" id="statLeads">119</div><div class="conv" id="statLeadsConv">Конверсия в заявку 24%</div></div></div>
+      </div>
+      <div class="an-bottom">
+        <div class="an-bottom-card">
+          <div class="lbl">Качество ответов</div>
+          <p>Показывает, где чат нужно улучшить</p>
+          <div class="attn-badge"><span class="n" id="statAttention">8</span><span class="t">требуют внимания</span></div>
+        </div>
+        <div class="an-bottom-card">
+          <div class="lbl">Тест приветствия</div>
+          <p>Какой вариант чаще начинает диалог</p>
+          <div class="bars-mini" id="statBars">
+            <div style="height:34%"></div>
+            <div class="hi" style="height:100%"></div>
+            <div style="height:58%"></div>
+            <div style="height:70%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="funnel-legend">Показ <span>·</span> Открытие чата <span>·</span> Диалог <span>·</span> Заявка</div>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <span class="eyebrow eyebrow-light">БЫСТРЫЙ ЗАПУСК</span>
+    <div class="sec-head">
+      <h2>От регистрации до чата на сайте — четыре понятных шага</h2>
+      <p class="sec-note">Можно настроить, проверить и подключить чат в течение одного дня, без обращения в поддержку.</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-circle">1</div>
+        <h3>Зарегистрируйтесь</h3>
+        <p>Получите личный кабинет и бесплатный доступ на 15 дней.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-circle">2</div>
+        <h3>Добавьте сайт и цель</h3>
+        <p>Укажите, что чат должен знать и какой результат нужен.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-circle">3</div>
+        <h3>Проверьте ответы</h3>
+        <p>Протестируйте диалоги и поправьте слабые места.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-circle">4</div>
+        <h3>Установите на сайт</h3>
+        <p>Добавьте одну строку кода. При необходимости мы поможем.</p>
+      </div>
+    </div>
+    <div class="start-banner">
+      <div><p>Можно начать без карты и без обязательств.</p><span>Демо-режим работает бесплатно 15 дней.</span></div>
+      <a class="btn btn-navy" href="https://chat.glavinstrument.com/cabinet/signup.html">Создать аккаунт</a>
+    </div>
+  </div>
+</section>
+
+<section class="final-cta">
+  <div class="wrap">
+    <div class="final-grid">
+      <div>
+        <span class="eyebrow eyebrow-dark">15 ДНЕЙ БЕСПЛАТНО</span>
+        <h2>Проверьте, сколько заявок теряет ваш сайт прямо сейчас</h2>
+        <p class="lead">Настройте чат под свой бизнес, запустите на реальном трафике и оцените результат в понятной аналитике.</p>
+        <div class="hero-btns">
+          <a class="btn btn-lime" href="https://chat.glavinstrument.com/cabinet/signup.html">Попробовать бесплатно</a>
+        </div>
+        <div class="final-note">Без банковской карты</div>
+      </div>
+      <div class="includes-card">
+        <div class="ic-eyebrow">ЧТО ВХОДИТ</div>
+        <div class="includes-item"><span class="includes-check"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 6" stroke="#10142c" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Настройка под ваш бизнес</div>
+        <div class="includes-item"><span class="includes-check"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 6" stroke="#10142c" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Тест на реальных вопросах</div>
+        <div class="includes-item"><span class="includes-check"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 6" stroke="#10142c" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Аналитика воронки и качества</div>
+        <div class="includes-item"><span class="includes-check"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 6" stroke="#10142c" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Помощь с установкой</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="faq-grid">
+      <div>
+        <span class="eyebrow eyebrow-light">ЧАСТЫЕ ВОПРОСЫ</span>
+        <h2 style="font-size:clamp(24px,3vw,34px);margin-bottom:14px;">Коротко о главном</h2>
+        <p class="sec-note">Если вашего вопроса нет в списке, напишите нам — поможем разобраться.</p>
+      </div>
+      <div>
+        <div class="faq-item open">
+          <div class="faq-q"><span>15 дней действительно бесплатно?</span><span class="sign">−</span></div>
+          <div class="faq-a">Да. Можно настроить чат, загрузить базу знаний и проверить его на своём сайте на реальном трафике — без оплаты и без банковской карты.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q"><span>Можно изменить внешний вид и поведение?</span><span class="sign">+</span></div>
+          <div class="faq-a">Да. Имя, пол и цвет чата настраиваются в личном кабинете за пару минут. Поведение определяется базой знаний, целью разговора и тестовыми фразами приветствия — без правок кода.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q"><span>Что будет, если чат ответит неправильно?</span><span class="sign">+</span></div>
+          <div class="faq-a">Такой ответ можно сразу отметить как неудачный и указать, как было правильно — бот запомнит исправление и больше не повторит эту ошибку в похожей ситуации.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q"><span>Куда приходят заявки?</span><span class="sign">+</span></div>
+          <div class="faq-a">В личный кабинет: заявки — в раздел «Заявки», а вопросы, на которые бот не ответил — в «Требует внимания». Везде видно контакт и историю переписки. Уведомления в Telegram — по желанию.</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q"><span>Нужен программист для установки?</span><span class="sign">+</span></div>
+          <div class="faq-a">Нет — достаточно вставить одну строку кода в HTML сайта. Если своего разработчика нет под рукой, наш менеджер поможет с установкой.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap footer-inner">
+    <div class="flogo">
+      <img src="logo.svg" alt="Умный Чат" class="logo-icon-img">
+      <span class="logo-text">
+        <span class="logo-title">ГлавИнструмент</span>
+        <span class="logo-sub">УМНЫЙ ЧАТ</span>
+      </span>
+    </div>
+    <div class="footer-tag">Умный чат для роста конверсии сайта.</div>
+    <div class="footer-links">
+      <a href="https://chat.glavinstrument.com/cabinet/login.html">Войти</a>
+      <a href="https://chat.glavinstrument.com/cabinet/signup.html">Регистрация</a>
+      <a href="/cabinet/privacy.html" id="privacyLink">Политика конфиденциальности</a>
+      <span>© 2026</span>
+    </div>
+  </div>
+</footer>
+
+<div class="modal-overlay" id="privacyModal" hidden>
+  <div class="modal-box">
+    <button type="button" class="modal-close" id="privacyModalClose" aria-label="Закрыть">×</button>
+    <div id="privacyModalBody"><p class="modal-loading">Загрузка…</p></div>
+  </div>
+</div>
+
+<script>
+function openSmartchat(e){
+  if(e) e.preventDefault();
+  // The hero chat mockup sits below the fold on most screens (especially
+  // mobile, where the heading/subtext stack tall above it) — without this,
+  // "Пообщаться с ботом" silently did nothing visible whenever the chat
+  // wasn't already in view. Scrolling it into view is enough on its own:
+  // the widget's own IntersectionObserver already expands/docks it the
+  // moment it crosses into the viewport (see widget.js's heroObserver) —
+  // ALSO calling SmartchatWidget.open() here used to fight that, snapping
+  // the iframe straight to its normal (non-hero) fullscreen-popup layout
+  // for an instant while the hero logic was independently mid-animation,
+  // which is exactly the flash/flicker this caused. block:'center' (not
+  // 'start') leaves it comfortably clear of the very bottom edge rather
+  // than just barely peeking onscreen.
+  var heroSlot = document.getElementById('heroChatSlot');
+  if (heroSlot) heroSlot.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return false;
+}
+
+// Clamps a just-shown popup back inside the viewport, with a small margin —
+// a static CSS left/right flip (tried first) can't account for how far right
+// or left the triggering pill actually sits, which varies a lot between the
+// wide analytics-card row and the much narrower single-column ЦЕЛЬ mini-card
+// on mobile. Measuring the REAL rect after it's visible and nudging with an
+// explicit left offset works regardless of which layout it's in.
+function clampPopupToViewport(popup) {
+  popup.style.left = '0px';
+  var rect = popup.getBoundingClientRect();
+  var margin = 12;
+  var overflowRight = rect.right - (window.innerWidth - margin);
+  var overflowLeft = margin - rect.left;
+  if (overflowRight > 0) {
+    popup.style.left = (-overflowRight) + 'px';
+  } else if (overflowLeft > 0) {
+    popup.style.left = overflowLeft + 'px';
+  }
+}
+document.querySelectorAll('.goal-demo-pill-wrap').forEach(function(wrap){
+  var btn = wrap.querySelector('.goal-demo-info');
+  var popup = wrap.querySelector('.goal-demo-popup');
+  // Always FORCE the popup open on click, never toggle by its current
+  // state — hover already opened it by the time a mouse click lands (the
+  // browser fires mouseenter before click), so a toggle would see it
+  // already open and immediately close it again. Closing is handled
+  // separately, by mouseleave and by the outside-click listener below.
+  btn.addEventListener('click', function(e){
+    e.stopPropagation();
+    document.querySelectorAll('.goal-demo-popup').forEach(function(p){ p.classList.remove('show'); });
+    popup.classList.add('show');
+    clampPopupToViewport(popup);
+  });
+  wrap.addEventListener('mouseenter', function(){ popup.classList.add('show'); clampPopupToViewport(popup); });
+  wrap.addEventListener('mouseleave', function(){ popup.classList.remove('show'); });
+});
+document.addEventListener('click', function(){
+  document.querySelectorAll('.goal-demo-popup').forEach(function(p){ p.classList.remove('show'); });
+});
+
+document.querySelectorAll('.faq-item').forEach(function(item){
+  item.querySelector('.faq-q').addEventListener('click', function(){
+    var wasOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item').forEach(function(i){
+      i.classList.remove('open');
+      i.querySelector('.sign').textContent = '+';
+    });
+    if(!wasOpen){
+      item.classList.add('open');
+      item.querySelector('.sign').textContent = '−';
+    }
+  });
+});
+
+// Each niche's demo dialogue: a diagnostic question, the visitor's answer,
+// then a short mini-presentation of what the bot actually does for THIS
+// business — not a second question in a row, which read as an interrogation
+// rather than a consultation.
+// Not a pitch about Умный Чат itself — this is what a VISITOR of that
+// business's own site experiences: the bot already installed there,
+// consulting them on their actual product, in character as that business.
+var NICHE_DIALOGUES = {
+  'Мебель': [
+    ['user', 'Добрый день! Выбрал у вас на сайте кухню Вайба. Подскажите, какой срок изготовления, примерно?'],
+    ['bot', 'Мы изготавливаем кухни в течение 14 дней независимо от сложности проекта. Вы уже выбрали цвет и наполнение?'],
+    ['user', 'Да, ваш менеджер помог разобраться, забыл только срок изготовления уточнить.'],
+    ['bot', 'Отлично! Если появятся вопросы, обращайтесь.'],
+  ],
+  'Переезды': [
+    ['user', 'Можете посчитать стоимость переезда?'],
+    ['bot', 'Добрый день! Конечно! Подскажите, вам переезд нужен с грузчиками?'],
+    ['user', 'Да'],
+    ['bot', 'С какого и на какой этаж и есть ли лифты в обоих помещениях?'],
+  ],
+  'Строительство': [
+    ['user', 'Здравствуйте, планируем ремонт квартиры под ключ, подскажете примерную стоимость?'],
+    ['bot', 'Добрый день! Давайте я задам несколько наводящих вопросов, и тогда смогу дать ориентир по цене. Вы хотите сделать капитальный ремонт?'],
+    ['user', 'Да'],
+    ['bot', 'Какое количество квадратных метров в вашей квартире?'],
+  ],
+};
+var demoChatBody = document.getElementById('demoChatBody');
+function renderNicheDialogue(niche){
+  var turns = NICHE_DIALOGUES[niche];
+  if (!turns || !demoChatBody) return;
+  demoChatBody.innerHTML = turns.map(function(t){
+    var cls = t[0] === 'bot' ? 'bubble bubble-bot' : 'bubble bubble-user';
+    return '<div class="' + cls + '">' + t[1] + '</div>';
+  }).join('');
+}
+document.querySelectorAll('.pill[data-niche]').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.pill[data-niche]').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    renderNicheDialogue(btn.dataset.niche);
+  });
+});
+
+// Illustrative example data (same "ПРИМЕР ОТЧЁТА" spirit as the rest of this
+// mockup) — a longer period naturally accumulates more of everything, so the
+// numbers below are picked to look like real cumulative totals rather than
+// the same daily rate just multiplied out.
+var ANALYTICS_PERIODS = {
+  'Вчера': { showings: '342', dialogs: '61', dialogsConv: 18, leads: '12', leadsConv: 20, attention: 1, bars: [40, 100, 55, 65] },
+  'Неделя': { showings: '2 480', dialogs: '496', dialogsConv: 20, leads: '119', leadsConv: 24, attention: 8, bars: [34, 100, 58, 70] },
+  'Месяц': { showings: '9 840', dialogs: '2 116', dialogsConv: 21, leads: '550', leadsConv: 26, attention: 24, bars: [45, 100, 62, 80] },
+  'Всё время': { showings: '38 600', dialogs: '7 890', dialogsConv: 20, leads: '1 950', leadsConv: 25, attention: 71, bars: [50, 100, 66, 85] },
+};
+var statBars = document.querySelectorAll('#statBars > div');
+function renderAnalyticsPeriod(period){
+  var d = ANALYTICS_PERIODS[period];
+  if (!d) return;
+  document.getElementById('statShowings').textContent = d.showings;
+  document.getElementById('statDialogs').textContent = d.dialogs;
+  document.getElementById('statDialogsConv').textContent = 'Конверсия в диалог ' + d.dialogsConv + '%';
+  document.getElementById('statLeads').textContent = d.leads;
+  document.getElementById('statLeadsConv').textContent = 'Конверсия в заявку ' + d.leadsConv + '%';
+  document.getElementById('statAttention').textContent = d.attention;
+  statBars.forEach(function(bar, i){ bar.style.height = d.bars[i] + '%'; });
+}
+document.querySelectorAll('#periodRow .period-pill').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('#periodRow .period-pill').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    renderAnalyticsPeriod(btn.dataset.period);
+  });
+});
+
+// Privacy policy popup — cabinet/privacy.html stays the single source of
+// truth; fetched once per page load and shown inline instead of navigating
+// away from the landing page.
+var privacyModal = document.getElementById('privacyModal');
+var privacyModalBody = document.getElementById('privacyModalBody');
+var privacyLoaded = false;
+function openPrivacyModal(e){
+  if (e) e.preventDefault();
+  privacyModal.hidden = false;
+  if (!privacyLoaded) {
+    fetch('/cabinet/privacy.html')
+      .then(function(res){ return res.text(); })
+      .then(function(html){
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var content = doc.querySelector('.legal-wrap');
+        if (content) {
+          privacyModalBody.innerHTML = content.innerHTML;
+          privacyLoaded = true;
+        } else {
+          privacyModalBody.innerHTML = '<p>Не удалось загрузить страницу. <a href="/cabinet/privacy.html">Открыть отдельно →</a></p>';
+        }
+      })
+      .catch(function(){
+        privacyModalBody.innerHTML = '<p>Не удалось загрузить страницу. <a href="/cabinet/privacy.html">Открыть отдельно →</a></p>';
+      });
+  }
+  return false;
+}
+function closePrivacyModal(){ privacyModal.hidden = true; }
+document.getElementById('privacyLink').addEventListener('click', openPrivacyModal);
+document.getElementById('privacyModalClose').addEventListener('click', closePrivacyModal);
+privacyModal.addEventListener('click', function(e){ if (e.target === privacyModal) closePrivacyModal(); });
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !privacyModal.hidden) closePrivacyModal(); });
+</script>
+<script src="https://chat.glavinstrument.com/widget.js" data-bot-token="demo-smartchat-self-sell" data-offset-bottom="56" data-hero-target="#heroChatSlot"></script>
+</body>
+</html>

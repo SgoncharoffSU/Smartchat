@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Поддержка — админ-панель</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="stylesheet" href="style.css" />
+<style>
+  .support-admin-shell { max-width: 760px; margin: 32px auto 60px; padding: 0 20px; }
+  .support-admin-company { font-size: 12px; color: #6b7280; margin-bottom: 2px; }
+  .support-admin-id { font-family: ui-monospace, monospace; font-size: 11.5px; color: #9ca3af; white-space: nowrap; }
+  .resolve-box { border-top: 1px solid #f1f2f6; margin-top: 18px; padding-top: 16px; }
+  .resolve-box p { font-size: 12.5px; color: #6b7280; margin: 0 0 8px; }
+  .resolve-box textarea {
+    width: 100%;
+    min-height: 80px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 9px 11px;
+    font-size: 13.5px;
+    font-family: inherit;
+    box-sizing: border-box;
+    resize: vertical;
+  }
+  .resolve-box button { margin-top: 10px; }
+  #loginCard, #noAccessCard { margin: 60px auto; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="logo" href="/">
+      <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="24" height="24" rx="6" fill="#4f46e5"/>
+        <path d="M12 5.5c.5 3 1.8 4.3 4.5 4.5-2.7.2-4 1.5-4.5 4.5-.5-3-1.8-4.3-4.5-4.5 2.7-.2 4-1.5 4.5-4.5z" fill="#fff"/>
+      </svg>
+      Умный<em>Чат</em> · Поддержка
+    </a>
+    <button type="button" id="logoutBtn" hidden>Выйти</button>
+  </div>
+
+  <div class="support-admin-shell">
+    <div id="loginCard" class="card" style="max-width:380px;" hidden>
+      <h1>Вход для поддержки</h1>
+      <p class="sub">Доступ только у аккаунтов с ролью support.</p>
+      <div class="error" id="loginError"></div>
+      <form id="loginForm">
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" required autocomplete="email" />
+        <label for="loginPassword">Пароль</label>
+        <input type="password" id="loginPassword" required autocomplete="current-password" />
+        <button type="submit" class="btn-primary" id="loginSubmitBtn">Войти</button>
+      </form>
+    </div>
+
+    <div id="noAccessCard" class="card" style="max-width:460px;" hidden>
+      <h1>Нет доступа</h1>
+      <p class="sub">Этот аккаунт не имеет прав поддержки. Обратитесь к администратору платформы.</p>
+      <p class="switch-link"><a href="/cabinet/">← Вернуться в обычный кабинет</a></p>
+    </div>
+
+    <div id="adminPanel" hidden>
+      <div class="kb-add-tabs" style="margin-bottom:16px;">
+        <button type="button" class="kb-add-tab active" id="tabTickets">Обращения</button>
+        <button type="button" class="kb-add-tab" id="tabCompanies">Компании</button>
+        <button type="button" class="kb-add-tab" id="tabProviders">Провайдер ИИ</button>
+        <button type="button" class="kb-add-tab" id="tabPayments">Оплата</button>
+      </div>
+
+      <div id="listView">
+        <div class="panel">
+          <h2>Обращения в поддержку</h2>
+          <p class="sub" style="margin-bottom:14px;">Все компании — открытые обращения выше решённых.</p>
+          <div id="ticketList"></div>
+          <p class="empty" id="ticketEmpty" hidden>Обращений нет.</p>
+        </div>
+      </div>
+
+      <div id="companiesView" hidden>
+        <div class="panel">
+          <h2>Компании</h2>
+          <p class="sub" style="margin-bottom:14px;">
+            «Войти» открывает кабинет этой компании от вашего support-аккаунта — доступ временный (4 часа),
+            в кабинете будет заметный баннер, что это режим поддержки.
+          </p>
+          <div class="table-scroll">
+            <table id="companiesTable" style="display:none">
+              <thead><tr><th>ID</th><th>Компания</th><th>Сайт</th><th>Статус</th><th></th></tr></thead>
+              <tbody id="companiesRows"></tbody>
+            </table>
+          </div>
+          <p class="empty" id="companiesEmpty" hidden>Компаний нет.</p>
+        </div>
+      </div>
+
+      <div id="providersView" hidden>
+        <div class="panel">
+          <h2>Провайдер ИИ</h2>
+          <p class="sub" style="margin-bottom:14px;">
+            Применяется сразу ко всем аккаунтам — это общий бэкенд генерации ответов, не настройка одной
+            компании. Переключение вступает в силу мгновенно, без перезапуска. Добавление нового провайдера
+            в этот список — через разработчика.
+          </p>
+          <div class="table-scroll">
+            <table id="providersTable" style="display:none">
+              <thead><tr><th>Название</th><th>Тип</th><th>Модель</th><th>Ключ</th><th>Себестоимость ₽/1000 ток (вх / исх)</th><th>Инструкция</th><th></th></tr></thead>
+              <tbody id="providersRows"></tbody>
+            </table>
+          </div>
+          <p class="empty" id="providersEmpty" hidden>Провайдеры пока не настроены.</p>
+        </div>
+      </div>
+
+      <div id="paymentsView" hidden>
+        <div class="panel">
+          <h2>Оплата — ЮKassa</h2>
+          <p class="sub" style="margin-bottom:14px;">
+            Один аккаунт ЮKassa собирает оплату со всех клиентов сразу — это не настройка одной компании.
+            Ключ хранится только на сервере и никогда не отправляется обратно в браузер целиком.
+          </p>
+          <label for="paymentsShopId">Shop ID</label>
+          <input type="text" id="paymentsShopId" placeholder="Например, 123456" autocomplete="off" />
+          <label for="paymentsSecretKey">Секретный ключ</label>
+          <input type="password" id="paymentsSecretKey" placeholder="Оставьте пустым, чтобы не менять" autocomplete="off" />
+          <p class="sub" id="paymentsCurrentKey" style="margin:-4px 0 12px;"></p>
+          <button type="button" class="btn-primary btn-inline" id="paymentsSaveBtn">Сохранить</button>
+          <span class="empty" id="paymentsStatus" style="margin-left:10px;"></span>
+        </div>
+      </div>
+
+      <div id="detailView" class="panel" hidden>
+        <button type="button" class="training-reset-btn" id="backBtn" style="width:auto;padding:0 14px;margin-bottom:14px;">← Все обращения</button>
+        <div class="support-admin-company" id="detailCompany"></div>
+        <h2 id="detailSubject"></h2>
+        <div id="detailStatus" class="support-status-banner" hidden></div>
+        <div id="detailThread" class="support-thread"></div>
+        <div class="support-reply-form">
+          <textarea id="replyText" placeholder="Написать клиенту…"></textarea>
+          <button type="button" class="btn-primary btn-inline" id="replySubmitBtn">Отправить</button>
+        </div>
+
+        <div class="resolve-box" id="resolveBox">
+          <p>Отметить выполненным — отчёт обязателен, его увидит клиент (в кабинете и на email).</p>
+          <textarea id="resolveReport" placeholder="Что сделано / как решён вопрос"></textarea>
+          <button type="button" class="btn-primary btn-inline" id="resolveBtn">✓ Выполнено</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var STATUS_LABEL = { open: 'Открыт', resolved: 'Решён' };
+    var currentTicketId = null;
+
+    function fmtDate(iso) {
+      return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function showLogin(message) {
+      document.getElementById('loginCard').hidden = false;
+      document.getElementById('noAccessCard').hidden = true;
+      document.getElementById('adminPanel').hidden = true;
+      document.getElementById('logoutBtn').hidden = true;
+      if (message) {
+        var err = document.getElementById('loginError');
+        err.textContent = message;
+        err.classList.add('visible');
+      }
+    }
+
+    function showNoAccess() {
+      document.getElementById('loginCard').hidden = true;
+      document.getElementById('noAccessCard').hidden = false;
+      document.getElementById('adminPanel').hidden = true;
+      document.getElementById('logoutBtn').hidden = true;
+    }
+
+    function showAdminPanel() {
+      document.getElementById('loginCard').hidden = true;
+      document.getElementById('noAccessCard').hidden = true;
+      document.getElementById('adminPanel').hidden = false;
+      document.getElementById('logoutBtn').hidden = false;
+      loadTickets();
+    }
+
+    function checkSession() {
+      fetch('/api/cabinet/me')
+        .then(function (res) {
+          if (!res.ok) throw new Error('unauthorized');
+          return res.json();
+        })
+        .then(function (me) {
+          if (me.role === 'support') showAdminPanel();
+          else showNoAccess();
+        })
+        .catch(function () { showLogin(); });
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var errEl = document.getElementById('loginError');
+      errEl.classList.remove('visible');
+      var btn = document.getElementById('loginSubmitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Входим…';
+      fetch('/api/cabinet/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: document.getElementById('loginEmail').value.trim(),
+          password: document.getElementById('loginPassword').value,
+        }),
+      })
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (d) { throw new Error(d.message || 'Неверный email или пароль'); });
+          return res.json();
+        })
+        .then(function () { checkSession(); })
+        .catch(function (err) {
+          errEl.textContent = typeof err.message === 'string' ? err.message : 'Не получилось войти.';
+          errEl.classList.add('visible');
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Войти';
+        });
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', function () {
+      fetch('/api/cabinet/logout', { method: 'POST' }).then(function () { location.reload(); });
+    });
+
+    var ALL_TABS = ['tabTickets', 'tabCompanies', 'tabProviders', 'tabPayments'];
+    var ALL_TAB_VIEWS = ['listView', 'companiesView', 'providersView', 'paymentsView'];
+    function activateTab(tabId) {
+      ALL_TABS.forEach(function (id) { document.getElementById(id).classList.toggle('active', id === tabId); });
+      ALL_TAB_VIEWS.forEach(function (id) { document.getElementById(id).hidden = true; });
+      document.getElementById('detailView').hidden = true;
+    }
+
+    document.getElementById('tabTickets').addEventListener('click', function () {
+      activateTab('tabTickets');
+      document.getElementById('listView').hidden = false;
+      currentTicketId = null;
+      loadTickets();
+    });
+    document.getElementById('tabCompanies').addEventListener('click', function () {
+      activateTab('tabCompanies');
+      document.getElementById('companiesView').hidden = false;
+      loadCompanies();
+    });
+    document.getElementById('tabProviders').addEventListener('click', function () {
+      activateTab('tabProviders');
+      document.getElementById('providersView').hidden = false;
+      loadProviders();
+    });
+    document.getElementById('tabPayments').addEventListener('click', function () {
+      activateTab('tabPayments');
+      document.getElementById('paymentsView').hidden = false;
+      loadPaymentSettings();
+    });
+
+    function loadPaymentSettings() {
+      fetch('/api/admin/payment-settings')
+        .then(function (res) { return res.json(); })
+        .then(function (settings) {
+          document.getElementById('paymentsShopId').value = settings.shopId || '';
+          document.getElementById('paymentsCurrentKey').textContent = settings.configured
+            ? 'Текущий ключ: ' + settings.secretKeyPreview
+            : 'Ключ ещё не задан.';
+        })
+        .catch(function () {});
+    }
+
+    document.getElementById('paymentsSaveBtn').addEventListener('click', function () {
+      var btn = this;
+      var statusEl = document.getElementById('paymentsStatus');
+      btn.disabled = true;
+      statusEl.textContent = 'Сохраняю…';
+      fetch('/api/admin/payment-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shopId: document.getElementById('paymentsShopId').value,
+          // Empty means "leave the stored secret key alone" — see
+          // PaymentSettingsService.update's own comment for why.
+          secretKey: document.getElementById('paymentsSecretKey').value,
+        }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function () {
+          statusEl.textContent = 'Сохранено.';
+          document.getElementById('paymentsSecretKey').value = '';
+          loadPaymentSettings();
+        })
+        .catch(function () { statusEl.textContent = 'Не получилось сохранить.'; })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    function loadProviders() {
+      fetch('/api/admin/llm-providers')
+        .then(function (res) { return res.json(); })
+        .then(renderProviderList)
+        .catch(function () {});
+    }
+
+    function renderProviderList(providers) {
+      var table = document.getElementById('providersTable');
+      var rows = document.getElementById('providersRows');
+      var empty = document.getElementById('providersEmpty');
+      rows.innerHTML = '';
+      empty.hidden = providers.length > 0;
+      table.style.display = providers.length > 0 ? 'table' : 'none';
+      var TYPE_LABEL = { yandex: 'Yandex', openai_compatible: 'OpenAI-совместимый' };
+      providers.forEach(function (p) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + p.name + (p.isActive ? ' <span class="support-ticket-item-status resolved">Активен</span>' : '') + '</td>' +
+          '<td>' + (TYPE_LABEL[p.type] || p.type) + '</td>' +
+          '<td>' + p.model + '</td>' +
+          '<td class="support-admin-id">' + p.apiKeyPreview + '</td>';
+
+        // Real cost from this provider's own billing page, input and output
+        // priced separately — feeds directly into what a 'token'-plan client
+        // is charged (see BillingService's effectiveRates: cost * TariffPlan
+        // .markupMultiplier). Real providers price these very differently
+        // (RouterAI's gpt-4o-mini: 4x more per output token than input).
+        var costTd = document.createElement('td');
+        var costInInput = document.createElement('input');
+        costInInput.type = 'number';
+        costInInput.step = '0.0001';
+        costInInput.min = '0';
+        costInInput.style.width = '80px';
+        costInInput.value = p.costRubPer1kInput != null ? p.costRubPer1kInput : '';
+        costInInput.placeholder = 'вх.';
+        costInInput.title = 'Входящие токены, ₽/1000';
+        var costOutInput = document.createElement('input');
+        costOutInput.type = 'number';
+        costOutInput.step = '0.0001';
+        costOutInput.min = '0';
+        costOutInput.style.width = '80px';
+        costOutInput.style.marginLeft = '4px';
+        costOutInput.value = p.costRubPer1kOutput != null ? p.costRubPer1kOutput : '';
+        costOutInput.placeholder = 'исх.';
+        costOutInput.title = 'Исходящие токены, ₽/1000';
+        var costSaveBtn = document.createElement('button');
+        costSaveBtn.type = 'button';
+        costSaveBtn.className = 'copy-btn';
+        costSaveBtn.textContent = 'Сохранить';
+        costSaveBtn.style.marginLeft = '6px';
+        costSaveBtn.addEventListener('click', function () {
+          costSaveBtn.disabled = true;
+          var valueIn = costInInput.value === '' ? null : Number(costInInput.value);
+          var valueOut = costOutInput.value === '' ? null : Number(costOutInput.value);
+          fetch('/api/admin/llm-providers/' + p.id + '/cost', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ costRubPer1kInput: valueIn, costRubPer1kOutput: valueOut }),
+          })
+            .then(function (res) { if (!res.ok) throw new Error(); })
+            .catch(function () { alert('Не получилось сохранить себестоимость.'); })
+            .finally(function () { costSaveBtn.disabled = false; });
+        });
+        costTd.appendChild(costInInput);
+        costTd.appendChild(costOutInput);
+        costTd.appendChild(costSaveBtn);
+        tr.appendChild(costTd);
+
+        var promptTd = document.createElement('td');
+        promptTd.style.maxWidth = '220px';
+        promptTd.style.color = p.systemPromptOverride ? 'inherit' : '#888';
+        promptTd.textContent = p.systemPromptOverride
+          ? (p.systemPromptOverride.length > 60 ? p.systemPromptOverride.slice(0, 60) + '…' : p.systemPromptOverride)
+          : '—';
+        tr.appendChild(promptTd);
+
+        var actionsTd = document.createElement('td');
+        var editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'copy-btn';
+        editBtn.textContent = 'Изменить';
+        editBtn.style.marginRight = p.isActive ? '0' : '8px';
+        editBtn.addEventListener('click', function () { toggleProviderPromptEditor(p, editRow); });
+        actionsTd.appendChild(editBtn);
+        if (!p.isActive) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'copy-btn';
+          btn.textContent = 'Переключить';
+          btn.addEventListener('click', function () {
+            btn.disabled = true;
+            btn.textContent = 'Переключаю…';
+            fetch('/api/admin/llm-providers/' + p.id + '/activate', { method: 'POST' })
+              .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+              .then(function () { loadProviders(); })
+              .catch(function () {
+                alert('Не получилось переключить провайдера.');
+                btn.disabled = false;
+                btn.textContent = 'Переключить';
+              });
+          });
+          actionsTd.appendChild(btn);
+        }
+        tr.appendChild(actionsTd);
+        rows.appendChild(tr);
+
+        // Hidden editor row, toggled open by "Изменить" — kept as a
+        // separate <tr> (not a popup/modal) so it stays inline with the
+        // provider it edits, matching this page's plain-table style.
+        var editRow = document.createElement('tr');
+        editRow.hidden = true;
+        var editTd = document.createElement('td');
+        editTd.colSpan = 6;
+        var textarea = document.createElement('textarea');
+        textarea.value = p.systemPromptOverride || '';
+        textarea.placeholder = 'Доп. системная инструкция только для этого провайдера (пусто — без override).';
+        textarea.style.width = '100%';
+        textarea.style.minHeight = '90px';
+        textarea.style.marginBottom = '8px';
+        var saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'btn-primary btn-inline';
+        saveBtn.textContent = 'Сохранить';
+        saveBtn.addEventListener('click', function () {
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Сохраняю…';
+          fetch('/api/admin/llm-providers/' + p.id + '/system-prompt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ systemPromptOverride: textarea.value }),
+          })
+            .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+            .then(function () { loadProviders(); })
+            .catch(function () {
+              alert('Не получилось сохранить инструкцию.');
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Сохранить';
+            });
+        });
+        editTd.appendChild(textarea);
+        editTd.appendChild(document.createElement('br'));
+        editTd.appendChild(saveBtn);
+        editRow.appendChild(editTd);
+        rows.appendChild(editRow);
+      });
+    }
+
+    function toggleProviderPromptEditor(p, editRow) {
+      editRow.hidden = !editRow.hidden;
+    }
+
+    function companyStatusText(c) {
+      if (c.subscriptionActive) return 'Оплачено';
+      if (c.trialEndsAt) {
+        var daysLeft = Math.ceil((new Date(c.trialEndsAt).getTime() - Date.now()) / 86400000);
+        return daysLeft >= 0 ? 'Пробный, ещё ' + daysLeft + ' дн.' : 'Пробный истёк';
+      }
+      return '—';
+    }
+
+    function loadCompanies() {
+      fetch('/api/admin/companies')
+        .then(function (res) { return res.json(); })
+        .then(renderCompanyList)
+        .catch(function () {});
+    }
+
+    function renderCompanyList(companies) {
+      var table = document.getElementById('companiesTable');
+      var rows = document.getElementById('companiesRows');
+      var empty = document.getElementById('companiesEmpty');
+      rows.innerHTML = '';
+      empty.hidden = companies.length > 0;
+      table.style.display = companies.length > 0 ? 'table' : 'none';
+      companies.forEach(function (c) {
+        var tr = document.createElement('tr');
+        // Distinct, since two bots for the same company are usually built
+        // from the same source site — repeating it per bot just adds noise
+        // to the one thing this row exists to answer at a glance.
+        var sites = [];
+        (c.bots || []).forEach(function (b) {
+          if (b.sourceWebsite && sites.indexOf(b.sourceWebsite) === -1) sites.push(b.sourceWebsite);
+        });
+        var siteHtml = sites.length
+          ? sites.map(function (s) {
+              // Stored as whatever the lead typed (see provisioning.service.ts) —
+              // often without a protocol at all, which a bare href would treat
+              // as a relative link on THIS page instead of opening the site.
+              var href = /^https?:\/\//i.test(s) ? s : 'https://' + s;
+              return '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + s + '</a>';
+            }).join(', ')
+          : '—';
+        tr.innerHTML =
+          '<td class="support-admin-id">' + c.id + '</td>' + '<td>' + c.name + '</td>' +
+          '<td>' + siteHtml + '</td>' + '<td>' + companyStatusText(c) + '</td>';
+        var td = document.createElement('td');
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'copy-btn';
+        btn.textContent = 'Войти';
+        btn.addEventListener('click', function () {
+          btn.disabled = true;
+          btn.textContent = 'Вхожу…';
+          fetch('/api/admin/companies/' + c.id + '/impersonate', { method: 'POST' })
+            .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+            .then(function () { location.href = '/cabinet/index.html'; })
+            .catch(function () {
+              alert('Не получилось войти.');
+              btn.disabled = false;
+              btn.textContent = 'Войти';
+            });
+        });
+        td.appendChild(btn);
+        tr.appendChild(td);
+        rows.appendChild(tr);
+      });
+    }
+
+    function loadTickets() {
+      fetch('/api/admin/support-tickets')
+        .then(function (res) { return res.json(); })
+        .then(renderTicketList)
+        .catch(function () {});
+    }
+
+    function renderTicketList(tickets) {
+      var list = document.getElementById('ticketList');
+      var empty = document.getElementById('ticketEmpty');
+      list.innerHTML = '';
+      empty.hidden = tickets.length > 0;
+      tickets.forEach(function (t) {
+        var row = document.createElement('div');
+        row.className = 'support-ticket-item';
+
+        var main = document.createElement('div');
+        main.className = 'support-ticket-item-main';
+        var company = document.createElement('div');
+        company.className = 'support-admin-company';
+        company.textContent = t.companyName;
+        var subj = document.createElement('div');
+        subj.className = 'support-ticket-item-subject';
+        subj.textContent = t.subject;
+        var meta = document.createElement('div');
+        meta.className = 'support-ticket-item-meta';
+        meta.textContent = fmtDate(t.updatedAt);
+        main.appendChild(company);
+        main.appendChild(subj);
+        main.appendChild(meta);
+
+        var status = document.createElement('span');
+        status.className = 'support-ticket-item-status ' + (t.status === 'resolved' ? 'resolved' : 'open');
+        status.textContent = STATUS_LABEL[t.status] || t.status;
+
+        row.appendChild(main);
+        row.appendChild(status);
+        row.addEventListener('click', function () { openTicket(t.id); });
+        list.appendChild(row);
+      });
+    }
+
+    function openTicket(id) {
+      fetch('/api/admin/support-tickets/' + id)
+        .then(function (res) { return res.json(); })
+        .then(function (ticket) {
+          currentTicketId = ticket.id;
+          document.getElementById('listView').hidden = true;
+          document.getElementById('detailView').hidden = false;
+          document.getElementById('detailCompany').textContent = ticket.company ? ticket.company.name : '';
+          document.getElementById('detailSubject').textContent = ticket.subject;
+          document.getElementById('replyText').value = '';
+          document.getElementById('resolveReport').value = ticket.resolutionReport || '';
+
+          var statusEl = document.getElementById('detailStatus');
+          var resolveBox = document.getElementById('resolveBox');
+          if (ticket.status === 'resolved') {
+            statusEl.hidden = false;
+            statusEl.textContent = 'Уже решено — клиент видит этот отчёт: ' + (ticket.resolutionReport || '');
+            resolveBox.hidden = true;
+          } else {
+            statusEl.hidden = true;
+            resolveBox.hidden = false;
+          }
+
+          var thread = document.getElementById('detailThread');
+          thread.innerHTML = '';
+          ticket.messages.forEach(function (m) {
+            var bubble = document.createElement('div');
+            bubble.className = 'support-thread-msg ' + (m.senderRole === 'support' ? 'support' : 'client');
+            bubble.textContent = m.content;
+            thread.appendChild(bubble);
+          });
+          thread.scrollTop = thread.scrollHeight;
+        })
+        .catch(function () {});
+    }
+
+    document.getElementById('backBtn').addEventListener('click', function () {
+      currentTicketId = null;
+      document.getElementById('detailView').hidden = true;
+      document.getElementById('listView').hidden = false;
+      loadTickets();
+    });
+
+    document.getElementById('replySubmitBtn').addEventListener('click', function () {
+      var text = document.getElementById('replyText').value.trim();
+      if (!text || !currentTicketId) return;
+      var btn = document.getElementById('replySubmitBtn');
+      btn.disabled = true;
+      fetch('/api/admin/support-tickets/' + currentTicketId + '/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function () { openTicket(currentTicketId); })
+        .catch(function () { alert('Не получилось отправить сообщение.'); })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    document.getElementById('resolveBtn').addEventListener('click', function () {
+      var report = document.getElementById('resolveReport').value.trim();
+      if (!report) { alert('Опишите, что сделано — клиент должен увидеть отчёт.'); return; }
+      if (!currentTicketId) return;
+      var btn = document.getElementById('resolveBtn');
+      btn.disabled = true;
+      btn.textContent = 'Сохраняю…';
+      fetch('/api/admin/support-tickets/' + currentTicketId + '/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ report: report }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function () { openTicket(currentTicketId); })
+        .catch(function () { alert('Не получилось сохранить отчёт.'); })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = '✓ Выполнено';
+        });
+    });
+
+    checkSession();
+  </script>
+</body>
+</html>

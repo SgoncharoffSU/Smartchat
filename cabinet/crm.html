@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CRM — Умный Чат</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="stylesheet" href="style.css" />
+<style>
+  /* Standalone page on purpose — see cabinet.service.ts's inviteTeammate and
+     index.html's CRM nav item: a teammate with no other cabinet access opens
+     this page directly and never sees bot/billing views at all. */
+  body { background: var(--canvas); }
+  .crm-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px; background: #fff; border-bottom: 1px solid var(--line);
+  }
+  .crm-topbar .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; color: var(--ink); text-decoration: none; }
+  .crm-topbar .logo em { font-style: normal; color: var(--blue); }
+  .crm-topbar-right { display: flex; align-items: center; gap: 14px; }
+  .crm-topbar-link { font-size: 13.5px; color: var(--blue); text-decoration: none; font-weight: 600; }
+  .crm-topbar-link:hover { text-decoration: underline; }
+  .crm-account { font-size: 13px; color: var(--muted); }
+
+  /* --- Desktop board (Kanban columns, drag-and-drop) --- */
+  .crm-board-wrap { padding: 20px 24px; overflow-x: auto; flex: 1; }
+  .crm-board { display: flex; gap: 16px; align-items: flex-start; min-height: 60vh; }
+  .crm-column {
+    flex: 0 0 284px; background: #f4f5f9; border-radius: 14px; padding: 10px;
+    display: flex; flex-direction: column; max-height: calc(100vh - 140px);
+    transition: background .12s ease;
+  }
+  .crm-column.drag-over { background: var(--accent); }
+  .crm-column-header { display: flex; align-items: center; gap: 8px; padding: 8px 8px 12px; font-weight: 700; font-size: 14px; }
+  .crm-column-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .crm-column-count { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 12.5px; background: #fff; border-radius: 999px; padding: 1px 8px; }
+  .crm-cards { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; padding-bottom: 8px; }
+  .crm-column-empty { text-align: center; color: #b0b5c0; font-size: 12.5px; padding: 22px 8px; }
+
+  .crm-card {
+    background: #fff; border-radius: 12px; padding: 13px; box-shadow: 0 1px 2px rgba(15,23,42,.06);
+    cursor: grab; border: 1px solid var(--line); transition: box-shadow .14s ease, border-color .14s ease, transform .1s ease;
+  }
+  .crm-card:hover { border-color: #c7d2fe; box-shadow: 0 4px 14px rgba(79,70,229,.12); }
+  .crm-card:active { cursor: grabbing; }
+  .crm-card.dragging { opacity: .4; }
+  .crm-card-top { display: flex; align-items: flex-start; gap: 9px; }
+  .crm-card-avatar {
+    width: 26px; height: 26px; border-radius: 999px; background: var(--accent); color: var(--ink);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; flex: none;
+  }
+  .crm-card-title { font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 2px; line-height: 1.3; }
+  .crm-card-sub { font-size: 12px; color: var(--muted); }
+  .crm-card-date { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .crm-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+  .crm-card-amount { font-size: 12.5px; font-weight: 700; color: #16a34a; }
+  .crm-card-assignee { font-size: 11px; background: var(--accent); color: var(--ink); border-radius: 999px; padding: 2px 8px; font-weight: 600; }
+  .crm-add-card-btn { border: 1px dashed #c7d2fe; background: transparent; color: var(--blue); border-radius: 8px; padding: 8px; font-size: 13px; cursor: pointer; margin-top: 4px; }
+
+  /* --- Mobile board (stage tabs + vertical list) --- */
+  .crm-mobile-board { display: none; flex: 1; flex-direction: column; min-height: 0; }
+  .crm-mobile-tabs { flex: none; display: flex; gap: 8px; padding: 12px 16px; overflow-x: auto; }
+  .crm-mobile-tabs::-webkit-scrollbar { display: none; }
+  .crm-tab-pill {
+    flex: none; display: flex; align-items: center; gap: 6px; border-radius: 999px; padding: 8px 14px;
+    font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; border: 1px solid var(--line); background: #fff; color: var(--muted);
+  }
+  .crm-tab-pill.active { color: #fff; border-color: transparent; }
+  .crm-tab-dot { width: 7px; height: 7px; border-radius: 999px; }
+  .crm-tab-count { font-size: 11px; opacity: .65; }
+  .crm-tab-pill.active .crm-tab-count { opacity: .85; }
+  .crm-mobile-list { flex: 1; overflow-y: auto; padding: 2px 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .crm-mobile-card {
+    text-align: left; width: 100%; background: #fff; border: none; border-radius: 12px; padding: 14px;
+    box-shadow: 0 1px 3px rgba(15,23,42,.08); cursor: pointer; display: flex; flex-direction: column; gap: 6px; -webkit-tap-highlight-color: transparent;
+  }
+  .crm-mobile-card:active { background: var(--secondary); }
+  .crm-mobile-empty { text-align: center; color: var(--muted); font-size: 13.5px; padding: 60px 20px; }
+
+  /* --- Deal detail panel (shared by desktop drawer + mobile full-screen) --- */
+  .crm-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.35); display: flex; justify-content: flex-end; z-index: 200; }
+  .crm-overlay[hidden] { display: none; }
+  .crm-panel { width: min(440px, 100vw); background: #fff; height: 100%; overflow-y: auto; padding: 22px; }
+  .crm-panel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .crm-panel-close { border: none; background: transparent; font-size: 20px; cursor: pointer; color: var(--muted); width: 30px; height: 30px; border-radius: 999px; flex: none; }
+  .crm-panel-close:hover { background: var(--secondary); }
+  .crm-panel-title { margin: 0; font-size: 17px; font-weight: 700; }
+
+  .crm-client-card {
+    background: #f5f6fb; border: 1px solid #e6e8f5; border-radius: 14px; padding: 14px;
+    display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px;
+  }
+  .crm-client-avatar {
+    width: 42px; height: 42px; border-radius: 999px; background: var(--ink); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex: none;
+  }
+  .crm-client-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .crm-client-fields input {
+    width: 100%; border: 1px solid transparent; background: transparent; border-radius: 7px; padding: 3px 6px; margin: -3px -6px;
+    font-size: 13.5px; font-family: inherit; color: var(--ink);
+  }
+  .crm-client-fields input:first-child { font-size: 15.5px; font-weight: 700; }
+  .crm-client-fields input:hover, .crm-client-fields input:focus { border-color: #d1d5db; background: #fff; outline: none; }
+  .crm-client-call {
+    width: 36px; height: 36px; border-radius: 999px; background: var(--ink); display: flex; align-items: center;
+    justify-content: center; flex: none; text-decoration: none;
+  }
+
+  .crm-stage-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .crm-stage-pill {
+    display: flex; align-items: center; gap: 6px; border-radius: 999px; padding: 7px 13px; font-size: 12.5px;
+    font-weight: 600; cursor: pointer; border: 1px solid var(--line); background: #fff; color: var(--muted);
+  }
+  .crm-stage-pill.active { color: #fff; border-color: transparent; }
+  .crm-stage-pill-dot { width: 7px; height: 7px; border-radius: 999px; }
+
+  .crm-field-row { margin-bottom: 12px; }
+  .crm-field-row label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .crm-field-row input, .crm-field-row select, .crm-field-row textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13.5px; font-family: inherit;
+  }
+  .crm-activity { border-top: 1px solid #f1f5f9; margin-top: 16px; padding-top: 12px; }
+  .crm-activity-item { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+  .crm-activity-item .meta { color: var(--muted); font-size: 11px; }
+  .crm-activity-item.system { color: var(--muted); font-style: italic; }
+
+  .crm-dialog-toggle {
+    border: 1px solid #e6e8f5; background: #f5f6fb; color: var(--blue); font-size: 12.5px; font-weight: 600;
+    border-radius: 8px; padding: 7px 12px; cursor: pointer; margin-top: 16px;
+  }
+  .crm-dialog-thread { max-height: 320px; overflow-y: auto; margin-top: 12px; padding: 10px; background: var(--secondary); border-radius: 10px; }
+  .crm-dialog-msg { max-width: 82%; padding: 8px 12px; border-radius: 12px; font-size: 12.5px; line-height: 1.4; margin-bottom: 8px; white-space: pre-wrap; word-break: break-word; }
+  .crm-dialog-msg.client { background: #fff; border: 1px solid var(--line); margin-right: auto; }
+  .crm-dialog-msg.support { background: var(--ink); color: #fff; margin-left: auto; }
+
+  .crm-menu-btn {
+    display: none; border: none; background: transparent; color: var(--ink); width: 34px; height: 34px;
+    border-radius: 9px; align-items: center; justify-content: center; cursor: pointer; flex: none;
+  }
+  .crm-menu-btn:hover { background: var(--secondary); }
+  .crm-menu-scrim { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.4); z-index: 149; }
+  .crm-menu-scrim.active { display: block; }
+  .crm-menu-drawer {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 260px; max-width: 84vw; background: #fff; z-index: 150;
+    transform: translateX(-100%); transition: transform .22s cubic-bezier(.32,.72,0,1);
+    box-shadow: 8px 0 32px rgba(15,23,42,.18); display: flex; flex-direction: column; padding: 18px 14px;
+  }
+  .crm-menu-drawer.open { transform: translateX(0); }
+  .crm-menu-drawer .logo {
+    margin-bottom: 16px; padding: 0 8px; text-decoration: none; color: var(--ink);
+    font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px;
+  }
+  .crm-menu-drawer .logo em { font-style: normal; color: var(--blue); }
+  .crm-menu-account { margin: 0 8px 14px; padding: 9px 10px; background: var(--secondary); border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .crm-menu-drawer .crm-topbar-link { display: block; padding: 10px 12px; border-radius: 9px; font-weight: 600; }
+  .crm-menu-drawer .crm-topbar-link:hover { background: var(--secondary); text-decoration: none; }
+  .crm-menu-drawer .btn-secondary { margin: auto 8px 0; }
+
+  @media (max-width: 720px) {
+    .crm-topbar { padding: 12px 14px; }
+    .crm-topbar-right { gap: 8px; }
+    .crm-topbar .logo { display: none; }
+    .crm-menu-btn { display: inline-flex; }
+    .crm-account { display: none; }
+    #backToCabinetLink, #crmLogoutBtn { display: none; }
+    #newDealBtn { padding: 8px 10px; font-size: 0; }
+    #newDealBtn::after { content: '+'; font-size: 20px; line-height: 1; }
+    .crm-board-wrap { display: none; }
+    .crm-mobile-board { display: flex; }
+    .crm-panel { padding: 16px; }
+  }
+</style>
+</head>
+<body style="display: flex; flex-direction: column; height: 100vh; overflow: hidden;">
+  <div class="crm-menu-scrim" id="crmMenuScrim"></div>
+  <div class="crm-menu-drawer" id="crmMenuDrawer">
+    <a class="logo" href="/"><svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="24" height="24" rx="6" fill="#c8ff4d"/><path d="M12 5.5c.5 3 1.8 4.3 4.5 4.5-2.7.2-4 1.5-4.5 4.5-.5-3-1.8-4.3-4.5-4.5 2.7-.2 4-1.5 4.5-4.5z" fill="#081522"/></svg>Умный<em>Чат</em> CRM</a>
+    <div class="crm-menu-account" id="crmMenuAccountLabel"></div>
+    <a class="crm-topbar-link" href="index.html" id="backToCabinetLinkMobile" hidden>Личный кабинет</a>
+    <button type="button" class="btn-secondary" id="crmLogoutBtnMobile">Выйти</button>
+  </div>
+
+  <div class="crm-topbar">
+    <button type="button" class="crm-menu-btn" id="crmMenuBtn" aria-label="Меню">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+    </button>
+    <a class="logo" href="/"><svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="24" height="24" rx="6" fill="#c8ff4d"/><path d="M12 5.5c.5 3 1.8 4.3 4.5 4.5-2.7.2-4 1.5-4.5 4.5-.5-3-1.8-4.3-4.5-4.5 2.7-.2 4-1.5 4.5-4.5z" fill="#081522"/></svg>Умный<em>Чат</em> CRM</a>
+    <div class="crm-topbar-right">
+      <button type="button" class="btn-primary btn-inline" id="newDealBtn">+ Новая сделка</button>
+      <a class="crm-topbar-link" href="index.html" id="backToCabinetLink" hidden>Личный кабинет</a>
+      <span class="crm-account" id="crmAccountLabel"></span>
+      <button type="button" class="btn-secondary" id="crmLogoutBtn">Выйти</button>
+    </div>
+  </div>
+
+  <div class="crm-board-wrap">
+    <div class="crm-board" id="crmBoard"></div>
+  </div>
+
+  <div class="crm-mobile-board" id="crmMobileBoard">
+    <div class="crm-mobile-tabs" id="crmMobileTabs"></div>
+    <div class="crm-mobile-list" id="crmMobileList"></div>
+  </div>
+
+  <div class="crm-overlay" id="dealOverlay" hidden>
+    <div class="crm-panel" id="dealPanel"></div>
+  </div>
+
+<script>
+  var myCompanyRole = 'owner';
+  var myUserId = null;
+  var customFieldDefs = [];
+  var teamMembers = [];
+  var lastStages = [];
+  var mobileActiveStageId = null;
+
+  var CALL_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+  var CHEVRON_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c7ccd6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>';
+
+  function apiFetch(url, opts) {
+    return fetch(url, opts).then(function (res) {
+      if (res.status === 401) { window.location.href = 'login.html'; throw new Error('unauthorized'); }
+      return res;
+    });
+  }
+
+  function fmtDate(iso) {
+    return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function initialOf(name) {
+    return (name || '?').trim().charAt(0).toUpperCase() || '?';
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+  }
+
+  function renderBoard(board) {
+    lastStages = board.stages;
+    if (!mobileActiveStageId || !board.stages.some(function (s) { return s.id === mobileActiveStageId; })) {
+      mobileActiveStageId = board.stages[0] ? board.stages[0].id : null;
+    }
+
+    var wrap = document.getElementById('crmBoard');
+    wrap.innerHTML = '';
+    board.stages.forEach(function (stage) {
+      var col = document.createElement('div');
+      col.className = 'crm-column';
+      col.dataset.stageId = stage.id;
+
+      var header = document.createElement('div');
+      header.className = 'crm-column-header';
+      header.innerHTML = '<span class="crm-column-dot" style="background:' + stage.color + '"></span><span>' + escapeHtml(stage.name) + '</span>';
+      var count = document.createElement('span');
+      count.className = 'crm-column-count';
+      var dealsInStage = board.deals.filter(function (d) { return d.stageId === stage.id; });
+      count.textContent = dealsInStage.length;
+      header.appendChild(count);
+      col.appendChild(header);
+
+      var cardsWrap = document.createElement('div');
+      cardsWrap.className = 'crm-cards';
+      if (dealsInStage.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'crm-column-empty';
+        empty.textContent = 'Пусто';
+        cardsWrap.appendChild(empty);
+      }
+      dealsInStage.forEach(function (deal) { cardsWrap.appendChild(dealCard(deal)); });
+      col.appendChild(cardsWrap);
+
+      col.addEventListener('dragover', function (e) { e.preventDefault(); col.classList.add('drag-over'); });
+      col.addEventListener('dragleave', function () { col.classList.remove('drag-over'); });
+      col.addEventListener('drop', function (e) {
+        e.preventDefault();
+        col.classList.remove('drag-over');
+        var dealId = e.dataTransfer.getData('text/plain');
+        moveDealToStage(dealId, stage.id);
+      });
+
+      wrap.appendChild(col);
+    });
+
+    renderMobileBoard(board);
+  }
+
+  function dealCard(deal) {
+    var card = document.createElement('div');
+    card.className = 'crm-card';
+    card.draggable = true;
+    card.dataset.dealId = deal.id;
+    card.innerHTML =
+      '<div class="crm-card-top">' +
+      '<div class="crm-card-avatar">' + escapeHtml(initialOf(deal.name)) + '</div>' +
+      '<div style="min-width:0;flex:1;">' +
+      '<div class="crm-card-title">' + escapeHtml(deal.title) + '</div>' +
+      (deal.name || deal.phone ? '<div class="crm-card-sub">' + escapeHtml([deal.name, deal.phone].filter(Boolean).join(' · ')) + '</div>' : '') +
+      '<div class="crm-card-date">' + fmtDate(deal.createdAt) + '</div>' +
+      '</div></div>' +
+      '<div class="crm-card-footer">' +
+      (deal.amount ? '<span class="crm-card-amount">' + Number(deal.amount).toLocaleString('ru-RU') + ' ' + (deal.currency || '') + '</span>' : '<span></span>') +
+      (deal.assignedUserName ? '<span class="crm-card-assignee">' + escapeHtml(deal.assignedUserName) + '</span>' : '') +
+      '</div>';
+    card.addEventListener('dragstart', function (e) {
+      card.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', deal.id);
+    });
+    card.addEventListener('dragend', function () { card.classList.remove('dragging'); });
+    card.addEventListener('click', function () { openDeal(deal.id); });
+    return card;
+  }
+
+  // --- Mobile: stage tabs + vertical card list — replaces drag-and-drop
+  // (native HTML5 DnD does not work on touch), see the stage pills inside
+  // the deal panel for how a mobile visitor actually moves a deal.
+  function renderMobileBoard(board) {
+    var tabsWrap = document.getElementById('crmMobileTabs');
+    tabsWrap.innerHTML = '';
+    board.stages.forEach(function (stage) {
+      var count = board.deals.filter(function (d) { return d.stageId === stage.id; }).length;
+      var isActive = stage.id === mobileActiveStageId;
+      var pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'crm-tab-pill' + (isActive ? ' active' : '');
+      if (isActive) { pill.style.background = stage.color; }
+      pill.innerHTML =
+        '<span class="crm-tab-dot" style="background:' + (isActive ? 'rgba(255,255,255,.85)' : stage.color) + '"></span>' +
+        '<span>' + escapeHtml(stage.name) + '</span>' +
+        '<span class="crm-tab-count">' + count + '</span>';
+      pill.addEventListener('click', function () { mobileActiveStageId = stage.id; renderMobileBoard(board); });
+      tabsWrap.appendChild(pill);
+    });
+
+    var listWrap = document.getElementById('crmMobileList');
+    listWrap.innerHTML = '';
+    var dealsInStage = board.deals.filter(function (d) { return d.stageId === mobileActiveStageId; });
+    if (dealsInStage.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'crm-mobile-empty';
+      empty.textContent = 'В этой стадии пока нет сделок';
+      listWrap.appendChild(empty);
+      return;
+    }
+    dealsInStage.forEach(function (deal) {
+      var card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'crm-mobile-card';
+      card.innerHTML =
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">' +
+        '<span style="font-size:14.5px;font-weight:600;line-height:1.3;">' + escapeHtml(deal.title) + '</span>' +
+        (deal.amount ? '<span style="font-size:13px;font-weight:700;color:#16a34a;flex:none;">' + Number(deal.amount).toLocaleString('ru-RU') + ' ' + (deal.currency || '') + '</span>' : '') +
+        '</div>' +
+        (deal.name || deal.phone ? '<div style="font-size:12.5px;color:#6b7280;margin-top:4px;">' + escapeHtml([deal.name, deal.phone].filter(Boolean).join(' · ')) + '</div>' : '') +
+        '<div style="font-size:11.5px;color:#9ca3af;margin-top:2px;">' + fmtDate(deal.createdAt) + '</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">' +
+        (deal.assignedUserName ? '<span class="crm-card-assignee">' + escapeHtml(deal.assignedUserName) + '</span>' : '<span></span>') +
+        CHEVRON_ICON +
+        '</div>';
+      card.addEventListener('click', function () { openDeal(deal.id); });
+      listWrap.appendChild(card);
+    });
+  }
+
+  function loadBoard() {
+    return apiFetch('/api/cabinet/deals').then(function (res) { return res.json(); }).then(renderBoard);
+  }
+
+  function moveDealToStage(dealId, stageId) {
+    return apiFetch('/api/cabinet/deals/' + dealId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stageId: stageId }),
+    })
+      .then(function (res) { if (!res.ok) return res.json().then(function (d) { throw new Error(d.message); }); return res.json(); })
+      .catch(function (err) { alert(err.message || 'Не получилось переместить сделку.'); loadBoard(); throw err; });
+  }
+
+  document.getElementById('newDealBtn').addEventListener('click', function () {
+    var title = prompt('Название новой сделки:');
+    if (!title) return;
+    apiFetch('/api/cabinet/deals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: title }),
+    })
+      .then(function (res) { if (!res.ok) return res.json().then(function (d) { throw new Error(d.message); }); })
+      .then(loadBoard)
+      .catch(function (err) { alert(err.message || 'Не получилось создать сделку.'); });
+  });
+
+  // --- Deal detail panel ---
+  function closeDeal() { document.getElementById('dealOverlay').hidden = true; }
+  document.getElementById('dealOverlay').addEventListener('click', function (e) { if (e.target === this) closeDeal(); });
+
+  function openDeal(dealId) {
+    apiFetch('/api/cabinet/deals/' + dealId).then(function (res) { return res.json(); }).then(function (deal) {
+      renderDealPanel(deal);
+      document.getElementById('dealOverlay').hidden = false;
+    });
+  }
+
+  function renderDealPanel(deal) {
+    var panel = document.getElementById('dealPanel');
+    var canReassign = myCompanyRole === 'owner' || myCompanyRole === 'manager';
+
+    var assigneeOptions = '<option value="">Не назначено</option>' + teamMembers.map(function (u) {
+      return '<option value="' + u.id + '"' + (u.id === deal.assignedUserId ? ' selected' : '') + '>' + escapeHtml(u.name || u.email) + '</option>';
+    }).join('');
+
+    var customFieldsHtml = customFieldDefs.map(function (f) {
+      var val = deal.customFields[f.key] || '';
+      var inputType = f.type === 'number' ? 'number' : (f.type === 'date' ? 'date' : (f.type === 'phone' ? 'tel' : (f.type === 'email' ? 'email' : 'text')));
+      if (f.type === 'textarea') {
+        return '<div class="crm-field-row"><label>' + escapeHtml(f.label) + '</label><textarea data-field-key="' + f.key + '" rows="3">' + escapeHtml(val) + '</textarea></div>';
+      }
+      return '<div class="crm-field-row"><label>' + escapeHtml(f.label) + '</label><input type="' + inputType + '" data-field-key="' + f.key + '" value="' + escapeHtml(val) + '" /></div>';
+    }).join('');
+
+    var activitiesHtml = (deal.activities || []).map(function (a) {
+      return '<div class="crm-activity-item' + (a.kind !== 'note' ? ' system' : '') + '">' + escapeHtml(a.text) +
+        '<div class="meta">' + (a.authorName ? escapeHtml(a.authorName) + ' · ' : '') + fmtDate(a.createdAt) + '</div></div>';
+    }).join('') || '<p class="empty">Пока нет записей.</p>';
+
+    // Only sales-origin deals (chat lead, self-sell provisioning) carry a
+    // dialogId — a deal created by hand in the CRM has no conversation to
+    // show, so the toggle is simply omitted for those.
+    var dialogSectionHtml = deal.dialogId
+      ? '<button type="button" class="crm-dialog-toggle" id="dealDialogToggleBtn">Показать переписку</button>' +
+        '<div class="crm-dialog-thread" id="dealDialogThread" hidden></div>'
+      : '';
+
+    var telHref = 'tel:' + String(deal.phone || '').replace(/[^+\d]/g, '');
+
+    var stagePillsHtml = lastStages.map(function (s) {
+      var isCurrent = s.id === deal.stageId;
+      return '<button type="button" class="crm-stage-pill' + (isCurrent ? ' active' : '') + '" data-stage-id="' + s.id + '"' +
+        (isCurrent ? ' style="background:' + s.color + '"' : '') + '>' +
+        '<span class="crm-stage-pill-dot" style="background:' + (isCurrent ? 'rgba(255,255,255,.85)' : s.color) + '"></span>' +
+        escapeHtml(s.name) + '</button>';
+    }).join('');
+
+    panel.innerHTML =
+      '<div class="crm-panel-header">' +
+      '<button type="button" class="crm-panel-close" id="dealPanelCloseBtn">&times;</button>' +
+      '<div>' +
+      '<h2 class="crm-panel-title">' + escapeHtml(deal.title) + '</h2>' +
+      '<div style="font-size:11.5px;color:#9ca3af;margin-top:2px;">Создано ' + fmtDate(deal.createdAt) + '</div>' +
+      '</div></div>' +
+
+      '<div class="crm-client-card">' +
+      '<div class="crm-client-avatar">' + escapeHtml(initialOf(deal.name)) + '</div>' +
+      '<div class="crm-client-fields">' +
+      '<input type="text" id="dealNameInput" value="' + escapeHtml(deal.name || '') + '" placeholder="Имя клиента" />' +
+      '<input type="text" id="dealPhoneInput" value="' + escapeHtml(deal.phone || '') + '" placeholder="Телефон" />' +
+      '<input type="text" id="dealEmailInput" value="' + escapeHtml(deal.email || '') + '" placeholder="Email" />' +
+      '</div>' +
+      (deal.phone ? '<a class="crm-client-call" href="' + telHref + '" id="dealCallLink">' + CALL_ICON + '</a>' : '') +
+      '</div>' +
+
+      '<div class="crm-stage-pills" id="dealStagePills">' + stagePillsHtml + '</div>' +
+
+      '<div class="crm-field-row"><label>Название сделки</label><input type="text" id="dealTitleInput" value="' + escapeHtml(deal.title) + '" /></div>' +
+      '<div class="crm-field-row"><label>Сумма</label><input type="number" id="dealAmountInput" value="' + (deal.amount || '') + '" /></div>' +
+      (canReassign ? '<div class="crm-field-row"><label>Ответственный</label><select id="dealAssigneeInput">' + assigneeOptions + '</select></div>' : '') +
+      customFieldsHtml +
+      '<button type="button" class="btn-primary btn-inline" id="dealSaveBtn">Сохранить</button>' +
+      '<span class="empty" id="dealSaveStatus"></span>' +
+
+      '<div class="crm-activity">' +
+      '<div class="crm-field-row"><label>Добавить заметку</label><textarea id="dealNoteInput" rows="2"></textarea>' +
+      '<button type="button" class="btn-secondary" id="dealAddNoteBtn" style="margin-top:6px;">Добавить</button></div>' +
+      activitiesHtml +
+      dialogSectionHtml +
+      '</div>';
+
+    document.getElementById('dealPanelCloseBtn').addEventListener('click', function () { closeDeal(); loadBoard(); });
+
+    if (deal.dialogId) {
+      var dialogToggleBtn = document.getElementById('dealDialogToggleBtn');
+      var dialogThreadEl = document.getElementById('dealDialogThread');
+      var dialogLoaded = false;
+      dialogToggleBtn.addEventListener('click', function () {
+        dialogThreadEl.hidden = !dialogThreadEl.hidden;
+        if (!dialogThreadEl.hidden && !dialogLoaded) {
+          dialogToggleBtn.textContent = 'Загрузка…';
+          apiFetch('/api/cabinet/dialogs/' + deal.dialogId)
+            .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+            .then(function (data) {
+              dialogLoaded = true;
+              dialogToggleBtn.textContent = 'Скрыть переписку';
+              dialogThreadEl.innerHTML = '';
+              data.messages.forEach(function (m) {
+                var bubble = document.createElement('div');
+                bubble.className = 'crm-dialog-msg ' + (m.role === 'assistant' ? 'support' : 'client');
+                bubble.textContent = m.content;
+                dialogThreadEl.appendChild(bubble);
+              });
+              dialogThreadEl.scrollTop = dialogThreadEl.scrollHeight;
+            })
+            .catch(function () { dialogThreadEl.textContent = 'Не получилось загрузить переписку.'; });
+        } else {
+          dialogToggleBtn.textContent = dialogThreadEl.hidden ? 'Показать переписку' : 'Скрыть переписку';
+        }
+      });
+    }
+
+    panel.querySelectorAll('.crm-stage-pill').forEach(function (pillBtn) {
+      pillBtn.addEventListener('click', function () {
+        var stageId = pillBtn.dataset.stageId;
+        if (stageId === deal.stageId) return;
+        moveDealToStage(deal.id, stageId).then(function (updated) { renderDealPanel(updated); loadBoard(); }).catch(function () {});
+      });
+    });
+
+    document.getElementById('dealSaveBtn').addEventListener('click', function () {
+      var btn = this;
+      var status = document.getElementById('dealSaveStatus');
+      btn.disabled = true;
+      var customFields = {};
+      customFieldDefs.forEach(function (f) {
+        var el = panel.querySelector('[data-field-key="' + f.key + '"]');
+        if (el) customFields[f.key] = el.value;
+      });
+      var body = {
+        title: document.getElementById('dealTitleInput').value,
+        name: document.getElementById('dealNameInput').value,
+        phone: document.getElementById('dealPhoneInput').value,
+        email: document.getElementById('dealEmailInput').value,
+        amount: document.getElementById('dealAmountInput').value ? Number(document.getElementById('dealAmountInput').value) : null,
+        customFields: customFields,
+      };
+      if (canReassign) body.assignedUserId = document.getElementById('dealAssigneeInput').value || null;
+      apiFetch('/api/cabinet/deals/' + deal.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+        .then(function (res) { if (!res.ok) return res.json().then(function (d) { throw new Error(d.message); }); return res.json(); })
+        .then(function (updated) { renderDealPanel(updated); loadBoard(); })
+        .catch(function (err) { status.textContent = err.message || 'Ошибка сохранения'; })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    document.getElementById('dealAddNoteBtn').addEventListener('click', function () {
+      var input = document.getElementById('dealNoteInput');
+      if (!input.value.trim()) return;
+      apiFetch('/api/cabinet/deals/' + deal.id + '/activities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: input.value.trim() }),
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (updated) { renderDealPanel(updated); })
+        .catch(function () { alert('Не получилось добавить заметку.'); });
+    });
+  }
+
+  function logout() {
+    fetch('/api/cabinet/logout', { method: 'POST' }).then(function () { window.location.href = 'login.html'; });
+  }
+  document.getElementById('crmLogoutBtn').addEventListener('click', logout);
+  document.getElementById('crmLogoutBtnMobile').addEventListener('click', logout);
+
+  function closeCrmMenu() {
+    document.getElementById('crmMenuDrawer').classList.remove('open');
+    document.getElementById('crmMenuScrim').classList.remove('active');
+  }
+  document.getElementById('crmMenuBtn').addEventListener('click', function () {
+    document.getElementById('crmMenuDrawer').classList.add('open');
+    document.getElementById('crmMenuScrim').classList.add('active');
+  });
+  document.getElementById('crmMenuScrim').addEventListener('click', closeCrmMenu);
+  document.getElementById('backToCabinetLinkMobile').addEventListener('click', closeCrmMenu);
+
+  // --- Boot ---
+  apiFetch('/api/cabinet/me')
+    .then(function (res) { if (!res.ok) throw new Error('unauthorized'); return res.json(); })
+    .then(function (me) {
+      myCompanyRole = me.companyRole || 'owner';
+      document.getElementById('backToCabinetLink').hidden = myCompanyRole !== 'owner';
+      document.getElementById('backToCabinetLinkMobile').hidden = myCompanyRole !== 'owner';
+      document.getElementById('crmAccountLabel').textContent = me.userName || me.userEmail || '';
+      document.getElementById('crmMenuAccountLabel').textContent = me.userName || me.userEmail || '';
+      return Promise.all([
+        fetch('/api/cabinet/deals/custom-fields/list').then(function (r) { return r.json(); }),
+        myCompanyRole === 'owner' || myCompanyRole === 'manager' ? fetch('/api/cabinet/team').then(function (r) { return r.json(); }) : Promise.resolve([]),
+      ]);
+    })
+    .then(function (results) {
+      customFieldDefs = results[0] || [];
+      teamMembers = results[1] || [];
+      return loadBoard();
+    })
+    .catch(function () {});
+</script>
+</body>
+</html>

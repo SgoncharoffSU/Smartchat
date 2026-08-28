@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Подтверждение регистрации — Умный Чат</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a class="logo" href="/">
+      <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="24" height="24" rx="6" fill="#4f46e5"/>
+        <path d="M12 5.5c.5 3 1.8 4.3 4.5 4.5-2.7.2-4 1.5-4.5 4.5-.5-3-1.8-4.3-4.5-4.5 2.7-.2 4-1.5 4.5-4.5z" fill="#fff"/>
+      </svg>
+      Умный<em>Чат</em>
+    </a>
+  </div>
+  <div class="auth-wrap">
+    <div class="card">
+      <h1 id="title">Подтверждаем регистрацию…</h1>
+      <p class="sub" id="subtitle">Секунду.</p>
+      <div class="error" id="error"></div>
+    </div>
+  </div>
+  <script>
+    var token = new URLSearchParams(location.search).get('token');
+    var titleEl = document.getElementById('title');
+    var subtitleEl = document.getElementById('subtitle');
+    var errorEl = document.getElementById('error');
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.add('visible');
+    }
+
+    if (!token) {
+      titleEl.textContent = 'Ссылка недействительна';
+      subtitleEl.style.display = 'none';
+      showError('В ссылке нет токена подтверждения. Проверьте, что вы перешли по полной ссылке из письма.');
+    } else {
+      fetch('/api/cabinet/confirm-email?token=' + encodeURIComponent(token))
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (d) { throw new Error(d.message || 'Ошибка подтверждения'); });
+          return res.json();
+        })
+        .then(function () {
+          titleEl.textContent = 'Готово!';
+          subtitleEl.textContent = 'Почта подтверждена, входим в кабинет…';
+          location.href = '/cabinet/';
+        })
+        .catch(function (err) {
+          titleEl.textContent = 'Не получилось подтвердить';
+          subtitleEl.style.display = 'none';
+          showError(typeof err.message === 'string' ? err.message : 'Ссылка недействительна или уже использована.');
+        });
+    }
+  </script>
+</body>
+</html>

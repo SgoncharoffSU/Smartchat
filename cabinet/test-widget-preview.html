@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Предпросмотр виджета</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: #fafafa; }
+</style>
+</head>
+<body>
+  <script>
+    // Embedded by the cabinet's "Тестирование" pane (see paneFrameSrc in
+    // cabinet/index.html) inside its own iframe box — position:fixed inside
+    // widget.js anchors to THIS iframe's viewport, not the cabinet page's, so
+    // the launcher/teaser/chat window render confined to the pane instead of
+    // floating over the whole cabinet. Same data-preview mechanism test-chat.html
+    // (the public prospect-facing demo link) already uses — real launcher
+    // button, real teaser bubble with the bot's actual opening line, real
+    // click-to-open — not a hand-built approximation of it.
+    var params = new URLSearchParams(location.search);
+    var botToken = params.get('token');
+    var color = params.get('color') || '#4f46e5';
+    var s = document.createElement('script');
+    s.src = '/widget.js';
+    s.setAttribute('data-bot-token', botToken);
+    s.setAttribute('data-color', color);
+    s.setAttribute('data-teaser-delay-ms', '1500');
+    s.setAttribute('data-preview', 'true');
+    // Unlike test-chat.html (the public demo link), this page is only ever
+    // reached from inside the cabinet's own "Тестирование" pane — safe to
+    // show the "mark as bad" control here. See widget.js/chat.js.
+    s.setAttribute('data-owner-testing', 'true');
+    document.body.appendChild(s);
+  </script>
+</body>
+</html>

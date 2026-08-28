@@ -4,16 +4,22 @@ dist/
 
 # Секреты и персональные данные (запрещено коммитить)
 .env
+.env.bak*
 data/
+uploads/
+
+# Локальные IDE/расширения — персональные, не часть проекта
+.idea/
+.continue/
 
 # Служебные скрипты, логи и артефакты исследования — не часть проекта
 *.log
 *.txt
 *.py
 *.tar.gz
+*.bak.*
 _*
 avito_*
-cabinet/
 .vscode/
 PROJECT_NOTES.md
 DevPortal.js

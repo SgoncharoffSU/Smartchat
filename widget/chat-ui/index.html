@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Smartchat</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="stylesheet" href="chat.css" />
+</head>
+<body>
+  <header id="chatHeader" class="chat-header">
+    <div class="avatar">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="white"/>
+        <path d="M12 6c.5 3.8 2.2 5.5 6 6-3.8.5-5.5 2.2-6 6-.5-3.8-2.2-5.5-6-6 3.8-.5 5.5-2.2 6-6z" fill="#4f46e5"/>
+      </svg>
+    </div>
+    <div class="info">
+      <div class="name" id="botNameLabel">Умный Чат</div>
+      <div class="status" id="statusOnline"><span class="status-dot"></span>Онлайн</div>
+    </div>
+  </header>
+  <div id="messages" class="messages"></div>
+  <div id="buttons" class="buttons"></div>
+  <form id="composer" class="composer">
+    <input id="input" type="text" placeholder="Напишите сообщение..." autocomplete="off" />
+    <button type="submit" aria-label="Отправить">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+      </svg>
+    </button>
+  </form>
+  <div class="footer-branding">Powered by <strong>Главинструмент</strong></div>
+  <script src="chat.js"></script>
+</body>
+</html>

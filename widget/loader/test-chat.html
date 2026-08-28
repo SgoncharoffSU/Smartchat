@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Smartchat — тестовый чат</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #0a0a0f;
+    color: #e2e8f0;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .hint {
+    max-width: 420px;
+    text-align: center;
+  }
+  .hint h1 {
+    font-size: 20px;
+    margin: 0 0 12px;
+  }
+  .hint p {
+    color: #94a3b8;
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0 0 8px;
+  }
+  .hint code {
+    background: #1a1a25;
+    border: 1px solid #2a2a3a;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 13px;
+  }
+  .reset-page-btn {
+    margin-top: 18px;
+    border: 1px solid #4f46e5;
+    background: #4f46e5;
+    color: #fff;
+    border-radius: 999px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .reset-page-btn:hover {
+    background: #433bcb;
+  }
+</style>
+</head>
+<body>
+  <div class="hint">
+    <h1>Тестовый режим Smartchat</h1>
+    <p>Ведёт себя точно как на боевом сайте: кнопка чата внизу справа, через пару секунд всплывает пузырь с настоящим первым вопросом бота.</p>
+    <p>Кнопка ниже — полный сброс: новая сессия + страница перезагружается, чтобы снова увидеть всё с самого начала, включая всплытие первого сообщения, а не только сам диалог.</p>
+    <button type="button" class="reset-page-btn" id="resetPageBtn">↺ Сбросить и посмотреть заново</button>
+  </div>
+  <script>
+    var botToken = new URLSearchParams(location.search).get('token') || 'demo-smartchat-self-sell';
+    var s = document.createElement('script');
+    s.src = '/widget.js';
+    s.setAttribute('data-bot-token', botToken);
+    s.setAttribute('data-teaser-delay-ms', '1500');
+    s.setAttribute('data-preview', 'true');
+    document.body.appendChild(s);
+
+    document.getElementById('resetPageBtn').addEventListener('click', function () {
+      localStorage.removeItem('smartchat_session_' + botToken);
+      localStorage.removeItem('smartchat_teaser_dismissed_' + botToken);
+      location.reload();
+    });
+  </script>
+</body>
+</html>

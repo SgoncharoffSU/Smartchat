@@ -1,0 +1,913 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id                 String    @id @default(uuid())
+  name               String
+  // Set on auto-provisioning, cleared (kept, actually) once claimed via
+  // /cabinet/register — registeredAt distinguishes "claimed" from "pending".
+  registrationToken  String?   @unique @map("registration_token")
+  registeredAt       DateTime? @map("registered_at")
+  trialEndsAt        DateTime? @map("trial_ends_at")
+  // Manually flipped once a client actually pays (no payment gateway yet —
+  // set directly by us after an off-platform payment). Once true, the trial
+  // countdown no longer matters: the bot keeps working and the cabinet shows
+  // a "paid" banner instead of the trial countdown.
+  subscriptionActive Boolean   @default(false) @map("subscription_active")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  // Filled once someone on this company's side actually presses Start on the
+  // Telegram deep link — this is where escalations for all of this company's
+  // bots get sent. Null means "not connected yet" (escalations still get
+  // recorded, just not pushed anywhere).
+  telegramChatId       String? @map("telegram_chat_id")
+  // One-time token embedded in the /start deep link shown in the cabinet.
+  // Consumed (left as-is; chatId being set is what actually matters) once used.
+  telegramConnectToken String? @unique @map("telegram_connect_token")
+  // A self-sell provisioning bot's own "lead" isn't a Lead row (see
+  // CrmIntegrationService's provisioned-registration push) — a completed
+  // registration is the conversion event instead, so its CRM sync status is
+  // tracked here rather than on a Lead. Null means "not yet pushed (or that
+  // CRM isn't connected on the bot that provisioned this company)"; the same
+  // retry sweep that covers Lead rows also covers these.
+  bitrix24SyncedAt DateTime? @map("bitrix24_synced_at")
+  amocrmSyncedAt   DateTime? @map("amocrm_synced_at")
+
+  // Lead-notification channels — separate opt-ins from escalations (which
+  // always use telegramChatId once connected): an owner may want escalations
+  // without a lead-per-message firehose, or vice versa. See
+  // TelegramService.notifyNewLead / WidgetService's leadCaptured branch.
+  notifyLeadsViaTelegram Boolean @default(false) @map("notify_leads_via_telegram")
+  // Plain notification address, independent of any User's login email (a
+  // shared sales inbox, not necessarily the owner's own account) — presence
+  // alone means "enabled", same convention as bitrix24WebhookUrl.
+  notificationEmail     String? @map("notification_email")
+
+  bots               Bot[]
+  users              User[]
+  escalations        Escalation[]
+  knowledgeEntries   KnowledgeEntry[]
+  knowledgeCategories KnowledgeCategory[]
+  aiUsageEvents      AiUsageEvent[]
+  supportTickets     SupportTicket[]
+  pipelines          Pipeline[]
+  customFieldDefinitions CustomFieldDefinition[]
+  deals              Deal[]
+  payments           Payment[]
+
+  // --- Billing (see TariffPlan/Payment/PaymentSettings) ---
+  // Null = no plan chosen yet (still just on the free trial above). Set the
+  // moment a payment for either plan succeeds — see PaymentsService.
+  tariffPlanId       String?     @map("tariff_plan_id")
+  tariffPlan         TariffPlan? @relation(fields: [tariffPlanId], references: [id])
+  // Only meaningful for an 'unlimited' plan — the paid period's end; the bot
+  // is treated as unpaid again once this passes (see BillingService.isPaid).
+  // Null for a 'token' plan (that one is governed by tokenBalanceRub instead,
+  // never expires on its own).
+  planExpiresAt      DateTime?   @map("plan_expires_at")
+  // Prepaid balance in RUB for a 'token' plan — debited after every
+  // completion call by the real, measured token count from that call times
+  // TariffPlan.tokenRubPer1k (see BillingService.chargeTokenUsage). Unrelated
+  // to (and not reset by) an 'unlimited' plan.
+  tokenBalanceRub    Decimal     @default(0) @db.Decimal(10, 2) @map("token_balance_rub")
+
+  @@map("companies")
+}
+
+// Both current tariffs live here as rows (not hardcoded) so the 1-RUB
+// placeholder price from this first pass can be edited later without a code
+// change or migration — see the seed data this migration inserts.
+model TariffPlan {
+  id       String  @id @default(uuid())
+  // 'unlimited' | 'token' — picks which Company billing fields actually
+  // govern access (see Company's own comments above) and which purchase flow
+  // PaymentsService.createPayment builds; a genuinely new kind is real code,
+  // not a config row, same convention as LlmProvider.type.
+  kind     String
+  name     String
+  priceRub Decimal @db.Decimal(10, 2) @map("price_rub")
+  // 'unlimited' only: how many days one payment covers.
+  periodDays    Int?     @map("period_days")
+  // 'token' only: FALLBACK flat rate (same for input/output), only used if
+  // the active LlmProvider row has no costRubPer1kInput/Output set yet (see
+  // BillingService.effectiveRates) — once real costs are entered there,
+  // kind='token' companies are charged those * markupMultiplier instead,
+  // input/output priced separately, live, not this fixed number.
+  tokenRubPer1k Decimal? @db.Decimal(10, 4) @map("token_rub_per_1k")
+  // 'token' only: e.g. 4.00 = charge 4x the real per-1000-tokens cost (a
+  // +300% markup over cost) — see BillingService.effectiveRates for the
+  // actual multiplication. Editable directly on this row, same as priceRub —
+  // no code change to adjust the margin.
+  markupMultiplier Decimal @default(4) @db.Decimal(6, 2) @map("markup_multiplier")
+  isActive Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  companies Company[]
+  payments  Payment[]
+
+  @@map("tariff_plans")
+}
+
+// One row per checkout attempt, 'pending' until the YooKassa webhook (see
+// PaymentsController) confirms it — that confirmation is the ONLY place a
+// plan/balance actually changes, never the redirect-back page itself (which
+// is just where the visitor's browser lands, not proof of payment).
+model Payment {
+  id               String    @id @default(uuid())
+  companyId        String    @map("company_id")
+  tariffPlanId     String    @map("tariff_plan_id")
+  amountRub        Decimal   @db.Decimal(10, 2) @map("amount_rub")
+  status           String    @default("pending") @map("status") // 'pending' | 'succeeded' | 'canceled'
+  yookassaPaymentId String?  @unique @map("yookassa_payment_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  confirmedAt      DateTime? @map("confirmed_at")
+
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tariffPlan TariffPlan @relation(fields: [tariffPlanId], references: [id])
+
+  @@index([companyId, createdAt])
+  @@map("payments")
+}
+
+// Singleton (always exactly the one row — see PaymentSettingsService) —
+// superadmin-only, same convention as LlmProvider: a real secret key, never
+// sent back to the frontend in full. Global because a single "Умный Чат"
+// YooKassa account collects for every client's subscription, not one
+// merchant account per company.
+model PaymentSettings {
+  id         String   @id @default(uuid())
+  shopId     String?  @map("shop_id")
+  secretKey  String?  @map("secret_key")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("payment_settings")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  companyId    String   @map("company_id")
+  email        String   @unique
+  // Collected at registration, shown in the sidebar's account row (avatar +
+  // name) instead of a bare email — null only for accounts created before
+  // this field existed.
+  name         String?
+  passwordHash String   @map("password_hash")
+  // Null until they click the confirmation link emailed at registration —
+  // login is blocked until then (see CabinetService.login/confirmEmail).
+  emailVerifiedAt  DateTime? @map("email_verified_at")
+  // One-time token embedded in the confirmation email link; cleared (set
+  // null) once used, regenerated on "прислать письмо ещё раз".
+  emailVerifyToken String?   @unique @map("email_verify_token")
+  // "Забыли пароль?" flow: one-time token emailed on request, cleared once
+  // used or replaced by a fresh one on a repeat request. Expiry is checked
+  // separately so an old, unused token can't be replayed indefinitely.
+  passwordResetToken     String?   @unique @map("password_reset_token")
+  passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
+  // 'owner' (default, every normal cabinet user) or 'support' — a support
+  // account still belongs to a real company (in practice "Умный Чат" itself)
+  // like anyone else, but this flag grants read access to every OTHER
+  // company's support tickets (and, while handling one, that company's
+  // context) — never a blanket "see everything" grant, always scoped to an
+  // actual open ticket. Set manually, directly in the database — no
+  // self-service way to become a support account.
+  role         String   @default("owner")
+  // Tenant-side CRM permission level — deliberately separate from `role`
+  // above (that's a vendor-side support flag, unrelated to what a client's
+  // own employee can see). 'owner'/'manager' see and edit every Deal in the
+  // company; 'employee' only their own (Deal.assignedUserId = this user) —
+  // enforced in DealsService, not just the UI. 'owner' additionally manages
+  // the pipeline/custom fields/team; 'manager' cannot.
+  companyRole  String   @default("owner") @map("company_role")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedDeals Deal[] @relation("DealAssignee")
+  dealActivities DealActivity[]
+
+  @@map("users")
+}
+
+// A company's own configurable sales funnel(s) for the mini-CRM board — a
+// completely separate concept from Bot.funnelConfig (that's an LLM-conversation
+// stage list, consumed at chat-runtime; this is a human-dragged Kanban
+// pipeline). One default pipeline per company today; the model allows more
+// later without a migration.
+model Pipeline {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  name      String   @default("Основная воронка")
+  isDefault Boolean  @default(true) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  company Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  stages  PipelineStage[]
+
+  @@map("pipelines")
+}
+
+model PipelineStage {
+  id         String  @id @default(uuid())
+  pipelineId String  @map("pipeline_id")
+  name       String
+  color      String  @default("#94a3b8")
+  order      Int
+  isWon      Boolean @default(false) @map("is_won")
+  isLost     Boolean @default(false) @map("is_lost")
+  // Where a Deal entering this stage gets pushed — configured per stage in
+  // the pipeline-settings UI, not a global bot-level setting like the v1
+  // Lead push. Null means "don't sync this stage." See
+  // CrmIntegrationService's deal-push branch for how these are used.
+  bitrix24CategoryId String? @map("bitrix24_category_id") // null = Bitrix "simple CRM"/Leads; set = a specific deal pipeline (smart process) category
+  bitrix24StageId    String? @map("bitrix24_stage_id") // STAGE_ID (crm.deal) or STATUS_ID (crm.lead), depending on bitrix24TargetType
+  bitrix24TargetType String? @map("bitrix24_target_type") // 'lead' | 'deal'
+  amocrmStatusId     Int?    @map("amocrm_status_id")
+  amocrmPipelineId   Int?    @map("amocrm_pipeline_id")
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals    Deal[]
+
+  @@map("pipeline_stages")
+}
+
+// Owner-defined extra fields on a Deal — company-scoped, not global.
+model CustomFieldDefinition {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  // Stable machine key derived from the label at creation time — referenced
+  // by DealCustomFieldValue, independent of the label being renamed later.
+  key       String
+  label     String
+  // 'text' | 'number' | 'date' | 'select' | 'phone' | 'email' | 'textarea'
+  type      String
+  options   Json? // string[] — only meaningful for type='select'
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  company Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  values  DealCustomFieldValue[]
+
+  @@unique([companyId, key])
+  @@map("custom_field_definitions")
+}
+
+model DealCustomFieldValue {
+  id      String @id @default(uuid())
+  dealId  String @map("deal_id")
+  fieldId String @map("field_id")
+  // Always a string — the UI parses/formats per the field's declared type.
+  value   String?
+
+  deal  Deal                  @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  field CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([dealId, fieldId])
+  @@map("deal_custom_field_values")
+}
+
+// A deal's activity feed — manual notes plus system entries (stage changes, sync events).
+model DealActivity {
+  id           String   @id @default(uuid())
+  dealId       String   @map("deal_id")
+  // Null for system-generated entries (auto stage-sync from an inbound CRM
+  // update, etc.) — a real note always has an author.
+  authorUserId String?  @map("author_user_id")
+  // 'note' | 'stage_change' | 'system'
+  kind         String
+  text         String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  deal   Deal  @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  author User? @relation(fields: [authorUserId], references: [id])
+
+  @@map("deal_activities")
+}
+
+// The mini-CRM's own deal card — deliberately NOT 1:1 with Dialog like Lead
+// is (see Lead's own comment): a Deal can be created manually, from a
+// chat-captured Lead, or from a self-sell provisioned registration, and the
+// whole point of this feature is that it must work as a standalone tool with
+// no chat involved at all.
+model Deal {
+  id             String    @id @default(uuid())
+  companyId      String    @map("company_id")
+  // Null for a manually-created deal with no chat/bot origin at all.
+  botId          String?   @map("bot_id")
+  // Set only if this deal grew out of a real chat-captured Lead — see
+  // WidgetService's lead-capture block. @unique: a Lead becomes at most one Deal.
+  leadId         String?   @unique @map("lead_id")
+  // Denormalized from the originating Lead's dialog, purely so the deal card
+  // can link straight to the transcript without an extra join through Lead.
+  dialogId       String?   @map("dialog_id")
+  title          String
+  name           String?
+  phone          String?
+  email          String?
+  amount         Decimal?  @db.Decimal(12, 2)
+  currency       String?   @default("RUB")
+  stageId        String    @map("stage_id")
+  assignedUserId String?   @map("assigned_user_id")
+  // 'chat' | 'provisioning' | 'manual' | 'import' — where this deal came from.
+  source         String    @default("manual")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  // Mirrors Lead.redactedAt — a Deal grown from a Lead must respect the same
+  // 152-FZ erasure (see LeadsService.redact, which also nulls this out).
+  redactedAt     DateTime? @map("redacted_at")
+
+  bitrix24DealId     String?   @map("bitrix24_deal_id")
+  // Set instead of bitrix24DealId when the stage maps to a Bitrix Lead (Б24
+  // "simple CRM"/pre-conversion) rather than a Deal — see PipelineStage.bitrix24TargetType.
+  bitrix24LeadId     String?   @map("bitrix24_lead_id")
+  bitrix24SyncedAt   DateTime? @map("bitrix24_synced_at")
+  amocrmLeadId       String?   @map("amocrm_lead_id")
+  amocrmSyncedAt     DateTime? @map("amocrm_synced_at")
+  // A fingerprint (stage + key fields) taken right after the last successful
+  // OUTBOUND push — an inbound webhook/poll update that would produce this
+  // exact same fingerprint is a no-op instead of bouncing straight back out
+  // as another outbound push (the ping-pong loop this guards against).
+  lastCrmFingerprint String?   @map("last_crm_fingerprint")
+
+  company      Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bot          Bot?                   @relation(fields: [botId], references: [id])
+  lead         Lead?                  @relation(fields: [leadId], references: [id])
+  assignedUser User?                  @relation("DealAssignee", fields: [assignedUserId], references: [id])
+  stage        PipelineStage          @relation(fields: [stageId], references: [id])
+  customFieldValues DealCustomFieldValue[]
+  activities   DealActivity[]
+
+  @@map("deals")
+}
+
+model SupportTicket {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  // The client user who opened it — support tickets aren't anonymous.
+  createdByUserId String @map("created_by_user_id")
+  subject   String
+  // 'open' | 'resolved' — no in-between "in progress" state: a ticket with
+  // any support reply on it already visibly has one, the status itself only
+  // needs to say whether it's done.
+  status    String    @default("open")
+  // Required before status can become 'resolved' (enforced in
+  // SupportTicketsService, not just the UI) — the client-visible summary of
+  // what was actually done, not just a silent status flip.
+  resolutionReport String? @map("resolution_report")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  resolvedAt DateTime? @map("resolved_at")
+
+  company  Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages SupportTicketMessage[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("support_tickets")
+}
+
+model SupportTicketMessage {
+  id        String   @id @default(uuid())
+  ticketId  String   @map("ticket_id")
+  // 'client' | 'support' — which side of the conversation this is, not a
+  // specific user id: the client side is always the ticket's own company,
+  // support could be any support-role account, and neither actually needs
+  // per-message attribution beyond that for how this is displayed.
+  senderRole String  @map("sender_role")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("support_ticket_messages")
+}
+
+model Bot {
+  id           String   @id @default(uuid())
+  companyId    String   @map("company_id")
+  name         String
+  systemPrompt String   @map("system_prompt")
+  // Ordered list of { stageId, instructions, suggestedButtons[], exitCondition }
+  funnelConfig Json     @map("funnel_config")
+  widgetToken  String   @unique @map("widget_token")
+  isActive     Boolean  @default(true) @map("is_active")
+  // How the OWNER identifies this bot in their own cabinet (switcher, lists)
+  // — set once at creation, editable in "Настройки чата". Deliberately
+  // separate from `name` (the visitor-facing chat persona, e.g. "Алина")
+  // and from `sourceWebsite`: a single bot can be installed on several
+  // sites, so neither the persona name nor any one site is a stable label
+  // for "which bot is this" from the owner's point of view. Null for bots
+  // created before this field existed — callers fall back to `name`.
+  label        String?  @map("label")
+  // Only true for bots allowed to self-sell & auto-provision new client
+  // companies from their own conversations (i.e. Алина) — never for bots
+  // created for clients, to avoid recursive provisioning.
+  enablesProvisioning Boolean   @default(false) @map("enables_provisioning")
+  // Null while the async site-analysis job hasn't produced a tailored funnel
+  // yet (bot is still on the generic default template).
+  funnelGeneratedAt   DateTime? @map("funnel_generated_at")
+  sourceWebsite       String?   @map("source_website")
+  // Real, observable progress through provisioning.service.ts's background
+  // job — 0 (queued), 1 (site checked), 2 (funnel generated by the model,
+  // about to save). Never a promised ETA, just "which step has actually
+  // finished" — the cabinet status dropdown renders this as a percentage
+  // ring instead of a static "configuring" icon.
+  provisioningStep    Int      @default(0) @map("provisioning_step")
+  // Most client bots hand off to a human who closes the sale outside the
+  // chat (in person, by phone, offline) — "заявок оплачено" doesn't mean
+  // anything for them and just clutters the dashboard. Off by default; on
+  // for bots (like Алина herself) that actually sell something the chat can
+  // track payment for. A per-bot setting, not a global one.
+  tracksPayments      Boolean  @default(false) @map("tracks_payments")
+  // What the owner picked in "Цель бота" (e.g. "Продажа в чате", "Вывод на
+  // звонок") — null means no goal set yet, funnel just uses its generic
+  // handoff (collect contact info) behavior. goalInstruction is the actual
+  // directive text injected into the handoff stage at runtime (see
+  // widget.service.ts) — kept separate from label so it can be a full
+  // sentence while the label stays short for display.
+  goalLabel       String?  @map("goal_label")
+  goalInstruction String?  @map("goal_instruction")
+  // Preset key ("chat_sale"/"call"/"registration"/"consultation"/"custom") —
+  // kept alongside the display label so the dashboard can map it to a
+  // goal-specific metric name (e.g. "Выведено на звонок" instead of the
+  // generic "Заявок получено") without string-matching the label itself.
+  goalPreset      String?  @map("goal_preset")
+  // "Обнулить статистику" in the cabinet sets this to now() — every
+  // analytics query then floors its date range at this timestamp (never
+  // deletes rows), so historical test/dev traffic stops counting without
+  // destroying any actual data.
+  analyticsResetAt DateTime? @map("analytics_reset_at")
+  // Grammar agreement for the model's own first-person speech (Russian past
+  // tense/short adjectives are gendered — "сделал" vs "сделала") — injected
+  // into stageInstructions on every turn, see widget.service.ts.
+  gender          String   @default("female") @map("gender")
+  // Both purely cosmetic/embedding settings, owner-editable in the cabinet's
+  // "Обучение бота" section. Baked into the <script> snippet as data-color/
+  // data-position (see getEmbedSnippet) — a real client site only picks up a
+  // change once it re-copies the snippet, same tradeoff as every other
+  // data-* attribute the loader already reads.
+  widgetColor     String   @default("#4f46e5") @map("widget_color")
+  widgetPosition  String   @default("bottom-right") @map("widget_position")
+  // Set the first time widget.js reports the real page hostname it's running
+  // on and it doesn't match sourceWebsite (the self-reported/chat-given
+  // site) — gates the platform-admin Telegram alert to once per bot instead
+  // of re-firing on every single visitor load of a persistently mismatched
+  // install. See WidgetService.checkDomainIntegrity.
+  domainMismatchAlertedAt DateTime? @map("domain_mismatch_alerted_at")
+  // CRM lead-forwarding, v1 — deliberately the simplest thing that works
+  // (an incoming-webhook URL / a private-integration token the owner
+  // generates themselves in their own CRM), not a full OAuth app listed in
+  // Bitrix24's or amoCRM's marketplace. See CrmIntegrationService.pushLead,
+  // called once a lead is captured (widget.service.ts) — null in either
+  // field means "not connected to that CRM", and a push failure there never
+  // blocks or affects the visitor's own reply.
+  bitrix24WebhookUrl String? @map("bitrix24_webhook_url")
+  // Random per-bot secret embedded in the URL the owner pastes into their own
+  // Bitrix24 portal's "исходящий вебхук" (outgoing webhook — a real,
+  // portal-admin-configured feature, no OAuth app needed) config — see
+  // Bitrix24WebhookController. Generated once, the first time a Bitrix24
+  // connection is saved (see CabinetService.saveBitrix24); this is how the
+  // inbound endpoint authenticates a call with no session/cookie of its own.
+  bitrix24WebhookToken String? @unique @map("bitrix24_webhook_token")
+  // amoCRM has no equivalent of Bitrix24's incoming webhook for creating
+  // leads — the private-integration access token is long-lived (no OAuth
+  // refresh flow) but still needs the account's own subdomain to know which
+  // API host to call.
+  amocrmSubdomain    String? @map("amocrm_subdomain")
+  amocrmAccessToken  String? @map("amocrm_access_token")
+  // Watermark for AmoCrmPollService's periodic inbound sweep — only leads
+  // updated after this get re-fetched, so a bot with no changes since the
+  // last poll costs one cheap filtered list call instead of a full re-scan.
+  amocrmLastPolledAt DateTime? @map("amocrm_last_polled_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  dialogs            Dialog[]
+  escalations        Escalation[]
+  knowledgeEntries   KnowledgeEntry[]
+  knowledgeCategories KnowledgeCategory[]
+  aiUsageEvents      AiUsageEvent[]
+  deals              Deal[]
+
+  @@index([companyId])
+  @@map("bots")
+}
+
+enum DialogStatus {
+  active
+  handoff
+  closed
+}
+
+model Dialog {
+  id             String       @id @default(uuid())
+  botId          String       @map("bot_id")
+  sessionId      String       @map("session_id")
+  currentStageId String?      @map("current_stage_id")
+  visitorMeta    Json?        @map("visitor_meta")
+  status         DialogStatus @default(active)
+  // True for the owner's own test/training-chat sessions in the cabinet
+  // (isPreview or trainingMode on the request) — excluded from Показов/
+  // Диалогов/Заявок in cabinet analytics so the owner talking to their own
+  // bot never inflates the numbers a real visitor funnel is measured by.
+  isPreview      Boolean      @default(false) @map("is_preview")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  bot      Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  messages Message[]
+  lead     Lead?
+
+  @@unique([botId, sessionId])
+  @@map("dialogs")
+}
+
+enum MessageRole {
+  visitor
+  assistant
+  system
+}
+
+model Message {
+  id        String      @id @default(uuid())
+  dialogId  String      @map("dialog_id")
+  role      MessageRole
+  content   String
+  // Suggested quick-reply buttons shown alongside this message
+  buttons   Json?
+  // Set when the bot attaches a file from the knowledge base (a contract,
+  // product photo, etc. — see KnowledgeEntry.fileUrl) to this reply. Null
+  // for every ordinary text-only message (the overwhelming majority).
+  attachmentUrl      String? @map("attachment_url")
+  attachmentName     String? @map("attachment_name")
+  attachmentMimeType String? @map("attachment_mime_type")
+  createdAt DateTime    @default(now()) @map("created_at")
+  // Set by the public 👎 on test-chat.html (the demo link given to testers
+  // with no cabinet access) — flags this reply for the OWNER to review later
+  // in "Обучение бота", never writes anything to the bot itself at the time
+  // of the click. Null = never flagged.
+  dislikedAt DateTime? @map("disliked_at")
+  // The owner's own note on what was wrong, written once they review the
+  // flagged reply — kept permanently (even after resolving) so past
+  // dislikes stay browsable, useful when sorting out a support inquiry
+  // later. Null until reviewed.
+  dislikeNote String? @map("dislike_note")
+  // What KnowledgeService.classifyDislikeNote decided this became —
+  // 'fact' | 'instruction' | 'correction' — shown next to the note in the
+  // history view. Null until reviewed.
+  dislikeResolution String? @map("dislike_resolution")
+  // Set once the owner has submitted a note for this dislike — the review
+  // list defaults to showing only rows where this is still null, but never
+  // deletes/hides the row itself once resolved.
+  dislikeResolvedAt DateTime? @map("dislike_resolved_at")
+
+  dialog Dialog @relation(fields: [dialogId], references: [id], onDelete: Cascade)
+
+  @@index([dialogId, createdAt])
+  @@map("messages")
+}
+
+model Lead {
+  id         String    @id @default(uuid())
+  dialogId   String    @unique @map("dialog_id")
+  name       String?
+  phone      String?
+  email      String?
+  rawCapture Json?     @map("raw_capture")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  // Set when the visitor asked to have their data deleted (152-FZ right to
+  // erasure). name/phone/email/rawCapture are nulled out at that point — this
+  // timestamp is the audit trail proving it happened and when, since the row
+  // itself no longer carries the PII that was erased.
+  redactedAt DateTime? @map("redacted_at")
+  // No billing integration yet — the owner marks a lead paid by hand in the
+  // cabinet. Real, if manual, data instead of waiting on a payment gateway.
+  paidAt     DateTime? @map("paid_at")
+  // Null means "not yet pushed to that CRM (or that CRM isn't connected for
+  // this bot)" — CrmIntegrationService's retry loop scans for exactly that
+  // combined with the bot actually having a webhook/token configured, so a
+  // transient outage at push time (see widget.service.ts's fire-and-forget
+  // call) never permanently loses the lead — it just stays pending until the
+  // next successful retry. Set once that specific CRM's push succeeds; never
+  // cleared afterward, including after redaction (it documents that a push
+  // DID happen at some point, even though the CRM-side data itself is out of
+  // this system's control to erase).
+  bitrix24SyncedAt DateTime? @map("bitrix24_synced_at")
+  amocrmSyncedAt   DateTime? @map("amocrm_synced_at")
+
+  dialog Dialog @relation(fields: [dialogId], references: [id], onDelete: Cascade)
+  deal   Deal?
+
+  @@map("leads")
+}
+
+enum EscalationReason {
+  // The model couldn't answer the visitor's question from anything it knows.
+  unanswered
+  // The visitor explicitly said the answer didn't satisfy them / they didn't
+  // understand it — flagged even when the model itself believed the prior
+  // answer was fine.
+  dissatisfaction
+  // A tester (test-chat.html's public 👎, or the owner's own dialog-viewer
+  // flag) marked a specific reply as bad — created the moment that happens,
+  // NOT via Telegram, so it never goes through the pending-Telegram-reply
+  // "verify" step: see DislikesService.resolve, which sets answer/answeredAt/
+  // verifiedAt together the moment the owner confirms a fix.
+  disliked
+}
+
+// A question that got kicked out to a human (owner + team, via Telegram) for
+// a real answer. Once verified (see verifiedAt below), CabinetService mirrors
+// it into KnowledgeEntry, which is what actually gets injected into the live
+// prompt — no redeploy or manual prompt editing required.
+model Escalation {
+  id                String           @id @default(uuid())
+  botId             String           @map("bot_id")
+  companyId         String           @map("company_id")
+  dialogId          String?          @map("dialog_id")
+  reason            EscalationReason
+  // For "unanswered" this already IS the visitor's own question. For
+  // "dissatisfaction" it's the model's own one-sentence summary of what
+  // didn't land — NOT the visitor's actual question, which is why
+  // visitorQuestion below exists as a separate field (otherwise whoever
+  // answers in Telegram sees "customer unhappy with X" with no way to tell
+  // what they'd actually asked).
+  question          String
+  // The real preceding visitor message that the bot's (unsatisfying) reply
+  // was answering — only set for "dissatisfaction". Found by walking the
+  // transcript backward from the bot's reply to the nearest visitor message.
+  visitorQuestion   String?          @map("visitor_question")
+  // The bot's own prior reply, only set for "dissatisfaction" — gives the
+  // human answering in Telegram the context of what didn't land.
+  botReply          String?          @map("bot_reply")
+  // Only set for reason: 'disliked' — the exact Message row that was flagged,
+  // so a second dislike on the same message never creates a duplicate
+  // escalation, and DislikesService.resolve can find its way back here.
+  dislikedMessageId String?          @unique @map("disliked_message_id")
+  // Telegram message_id of the escalation message sent to the team chat —
+  // lets a plain Telegram "reply" to that message be matched back to this
+  // row without any extra state on the Telegram side.
+  telegramMessageId String?          @map("telegram_message_id")
+  // AI-polished (grammar/style, same facts) version of the human's latest
+  // Telegram reply, waiting on the human to confirm it before it becomes the
+  // real `answer` — see TelegramService.handleReplyAnswer. Null once
+  // confirmed (answer is set) or before any reply has come in yet.
+  draftAnswer       String?          @map("draft_answer")
+  // Telegram message_id of the bot's own "вот исправленный вариант, ок?"
+  // message — a reply to THAT message also resolves back to this escalation,
+  // same idea as telegramMessageId but for the confirmation round-trip.
+  draftMessageId    String?          @map("draft_message_id")
+  answer            String?
+  answeredAt        DateTime?        @map("answered_at")
+  // Set only after the owner tried the answer out in the test chat (in
+  // different phrasings) and confirmed it actually works — a Telegram reply
+  // alone is "answered", not yet trustworthy knowledge. Only verified rows
+  // get mirrored into KnowledgeEntry (see CabinetService.verifyEscalation).
+  verifiedAt        DateTime?        @map("verified_at")
+  // For reason: 'unanswered' only — a phone/email the visitor left so the
+  // owner can reach out directly, since there's no way to push the eventual
+  // human answer back into a chat session that may already be closed. Often
+  // arrives a turn or two AFTER the escalation itself (see
+  // TelegramService.attachContactToEscalation), not necessarily at creation.
+  contactPhone      String?          @map("contact_phone")
+  contactEmail      String?          @map("contact_email")
+  // Sentinel for "have we already told the owner about this contact" — once
+  // set, later turns stop re-checking/re-notifying for this escalation.
+  contactSentAt     DateTime?        @map("contact_sent_at")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  // Manual "Обработано" checkbox — the owner reviewed this and wants it off
+  // their pending list, independent of whether it ever got a real answer
+  // (a one-off, a duplicate, something not worth a KB entry). Unlike
+  // verifiedAt, this never triggers mirroring into KnowledgeEntry — it's
+  // purely "stop showing me this", toggleable back off via the same
+  // checkbox. See CabinetService.setEscalationProcessed.
+  processedAt       DateTime?        @map("processed_at")
+
+  bot     Bot     @relation(fields: [botId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([botId, answeredAt])
+  @@index([botId, verifiedAt])
+  @@index([telegramMessageId])
+  @@map("escalations")
+}
+
+enum KnowledgeSource {
+  // Typed directly into the "База знаний" page by the owner.
+  manual
+  // Auto-created the moment a Telegram-answered escalation gets verified in
+  // the test chat — same event that already feeds widget.service.ts's prompt
+  // injection, now also visible/editable as a first-class KB row.
+  telegram
+  // Came from the "Добавить информацию" button in the cabinet's test chat.
+  test_chat
+  // Pulled from a URL the owner pasted into "База знаний" (reuses the same
+  // site-fetch used during onboarding, just user-triggered and repeatable).
+  site
+  // One entry among several produced by AI-structuring a single raw-text
+  // paste from "Добавьте информацию" — see KnowledgeService.createFromBulkText.
+  bulk
+  // Behavioral instruction ("Дать совет" / "Поставить цель боту" follow-up /
+  // classifyTrainingInput deciding free text is a command, not a fact) —
+  // ALWAYS injected into every reply's prompt (see
+  // KnowledgeService.getInstructionsForPrompt), never retrieved by
+  // similarity like every other source above. Used to live invisibly
+  // concatenated into Bot.systemPrompt as raw text with no way to view,
+  // edit, or remove one specific line — now a real, listable KB row like
+  // any other, just with different consumption semantics.
+  instruction
+  // A (bad reply, good reply) pair the owner flagged in the "Тестирование"
+  // pane — retrieved by similarity like a fact (only surfaces when a similar
+  // situation comes up again), but formatted as a worked example rather than
+  // a stated fact. See KnowledgeService.createCorrection/
+  // getCorrectionsForPrompt. `question` holds the situation that triggered
+  // the bad reply (what gets embedded for retrieval); `answer` holds the
+  // corrected reply; `badExample` holds the original bad reply.
+  correction
+}
+
+// Gates whether an entry actually feeds the live bot prompt (getForPrompt only
+// ever returns "approved" rows). Default depends on source, not one blanket
+// value: site-scraped text is often stale (owners shouldn't be forced to fix
+// everything before the bot can use ANY of it), so it starts "pending" and
+// site content review happens at the owner's own pace in "База знаний" —
+// telegram/manual/bulk entries are the owner's own direct input in the
+// moment, so they start "approved" but stay fully re-moderatable afterward.
+enum KnowledgeModerationStatus {
+  pending
+  approved
+  rejected
+}
+
+// Owner-defined grouping for the "База знаний" article view (e.g. "О
+// компании", "О продукте", "Финансовые вопросы") — flat, not nested, for now.
+// Entries with no category (null) render under the built-in "Вопрос/Ответ"
+// bucket instead — every entry created before this model existed lands there
+// automatically, with no backfill needed.
+model KnowledgeCategory {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  // Each bot has its own independent knowledge base (different products/
+  // skills even within the same company — see the multi-bot-per-company
+  // work), so categories are scoped per bot, not shared company-wide.
+  botId     String   @map("bot_id")
+  name      String
+  // Manual ordering in the category menu — lower first. New categories are
+  // appended (see KnowledgeService.createCategory).
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  company Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bot     Bot              @relation(fields: [botId], references: [id], onDelete: Cascade)
+  entries KnowledgeEntry[]
+
+  @@index([companyId])
+  @@index([botId])
+  @@map("knowledge_categories")
+}
+
+// The structured, per-bot knowledge base: real Q&A rows instead of raw text
+// blobs appended to systemPrompt. Retrieval today is plain and cheap (recency
+// + keyword filter in cabinet.service.ts / widget.service.ts) — see the
+// cost write-up before any embeddings-based search or LLM auto-structuring
+// gets added on top of this.
+model KnowledgeEntry {
+  id        String          @id @default(uuid())
+  botId     String          @map("bot_id")
+  companyId String          @map("company_id")
+  // Null for free-text entries (e.g. a pasted price list via "Добавить
+  // информацию") that aren't a single Q&A pair — answer alone carries the
+  // content in that case. Doubles as the article title when categoryId is
+  // set — same column, read differently depending on how it's displayed.
+  question  String?
+  answer    String
+  // Only set for source: 'correction' — the original bad reply this entry
+  // corrects, kept alongside `answer` (the good reply) so the owner can see
+  // both sides in the KB view, and so the prompt injection can show the
+  // model an explicit "not like this, like that" contrast.
+  badExample String?        @map("bad_example")
+  source    KnowledgeSource @default(manual)
+  // Null = the built-in "Вопрос/Ответ" bucket, not "uncategorized-and-hidden".
+  categoryId       String?                   @map("category_id")
+  moderationStatus KnowledgeModerationStatus @default(approved) @map("moderation_status")
+  // Vector from Yandex's text-search-doc embedding model, stored as a plain
+  // JSON float array — no pgvector extension needed at this scale (dozens to
+  // low hundreds of rows per bot); ranking is done in-app (cosine similarity)
+  // in knowledge.service.ts. Null until the embedding call succeeds/backfills.
+  embedding Json?
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  // A file attached to this entry (a contract, a product photo, a
+  // spec sheet) — at most one per entry, matching how the owner naturally
+  // adds these ("Договор поставки" + its PDF, "Фото гарнитура" + its photo).
+  // Null for a plain text entry. fileUrl is served straight off disk (see
+  // main.ts's useStaticAssets for /uploads) — no separate files table since
+  // nothing else needs to reference a file independently of its entry yet.
+  fileUrl      String? @map("file_url")
+  fileName     String? @map("file_name")
+  fileMimeType String? @map("file_mime_type")
+
+  bot      Bot                @relation(fields: [botId], references: [id], onDelete: Cascade)
+  company  Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category KnowledgeCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([botId, createdAt])
+  @@index([categoryId])
+  @@map("knowledge_entries")
+}
+
+enum AiUsageKind {
+  // One embedding call per KB entry write (indexing) or per visitor message
+  // (query-time search) — see EmbeddingsService.
+  embedding
+  // A completion call that isn't a visitor-facing chat reply: structuring a
+  // bulk KB paste into entries, or polishing a Telegram answer draft.
+  generation
+}
+
+// Real, measured token counts from the API's own response — not an estimate
+// of usage. estimatedCostRub IS an estimate (tokens × a rate constant kept in
+// EmbeddingsService, not pulled from Yandex Cloud's billing API), included so
+// the cabinet can show a running number without a trip to the console; treat
+// Yandex Cloud's own billing as the source of truth for actual charges.
+model AiUsageEvent {
+  id               String      @id @default(uuid())
+  botId            String      @map("bot_id")
+  companyId        String      @map("company_id")
+  kind             AiUsageKind
+  tokens           Int
+  estimatedCostRub Float       @map("estimated_cost_rub")
+  createdAt        DateTime    @default(now()) @map("created_at")
+
+  bot     Bot     @relation(fields: [botId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([botId, createdAt])
+  @@map("ai_usage_events")
+}
+
+// Global — not scoped to any Company — which LLM backend every bot's
+// conversation currently runs on. Superadmin-only (see LlmProviderAdmin-
+// Controller, SupportGuard). Switching which row has isActive=true takes
+// effect immediately for every account's bot: YandexGptService reads the
+// active row (cached in memory, refreshed the instant a switch happens)
+// instead of process.env, so there's no redeploy or restart involved.
+// Adding a genuinely NEW provider row still goes through direct DB/API
+// access, not a public "add provider" form — the request-shape differences
+// between providers are real code, not just config, so a new provider is
+// something to build and verify, not something to type into a text box.
+model LlmProvider {
+  id   String @id @default(uuid())
+  // Superadmin-facing label only (e.g. "RouterAI — DeepSeek v4 Pro") — never
+  // shown to a client, never used to build the request.
+  name String
+  // 'yandex' | 'openai_compatible' — picks which request/response shape
+  // YandexGptService.callCompletion builds; not an open-ended value, adding
+  // a genuinely different shape means adding a real branch in code, not a
+  // new type string here.
+  type String
+  // Never returned to the frontend in full — see LlmProviderService.list,
+  // which only ever sends the last 4 characters back for display.
+  apiKey String @map("api_key")
+  // Only meaningful for type='openai_compatible' — Yandex's completion URL
+  // is fixed and lives in code, so this stays null for type='yandex' rows.
+  baseUrl String? @map("base_url")
+  model   String
+  // Yandex-specific (its modelUri is "gpt://{folderId}/{model}"); null for
+  // every other provider type.
+  folderId String? @map("folder_id")
+  // Prepended as an extra system message ahead of every completion request
+  // sent to THIS provider (see YandexGptService.callCompletion) — null means
+  // "no override, behave exactly as before this column existed". Exists
+  // because the shared prompt built in WidgetService is one single text for
+  // every provider, but reasoning-style models (DeepSeek et al.) need
+  // model-specific steering (e.g. "no visible reasoning, one JSON object
+  // only") that would be noise for a plain instruct model like Yandex.
+  systemPromptOverride String? @map("system_prompt_override")
+  // Exactly one row should ever have this true — enforced in
+  // LlmProviderService.setActive (a transaction that flips the old active
+  // row off and the new one on together), not a DB constraint.
+  isActive Boolean @default(false) @map("is_active")
+  // What THIS provider/model actually costs us, in RUB per 1000 tokens — the
+  // real numbers from the provider's own pricing page (e.g. RouterAI quotes
+  // input and output at very different rates — seen live: gpt-4o-mini is
+  // 16₽/1M input vs 67₽/1M output, over 4x apart — a single blended rate
+  // would misprice every real conversation, which skews heavily toward
+  // output tokens). Null until a superadmin fills them in. BillingService
+  // multiplies the ACTIVE row's numbers here by TariffPlan.markupMultiplier
+  // to get what a 'token'-plan company is actually charged — never
+  // hardcoded, so a model switch or a provider price change is reflected the
+  // moment these fields (or which row is active) change, with no code edit.
+  costRubPer1kInput  Decimal? @db.Decimal(10, 4) @map("cost_rub_per_1k_input")
+  costRubPer1kOutput Decimal? @db.Decimal(10, 4) @map("cost_rub_per_1k_output")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("llm_providers")
+}

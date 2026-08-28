@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Регистрация — Умный Чат</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <a class="logo" href="/">
+        <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="24" height="24" rx="6" fill="#c8ff4d"/>
+          <path d="M12 5.5c.5 3 1.8 4.3 4.5 4.5-2.7.2-4 1.5-4.5 4.5-.5-3-1.8-4.3-4.5-4.5 2.7-.2 4-1.5 4.5-4.5z" fill="#081522"/>
+        </svg>
+        Умный<em>Чат</em>
+      </a>
+      <a class="topbar-back" href="/">← Вернуться на сайт</a>
+    </div>
+    <a class="topbar-link" href="login.html">Уже есть аккаунт? Войти</a>
+  </div>
+  <div class="auth-wrap">
+    <div class="card">
+      <h1 id="title">Начните бесплатно</h1>
+      <p class="sub" id="subtitle">15 дней бесплатно — карта не нужна.</p>
+      <div class="error" id="error"></div>
+      <div class="sub" id="confirmNotice" style="display:none;"></div>
+      <form id="form">
+        <label for="businessDescription">Чем занимается ваш бизнес?</label>
+        <textarea id="businessDescription" required placeholder="Например: продаём и устанавливаем бани под ключ"></textarea>
+        <label for="website">Сайт компании (если есть)</label>
+        <input type="text" id="website" placeholder="example.ru" autocomplete="url" />
+        <label for="name">Ваше имя</label>
+        <input type="text" id="name" required autocomplete="name" />
+        <label for="email">Email</label>
+        <input type="email" id="email" required autocomplete="email" />
+        <label for="password">Пароль (минимум 8 символов)</label>
+        <input type="password" id="password" required minlength="8" autocomplete="new-password" />
+        <label class="consent-check" for="consent">
+          <input type="checkbox" id="consent" required />
+          <span>Согласен(на) на <a href="privacy.html" target="_blank" rel="noopener">обработку персональных данных</a></span>
+        </label>
+        <button type="submit" class="btn-primary" id="submitBtn">Создать кабинет</button>
+      </form>
+    </div>
+  </div>
+  <script>
+    var errorEl = document.getElementById('error');
+    var form = document.getElementById('form');
+    var submitBtn = document.getElementById('submitBtn');
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.add('visible');
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      errorEl.classList.remove('visible');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Создаём...';
+
+      fetch('/api/provisioning/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessDescription: document.getElementById('businessDescription').value.trim(),
+          website: document.getElementById('website').value.trim(),
+          name: document.getElementById('name').value.trim(),
+          email: document.getElementById('email').value.trim(),
+          password: document.getElementById('password').value,
+          consent: document.getElementById('consent').checked,
+        }),
+      })
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (d) { throw new Error(d.message || 'Ошибка регистрации'); });
+          return res.json();
+        })
+        .then(function (data) {
+          form.style.display = 'none';
+          document.getElementById('title').textContent = 'Осталось подтвердить почту';
+          document.getElementById('subtitle').style.display = 'none';
+          var notice = document.getElementById('confirmNotice');
+          notice.textContent =
+            'Мы отправили письмо на ' + data.email + ' — перейдите по ссылке в нём, чтобы войти в кабинет. ' +
+            'Если письма нет через пару минут, загляните в папку «Спам» — почтовые сервисы иногда ' +
+            'отправляют туда письма от новых отправителей.';
+          notice.style.display = 'block';
+        })
+        .catch(function (err) {
+          showError(typeof err.message === 'string' ? err.message : 'Не получилось зарегистрироваться, попробуйте ещё раз.');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Создать кабинет';
+        });
+    });
+  </script>
+</body>
+</html>

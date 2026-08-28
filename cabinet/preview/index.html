@@ -1,0 +1,2565 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Личный кабинет — Умный Чат</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body class="cabinet-body">
+  <div id="impersonationBanner" hidden>
+    <span id="impersonationBannerText"></span>
+    <button type="button" id="exitImpersonationBtn">Выйти из режима поддержки</button>
+  </div>
+  <div class="app-shell" id="appShell" style="display:none">
+    <aside class="sidebar">
+      <a class="logo" href="/">
+        <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="24" height="24" rx="6" fill="#4f46e5"/>
+          <path d="M12 5.5c.5 3 1.8 4.3 4.5 4.5-2.7.2-4 1.5-4.5 4.5-.5-3-1.8-4.3-4.5-4.5 2.7-.2 4-1.5 4.5-4.5z" fill="#fff"/>
+        </svg>
+        Умный<em>Чат</em>
+      </a>
+      <div class="sidebar-company" id="sidebarCompany" title="Вы сейчас в кабинете этой компании"></div>
+      <div class="bot-switcher-row">
+        <select id="botSwitcherSelect" class="bot-switcher-select" title="Переключить бота"></select>
+        <button type="button" class="bot-switcher-add-btn" id="botSwitcherAddBtn" title="Добавить нового бота">+</button>
+      </div>
+      <a class="sidebar-bot-site" id="sidebarBotSite" href="#" target="_blank" rel="noopener noreferrer" hidden></a>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="dashboard" type="button">Дашборд</button>
+        <button class="nav-item" data-view="attention" type="button">Требует внимания <span class="nav-badge nav-badge-ok" id="attentionBadge">0</span></button>
+        <button class="nav-item" data-view="training" type="button">Обучение бота</button>
+        <button class="nav-item" data-view="knowledge" type="button">База знаний</button>
+        <button class="nav-item" data-view="install" type="button">Установка</button>
+        <button class="nav-item" data-view="telegram" type="button">Интеграции</button>
+        <button class="nav-item" data-view="leads" type="button">Заявки</button>
+        <button class="nav-item" data-view="support" type="button">Поддержка</button>
+      </nav>
+
+      <div class="account-widget">
+        <div class="account-menu" id="accountMenu" hidden>
+          <button class="account-menu-item" id="logoutBtn" type="button">↩ Выйти</button>
+        </div>
+        <div class="account-bar">
+          <button class="account-row" id="accountRow" type="button">
+            <span class="account-avatar" id="accountAvatar">?</span>
+            <span class="account-info">
+              <span class="account-name" id="accountName">…</span>
+              <span class="account-email" id="accountEmail"></span>
+            </span>
+          </button>
+          <button class="settings-gear-btn" id="settingsGearBtn" type="button" title="Настройки" aria-label="Настройки">⚙</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="trial-banner" id="trialBanner" hidden></div>
+      <div class="content-header">
+        <div>
+          <h1 id="pageTitle">Дашборд</h1>
+        </div>
+        <div class="status-widget">
+          <button class="status-badge" id="statusBadge" type="button">
+            <span id="statusIcon">⏳</span>
+            <span id="statusLabel">Проверяю…</span>
+            <span id="statusMore" class="status-more" hidden aria-hidden="true">👆</span>
+          </button>
+          <div class="status-dropdown" id="statusDropdown" hidden></div>
+        </div>
+      </div>
+
+      <section class="view" id="view-dashboard">
+        <div class="panel">
+          <div class="info-widget">
+            <button class="info-btn" id="goalInfoBtn" type="button" aria-label="Как работает цель">?</button>
+            <div class="info-popup" id="goalInfoPopup" hidden>
+              <div class="info-popup-title">Зачем нужна цель</div>
+              <p>
+                От цели зависит, как бот завершает разговор с заинтересованным посетителем — ведёт на звонок,
+                оформляет продажу прямо в чате или доводит до регистрации.
+              </p>
+            </div>
+          </div>
+          <h2>Цель бота</h2>
+          <button type="button" class="goal-display" id="goalDisplay">
+            <span class="goal-display-icon" id="goalDisplayIcon">🎯</span>
+            <span class="goal-display-text" id="goalCurrent">…</span>
+            <span class="goal-display-edit">Изменить</span>
+          </button>
+          <div class="goal-edit-form" id="goalEditForm" hidden>
+            <select id="goalPresetSelect"></select>
+            <input type="text" id="goalCustomInput" placeholder="Своими словами, что должен делать бот" hidden />
+            <div class="goal-edit-actions">
+              <button type="button" class="copy-btn" id="goalEditCancelBtn">Отмена</button>
+              <button type="button" class="btn-primary btn-inline" id="goalEditSaveBtn">Сохранить</button>
+            </div>
+            <span class="empty" id="goalEditStatus"></span>
+          </div>
+        </div>
+
+        <div class="period-selector">
+          <button class="period-btn" data-period="yesterday" type="button">Вчера</button>
+          <button class="period-btn" data-period="week" type="button">Неделя</button>
+          <button class="period-btn" data-period="month" type="button">Месяц</button>
+          <button class="period-btn" data-period="all" type="button">Всё время</button>
+          <div class="date-range-picker">
+            <input type="date" id="rangeFrom" aria-label="С даты" />
+            <span class="date-range-sep">—</span>
+            <input type="date" id="rangeTo" aria-label="По дату" />
+            <button class="period-btn" id="rangeApplyBtn" type="button">Применить</button>
+          </div>
+          <a href="#" id="resetStatsLink" class="reset-stats-link" title="Обнулить статистику — учитывать только новые диалоги/заявки">Обнулить статистику</a>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-lbl">Показов</div>
+            <div class="stat-val" id="statShown">–</div>
+            <div class="stat-delta" id="statShownDelta"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-lbl">Диалогов</div>
+            <div class="stat-val" id="statDialogs">–</div>
+            <div class="stat-delta" id="statDialogsDelta"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-lbl" id="statLeadsLabel">Заявок получено</div>
+            <div class="stat-val" id="statLeads">–</div>
+            <div class="stat-delta" id="statLeadsDelta"></div>
+          </div>
+          <div class="stat-card" id="paidCard" style="display:none">
+            <div class="stat-lbl">Заявок оплачено</div>
+            <div class="stat-val" id="statPaid">–</div>
+            <div class="stat-delta" id="statPaidDelta"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="info-widget">
+            <button class="info-btn" id="problemsInfoBtn" type="button" aria-label="Что считается проблемой">?</button>
+            <div class="info-popup" id="problemsInfoPopup" hidden>
+              <div class="info-popup-title">Что считается проблемой</div>
+              <p>Вопрос, на который бот не смог ответить, или явное недовольство клиента ответом.</p>
+              <p class="info-popup-footnote">
+                Решённой она становится после того, как вы ответили в Telegram и проверили ответ в тестовом
+                чате — загляните в «Требует внимания».
+              </p>
+            </div>
+          </div>
+          <h2>Качество ответов</h2>
+          <div class="problems-row">
+            <div class="problems-stat">
+              <div class="problems-num" id="problemsTotal">0</div>
+              <div class="problems-lbl">проблемных ответов за период</div>
+            </div>
+            <div class="problems-stat">
+              <div class="problems-num problems-ok" id="problemsResolved">0</div>
+              <div class="problems-lbl">уже решено и проверено</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="info-widget">
+            <button class="info-btn" id="variantInfoBtn" type="button" aria-label="Что означают столбцы">?</button>
+            <div class="info-popup" id="variantInfoPopup" hidden>
+              <div class="info-popup-title">Как читать таблицу</div>
+              <dl class="info-popup-list">
+                <dt>Показов</dt>
+                <dd>Фраза была показана посетителю.</dd>
+                <dt>Диалогов</dt>
+                <dd>Посетитель реально начал разговор — главный признак того, что фраза сработала.</dd>
+                <dt>Конверсия</dt>
+                <dd>Доля показов, которые превратились в диалог.</dd>
+              </dl>
+              <p class="info-popup-footnote">
+                Добавить свою фразу можно в тестовом чате: режим «Обучение» → «Добавить фразу для теста».
+              </p>
+            </div>
+          </div>
+          <h2>A/B/C/D-тест приветствия</h2>
+          <p class="empty" id="variantPending">Ещё пару шагов и я заполню данные для тестирования бота.</p>
+          <div id="variantContent" style="display:none">
+            <table id="variantTable" class="variant-table" style="display:none">
+              <thead>
+                <tr>
+                  <th class="variant-col-label">A/B</th>
+                  <th>Первая фраза до общения</th>
+                  <th class="variant-col-metric"><span class="th-slanted">Показов</span></th>
+                  <th class="variant-col-metric"><span class="th-slanted">Диалогов</span></th>
+                  <th class="variant-col-metric"><span class="th-slanted">Конверсия</span></th>
+                </tr>
+              </thead>
+              <tbody id="variantRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-install" hidden>
+        <div class="panel">
+          <h2>Установите бота на свой сайт</h2>
+          <p class="sub" style="margin-bottom:14px;">
+            Одна строка кода — и бот появится у вас на сайте ровно в таком же виде, в каком вы
+            только что его тестировали справа.
+          </p>
+          <div class="snippet-box" id="snippet">…</div>
+          <button class="copy-btn" id="copySnippet" type="button">Скопировать</button>
+          <p class="sub" style="margin-top:14px;margin-bottom:0;">
+            Вставьте этот код перед закрывающим тегом <code>&lt;/body&gt;</code> на вашем сайте.
+          </p>
+          <p class="sub" style="margin-top:20px;margin-bottom:6px;">
+            Хотите, чтобы кто-то ещё (партнёр, коллега) попробовал бота, но без доступа к кабинету и
+            обучению — отправьте эту ссылку вместо этого:
+          </p>
+          <div class="snippet-box" id="testChatLink">…</div>
+          <button class="copy-btn" id="copyTestChatLink" type="button">Скопировать</button>
+          <button class="copy-btn" id="openTestChatBtn" type="button">Открыть в новом окне ↗</button>
+        </div>
+      </section>
+
+      <section class="view" id="view-attention" hidden>
+        <button type="button" class="dislike-queue-toggle" id="processedToggle" hidden>
+          Обработанные <span class="dislike-queue-badge" id="processedBadge">0</span>
+        </button>
+        <div class="panel" id="processedPanel" hidden>
+          <div class="table-scroll">
+            <table id="processedTable" style="display:none">
+              <thead><tr><th>Тип</th><th>Вопрос</th><th>Ответ</th><th>Когда</th><th></th></tr></thead>
+              <tbody id="processedRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel" id="pendingPanel" style="display:none">
+          <h2>Ждут ответа</h2>
+          <p class="sub" style="margin-bottom:14px;">
+            Бот не смог ответить или клиент явно остался недоволен. Ответьте в Telegram (Reply на
+            сообщение с вопросом) — и вопрос переедет в «Ответили — осталось проверить». Если
+            отвечать не нужно (дубль, разовый случай) — просто отметьте «Обработано».
+          </p>
+          <div class="table-scroll">
+            <table id="pendingTable" style="display:none">
+              <thead><tr><th>Тип</th><th>Вопрос</th><th>Ответ бота</th><th>Что не устроило</th><th>Когда</th><th></th><th>Обработано</th></tr></thead>
+              <tbody id="pendingRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel" id="verifyPanel" style="display:none">
+          <h2>Ответили — осталось проверить</h2>
+          <p class="sub" style="margin-bottom:14px;">
+            Следующий шаг: откройте тестовый чат справа, задайте этот вопрос и пару похожих
+            формулировок, убедитесь, что бот теперь отвечает верно во всех — и только тогда
+            отметьте проверенным. До этого момента бот ваш ответ ещё не использует.
+          </p>
+          <div class="table-scroll">
+            <table id="verifyTable" style="display:none">
+              <thead><tr><th>Вопрос</th><th>Ваш ответ</th><th></th><th></th><th>Обработано</th></tr></thead>
+              <tbody id="verifyRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel" id="verifiedPanel" style="display:none">
+          <h2>Недавно решённые</h2>
+          <div class="table-scroll">
+            <table id="verifiedTable" style="display:none">
+              <thead><tr><th>Вопрос</th><th>Ответ</th><th>Когда</th></tr></thead>
+              <tbody id="verifiedRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-training" hidden>
+        <div class="training-toolbar">
+          <span class="training-toolbar-label">Остальное обучение бота — здесь:</span>
+          <button type="button" class="training-toolbar-link" data-goto-view="knowledge">База знаний</button>
+          <button type="button" class="training-toolbar-link" data-goto-view="settings">Настройки чата</button>
+          <button type="button" class="training-toolbar-link" data-goto-view="telegram">Интеграции</button>
+          <button type="button" class="training-help-btn" id="trainingHelpBtn" title="Как это работает">?</button>
+        </div>
+        <div class="training-grid training-grid-solo">
+          <div class="training-pane">
+            <div class="training-pane-header">
+              <h2>Тестовый чат</h2>
+              <button type="button" class="training-reset-btn" id="resetTestingBtn" title="Сбросить и показать всплывающее сообщение заново">↺</button>
+            </div>
+            <p class="training-pane-sub">
+              Точная копия того, что видит посетитель вашего сайта, включая всплывающее сообщение перед открытием —
+              не влияет на статистику. Под каждым ответом бота есть «👎 Плохой ответ?» — так можно поправить
+              конкретную реплику, и бот сразу это запомнит.
+            </p>
+            <iframe id="testingFrame" class="training-iframe" title="Тестовый чат"></iframe>
+          </div>
+        </div>
+      </section>
+
+      <div class="modal-overlay" id="trainingHelpModal" hidden>
+        <div class="modal-box">
+          <button type="button" class="modal-close-btn" id="trainingHelpCloseBtn">×</button>
+          <h2>Как обучать бота</h2>
+          <ul class="training-help-list">
+            <li><strong>Тестовый чат</strong> — это тот же бот, что видят ваши клиенты, в тех же условиях.</li>
+            <li><strong>👎 у ответа</strong> — если конкретный ответ оказался неудачным, отметьте его и укажите, как было правильно. Бот учтёт это в похожих ситуациях в будущем.</li>
+            <li><strong>База знаний</strong> — добавляйте сюда, если бот чего-то не знал вообще (цены, сроки, условия, инструкции, которые должны действовать всегда).</li>
+            <li><strong>Настройки чата</strong> — имя и пол бота, цвет виджета, название компании, варианты приветствия, цель бота.</li>
+            <li><strong>Интеграции</strong> — куда приходят вопросы, на которые бот не смог ответить сам, и настройки подключения мессенджеров.</li>
+            <li>Если бот стабильно ведёт себя странно не по теме вашего бизнеса (повторяется, путается, придумывает) — это не чинится через кабинет, напишите в поддержку.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="dialogViewModal" hidden>
+        <div class="modal-box" style="max-width:600px;">
+          <button type="button" class="modal-close-btn" id="dialogViewCloseBtn">×</button>
+          <h2>Диалог целиком</h2>
+          <p class="sub" id="dialogViewMeta" style="margin-bottom:12px;"></p>
+          <div class="support-thread" id="dialogViewThread" style="max-height:60vh;"></div>
+        </div>
+      </div>
+
+      <section class="view" id="view-knowledge" hidden>
+        <div class="panel">
+          <h2>База знаний</h2>
+          <p class="sub" style="margin-bottom:14px;">
+            Всё, что бот точно знает о вашем бизнесе — организовано в разделы, как в справочнике. Бот в чате
+            использует только промодерированные (одобренные) записи; ИИ-поиск ниже находит нужное по смыслу,
+            а не по точным словам.
+          </p>
+          <input id="kbSearchInput" type="text" class="kb-search-input" placeholder="🔎 Умный поиск по базе знаний…" />
+          <p class="empty" id="kbSearchHint" style="display:none;margin-top:8px;"></p>
+        </div>
+
+        <div class="kb-layout">
+          <div class="panel kb-content">
+            <div class="kb-add-tabs">
+              <button type="button" class="kb-add-tab active" data-tab="bulk">Вставить текст</button>
+              <button type="button" class="kb-add-tab" data-tab="site">Добавить сайт</button>
+              <button type="button" class="kb-add-tab" data-tab="article">Написать статью</button>
+              <button type="button" class="kb-add-tab" data-tab="instruction">Инструкция боту</button>
+            </div>
+            <div class="kb-add-pane" id="kbAddPaneBulk">
+              <textarea id="kbBulkText" rows="4" placeholder="Просто вставьте сюда текст: прайс-лист, описание товаров, условия доставки, ответы на частые вопросы… Мы сами разберём его на записи для бота."></textarea>
+              <div class="kb-add-actions"><button class="copy-btn" id="kbBulkAddBtn" type="button">Добавить и разобрать</button></div>
+            </div>
+            <div class="kb-add-pane" id="kbAddPaneSite" hidden>
+              <div class="kb-add-row">
+                <input id="kbSiteUrl" type="text" placeholder="Ссылка на сайт (например, ваш сайт или страница с ценами)" />
+                <button class="copy-btn" id="kbAddSiteBtn" type="button">Добавить ссылку</button>
+              </div>
+              <p class="empty" style="margin-top:6px;">Информация с сайта попадёт на модерацию — бот не начнёт её использовать, пока вы не одобрите запись.</p>
+            </div>
+            <div class="kb-add-pane" id="kbAddPaneArticle" hidden>
+              <input id="kbArticleTitle" type="text" placeholder="Заголовок статьи" style="margin-bottom:8px;" />
+              <textarea id="kbArticleBody" rows="4" placeholder="Текст статьи"></textarea>
+              <div class="kb-add-actions"><button class="copy-btn" id="kbArticleAddBtn" type="button">Добавить статью</button></div>
+            </div>
+            <div class="kb-add-pane" id="kbAddPaneInstruction" hidden>
+              <textarea id="kbInstructionText" rows="4" placeholder="Как бот должен себя вести — например: «Никогда не упоминай конкурентов» или «В конце разговора всегда предлагай скидку 10% на первый заказ»."></textarea>
+              <div class="kb-add-actions"><button class="copy-btn" id="kbInstructionAddBtn" type="button">Добавить инструкцию</button></div>
+              <p class="empty" style="margin-top:6px;">Действует сразу и во всех разговорах — не факт для поиска, а правило поведения, которое бот всегда учитывает.</p>
+            </div>
+            <p class="empty" id="kbAddError" style="display:none;color:#b91c1c;"></p>
+
+            <div id="kbArticlesFeed" style="margin-top:18px;"></div>
+            <p class="empty" id="kbEmpty">Записей пока нет — добавьте первую выше.</p>
+          </div>
+
+          <div class="panel kb-sidebar">
+            <h2>Разделы</h2>
+            <div class="kb-category-list" id="kbCategoryList"></div>
+            <div class="kb-add-category-row">
+              <input id="kbNewCategoryName" type="text" placeholder="Новый раздел…" />
+              <button class="copy-btn" id="kbAddCategoryBtn" type="button">+</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-telegram" hidden>
+        <div class="panel">
+          <h2>Уведомления в Telegram</h2>
+          <p class="sub" style="margin-bottom:14px;">
+            Бот не молчит, когда не знает ответа — он сразу спрашивает вас. Всё, на что он не смог
+            ответить, или что не устроило клиента, в ту же секунду прилетит сюда, в Telegram.
+            Ответьте на сообщение так же просто, как отвечаете человеку в переписке — а дальше
+            загляните в «Требует внимания», чтобы проверить и подтвердить ответ.
+          </p>
+          <a id="telegramLink" href="#" target="_blank" class="btn-primary btn-inline" style="text-decoration:none;">Подключить Telegram →</a>
+        </div>
+      </section>
+
+      <section class="view" id="view-leads" hidden>
+        <div class="panel">
+          <h2>Заявки</h2>
+          <div class="table-scroll">
+            <table id="leadsTable" style="display:none">
+              <thead><tr><th>Имя</th><th>Телефон</th><th>Email</th><th>Интерес</th><th>Когда</th><th id="leadsPaidHeader">Оплата</th></tr></thead>
+              <tbody id="leadsRows"></tbody>
+            </table>
+          </div>
+          <p class="empty" id="leadsEmpty">Заявок пока нет.</p>
+        </div>
+      </section>
+
+      <section class="view" id="view-support" hidden>
+        <div class="panel" id="supportListPanel">
+          <h2>Поддержка</h2>
+          <p class="sub" style="margin-bottom:14px;">Вопросы по работе кабинета, боту, оплате — сюда, не в чат с посетителями.</p>
+          <button type="button" class="btn-primary btn-inline" id="supportNewTicketBtn" style="margin-bottom:16px;">Новое обращение</button>
+
+          <div id="supportNewTicketForm" class="support-new-form" hidden>
+            <input type="text" id="supportNewSubject" placeholder="Коротко, о чём вопрос" maxlength="200" />
+            <textarea id="supportNewMessage" placeholder="Опишите подробнее, что случилось"></textarea>
+            <div class="support-new-form-actions">
+              <button type="button" class="training-reset-btn" id="supportNewCancelBtn" style="width:auto;padding:0 14px;">Отмена</button>
+              <button type="button" class="btn-primary btn-inline" id="supportNewSubmitBtn">Отправить</button>
+            </div>
+          </div>
+
+          <div id="supportTicketList"></div>
+          <p class="empty" id="supportEmpty" hidden>Обращений пока нет.</p>
+        </div>
+
+        <div class="panel" id="supportDetailPanel" hidden>
+          <button type="button" class="training-reset-btn" id="supportBackBtn" style="width:auto;padding:0 14px;margin-bottom:14px;">← Все обращения</button>
+          <h2 id="supportDetailSubject"></h2>
+          <div id="supportDetailStatus" class="support-status-banner" hidden></div>
+          <div id="supportDetailThread" class="support-thread"></div>
+          <div class="support-reply-form">
+            <textarea id="supportReplyText" placeholder="Написать сообщение…"></textarea>
+            <button type="button" class="btn-primary btn-inline" id="supportReplySubmitBtn">Отправить</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-settings" hidden>
+        <div class="panel">
+          <h2>Настройки чата</h2>
+          <div class="appearance-row">
+            <div class="appearance-field">
+              <label for="companyNameInput">Название компании</label>
+              <input type="text" id="companyNameInput" maxlength="80" placeholder="Например, «БаняХаус»" />
+              <p class="appearance-field-hint">
+                То, как бот называет вашу компанию, когда представляется — например, «Вас приветствует
+                Алина из «БаняХаус»!». Без этого бот пытается описать компанию своими словами и может
+                звучать не по-деловому.
+              </p>
+            </div>
+          </div>
+          <div class="appearance-row">
+            <div class="appearance-field">
+              <label for="botNameInput">Имя бота</label>
+              <input type="text" id="botNameInput" maxlength="40" placeholder="Например, Алина" />
+            </div>
+            <div class="appearance-field">
+              <label>Пол бота</label>
+              <div class="appearance-toggle-group" id="genderToggle">
+                <button type="button" class="period-btn" data-gender="female">Женский</button>
+                <button type="button" class="period-btn" data-gender="male">Мужской</button>
+              </div>
+            </div>
+          </div>
+          <div class="appearance-row">
+            <div class="appearance-field">
+              <label>Цвет чата</label>
+              <div class="color-picker-widget info-widget">
+                <button type="button" class="color-picker-btn info-btn" id="colorPickerBtn" style="background:#4f46e5" aria-label="Выбрать цвет чата"></button>
+                <div class="info-popup color-popup" id="colorPopup" hidden>
+                  <div class="color-wheel-wrap">
+                    <div class="color-wheel" id="colorWheel">
+                      <div class="color-wheel-handle" id="colorWheelHandle"></div>
+                    </div>
+                  </div>
+                  <div class="color-popup-row">
+                    <input type="text" id="colorNameInput" class="color-name-input" placeholder="Название или #HEX" />
+                    <button type="button" class="color-eyedropper-btn" id="eyedropperBtn" title="Пипетка — выбрать цвет с экрана">💧</button>
+                    <input type="color" id="colorCustomInput" class="color-custom-input" title="Свой цвет" />
+                  </div>
+                  <p class="color-popup-error" id="colorPopupError" hidden></p>
+                </div>
+              </div>
+              <div class="color-wheel-preview" id="colorWheelPreview" hidden>
+                <span class="color-wheel-preview-swatch" id="colorWheelPreviewSwatch"></span>
+                <span class="color-wheel-preview-hex" id="colorWheelPreviewHex"></span>
+              </div>
+            </div>
+            <div class="appearance-field">
+              <label>Расположение на сайте</label>
+              <div class="appearance-toggle-group" id="positionToggle">
+                <button type="button" class="period-btn" data-position="bottom-left">← Слева внизу</button>
+                <button type="button" class="period-btn" data-position="bottom-right">Справа внизу →</button>
+              </div>
+            </div>
+          </div>
+          <div class="appearance-save-row">
+            <button type="button" class="copy-btn" id="saveAppearanceBtn">Сохранить</button>
+            <span class="empty appearance-status" id="appearanceStatus"></span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Варианты приветствия</h2>
+          <p class="appearance-field-hint" style="margin-top:0;">
+            Добавьте альтернативную первую фразу бота — она встанет в случайный перебор наравне с текущей,
+            и в аналитике будет видно, какая приводит к большему числу заявок (A/B/C/D-тест).
+          </p>
+          <div class="appearance-row">
+            <div class="appearance-field" style="flex:1;">
+              <input type="text" id="greetingVariantInput" maxlength="300" placeholder="Например: Здравствуйте! Подскажу, какая баня подойдёт именно вам." />
+            </div>
+          </div>
+          <div class="appearance-save-row">
+            <button type="button" class="copy-btn" id="addGreetingVariantBtn">Добавить вариант</button>
+            <span class="empty appearance-status" id="greetingVariantStatus"></span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    var STATUS_COLORS = { ok: 'ok', info: 'info', warning: 'warning', critical: 'critical' };
+    var botWidgetToken = null;
+    // One company can have several bots (different products/skills) — these
+    // track which one the whole cabinet is currently scoped to, and every
+    // bot-specific request appends it via withBotId() below.
+    var CURRENT_BOT_STORAGE_KEY = 'smartchat_current_bot_id';
+    var currentBotId = null;
+    var allBots = [];
+    var currentAppearance = { name: '', gender: 'female', color: '#4f46e5', position: 'bottom-right' };
+    var currentPeriod = 'week';
+    // The sidebar logo already says "Умный Чат" (the product) — showing the
+    // business's own name here instead of a redundant "Дашборд" label is more
+    // useful, especially for anyone managing more than one client's bot.
+    var companyName = '';
+
+    // Appends the currently-selected bot's id to a bot-scoped API URL —
+    // every fetch to an endpoint that means something different per-bot
+    // (analytics, база знаний, appearance, goal...) goes through this.
+    function withBotId(url) {
+      if (!currentBotId) return url;
+      var sep = url.indexOf('?') === -1 ? '?' : '&';
+      return url + sep + 'botId=' + encodeURIComponent(currentBotId);
+    }
+
+    // Click-and-drag panning for wide tables (see .table-scroll) — the
+    // window is now wide enough most of the time that a table only ever
+    // needs this on a narrower screen, but reaching for the scrollbar at
+    // the very bottom of a tall table is still more friction than just
+    // grabbing the content itself. The .table-scroll wrappers are static
+    // markup present at load, so this only needs to run once. Harmless to
+    // attach even when a table isn't currently overflowing — scrollLeft is
+    // simply a no-op then.
+    document.querySelectorAll('.table-scroll').forEach(function (el) {
+      el.addEventListener('mouseenter', function () {
+        el.classList.toggle('draggable', el.scrollWidth > el.clientWidth);
+      });
+      var isDown = false;
+      var startX = 0;
+      var startScrollLeft = 0;
+      el.addEventListener('mousedown', function (e) {
+        if (el.scrollWidth <= el.clientWidth) return;
+        isDown = true;
+        el.classList.add('dragging');
+        startX = e.pageX;
+        startScrollLeft = el.scrollLeft;
+      });
+      window.addEventListener('mouseup', function () {
+        if (!isDown) return;
+        isDown = false;
+        el.classList.remove('dragging');
+      });
+      window.addEventListener('mousemove', function (e) {
+        if (!isDown) return;
+        e.preventDefault();
+        el.scrollLeft = startScrollLeft - (e.pageX - startX);
+      });
+    });
+
+    // Populates the sidebar's bot switcher from allBots — a single-bot
+    // company just gets a working one-option dropdown rather than a
+    // special-cased hidden control.
+    function renderBotSwitcher() {
+      var select = document.getElementById('botSwitcherSelect');
+      select.innerHTML = '';
+      allBots.forEach(function (b) {
+        var opt = document.createElement('option');
+        opt.value = b.id;
+        // A company with several bots (one per site — seen live: some run
+        // up to 10) makes the plain persona name alone ambiguous to work
+        // with. The site is the thing that actually tells them apart.
+        opt.textContent = b.sourceWebsite ? b.name + ' — ' + b.sourceWebsite : b.name;
+        if (b.id === currentBotId) opt.selected = true;
+        select.appendChild(opt);
+      });
+      updateSidebarBotSite();
+    }
+
+    // Same site shown in the switcher's own option text above, surfaced here
+    // too so it's visible WITHOUT opening the dropdown — the thing that's
+    // easy to lose track of when a company has several bots is exactly which
+    // one is currently active.
+    function updateSidebarBotSite() {
+      var link = document.getElementById('sidebarBotSite');
+      var current = allBots.filter(function (b) { return b.id === currentBotId; })[0];
+      if (current && current.sourceWebsite) {
+        var href = /^https?:\/\//i.test(current.sourceWebsite) ? current.sourceWebsite : 'https://' + current.sourceWebsite;
+        link.href = href;
+        link.textContent = current.sourceWebsite;
+        link.hidden = false;
+      } else {
+        link.hidden = true;
+      }
+    }
+
+    // Re-fetches everything that means something different per-bot —
+    // appearance, install status, embed snippet, analytics, база знаний,
+    // цель. Runs once at boot and again every time the switcher changes
+    // which bot the whole cabinet is scoped to.
+    function loadBotScopedData() {
+      var current = allBots.filter(function (b) { return b.id === currentBotId; })[0];
+      botWidgetToken = current ? current.widgetToken : null;
+
+      return fetch(withBotId('/api/cabinet/appearance'))
+        .then(function (res) { return res.json(); })
+        .then(function (appearance) {
+          applyAppearanceToForm(appearance);
+          initTrainingPanes();
+          return fetch(withBotId('/api/cabinet/status'));
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          renderStatus(data);
+          return fetch(withBotId('/api/cabinet/embed-snippet'));
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          document.getElementById('snippet').textContent = data.snippet;
+          document.getElementById('testChatLink').textContent = data.testUrl;
+          loadAnalytics();
+          loadKnowledgeCategories().then(loadKnowledge);
+          loadGoal();
+        });
+    }
+
+    function fmtDate(iso) {
+      return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function fmtDelta(pct) {
+      if (pct === null || pct === undefined) return '';
+      var abs = Math.abs(pct).toFixed(0);
+      var cls = pct > 0 ? 'delta-up' : pct < 0 ? 'delta-down' : 'delta-flat';
+      if (pct === 0) return '<span class="' + cls + '">В прошлом периоде было столько же</span>';
+      // pct > 0 means THIS period is higher than the previous one — so the
+      // PREVIOUS period (what this sentence describes) was the smaller of
+      // the two. Was inverted: a real 10 -> 4 drop (pct = -60) showed
+      // "в прошлом периоде было на 60% меньше", when the previous period
+      // (10) was actually MORE than now (4) — backwards.
+      var word = pct > 0 ? 'меньше' : 'больше';
+      return '<span class="' + cls + '">В прошлом периоде было на ' + abs + '% ' + word + '</span>';
+    }
+
+    function fmtConversion(label, rate) {
+      return '<span class="stat-conversion">' + label + ' ' + rate.toFixed(1) + '%</span>';
+    }
+
+    // --- Navigation ---
+    var VIEW_TITLES = {
+      dashboard: 'Дашборд',
+      attention: 'Требует внимания',
+      training: 'Обучение бота',
+      knowledge: 'База знаний',
+      install: 'Установка',
+      telegram: 'Интеграции',
+      leads: 'Заявки',
+      support: 'Поддержка',
+      settings: 'Настройки',
+    };
+    // Shared by the sidebar nav items, the settings gear (which isn't itself
+    // a .nav-item — see below), and the "Тестовый чат" toolbar's quick links
+    // (see the training-toolbar-link handler) — one function so all three
+    // switch views identically instead of three slightly-different copies.
+    function goToView(viewName) {
+      document.querySelectorAll('.nav-item').forEach(function (b) { b.classList.remove('active'); });
+      var navBtn = document.querySelector('.nav-item[data-view="' + viewName + '"]');
+      if (navBtn) navBtn.classList.add('active');
+      document.querySelectorAll('.view').forEach(function (v) { v.hidden = true; });
+      document.getElementById('view-' + viewName).hidden = false;
+      document.getElementById('pageTitle').textContent =
+        viewName === 'dashboard' ? (companyName || VIEW_TITLES.dashboard) : (VIEW_TITLES[viewName] || '');
+    }
+    document.querySelectorAll('.nav-item').forEach(function (btn) {
+      btn.addEventListener('click', function () { goToView(btn.dataset.view); });
+    });
+
+    // The gear lives next to the account row, not in the main nav list, so it
+    // isn't a .nav-item — goToView still handles it fine (there's just no
+    // nav-item to highlight, which is correct: settings has no sidebar entry).
+    document.getElementById('settingsGearBtn').addEventListener('click', function () { goToView('settings'); });
+
+    document.querySelectorAll('.training-toolbar-link').forEach(function (btn) {
+      btn.addEventListener('click', function () { goToView(btn.dataset.gotoView); });
+    });
+
+    // --- Status badge ---
+    // Real, growing ring — not a static icon — for anything reporting an
+    // actual measured percent (e.g. provisioning step), never a fabricated
+    // time-based estimate.
+    function progressRingSvg(percent, size) {
+      var r = (size - 4) / 2;
+      var c = 2 * Math.PI * r;
+      var offset = c * (1 - Math.max(0, Math.min(100, percent)) / 100);
+      var center = size / 2;
+      var text = size >= 22
+        ? '<text x="' + center + '" y="' + center + '" text-anchor="middle" dominant-baseline="central" ' +
+          'font-size="' + Math.round(size * 0.32) + '" font-weight="700" fill="#166534">' + percent + '%</text>'
+        : '';
+      return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' +
+        '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="#dcfce7" stroke-width="3"/>' +
+        '<circle cx="' + center + '" cy="' + center + '" r="' + r + '" fill="none" stroke="#22c55e" stroke-width="3" ' +
+        'stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '" stroke-linecap="round" ' +
+        'transform="rotate(-90 ' + center + ' ' + center + ')"/>' + text + '</svg>';
+    }
+
+    function renderStatus(data) {
+      var badge = document.getElementById('statusBadge');
+      var icon = document.getElementById('statusIcon');
+      var label = document.getElementById('statusLabel');
+      var more = document.getElementById('statusMore');
+      var dropdown = document.getElementById('statusDropdown');
+
+      badge.className = 'status-badge status-' + (STATUS_COLORS[data.level] || 'info');
+      var top = data.items[0];
+      if (typeof top.percent === 'number') {
+        icon.innerHTML = progressRingSvg(top.percent, 26);
+      } else {
+        icon.textContent = top.icon;
+      }
+      label.textContent = top.title;
+      // A small animated pointing hand instead of a "и ещё N" text suffix —
+      // just a hint that there's more to see, not a number to parse.
+      more.hidden = data.items.length <= 1;
+
+      dropdown.innerHTML = '';
+      data.items.forEach(function (item) {
+        var row = document.createElement('div');
+        row.className = 'status-item status-' + item.level;
+        var iconHtml = typeof item.percent === 'number'
+          ? '<span class="status-item-ring">' + progressRingSvg(item.percent, 32) + '</span>'
+          : item.icon;
+        row.innerHTML =
+          '<div class="status-item-title">' + iconHtml + ' ' + item.title + '</div>' +
+          '<div class="status-item-detail">' + item.detail + '</div>';
+        if (item.view) {
+          row.classList.add('status-item-clickable');
+          row.addEventListener('click', function () {
+            dropdown.hidden = true;
+            var navBtn = document.querySelector('.nav-item[data-view="' + item.view + '"]');
+            if (navBtn) navBtn.click();
+          });
+        }
+        dropdown.appendChild(row);
+      });
+    }
+    document.getElementById('statusBadge').addEventListener('click', function () {
+      var dropdown = document.getElementById('statusDropdown');
+      dropdown.hidden = !dropdown.hidden;
+    });
+    document.addEventListener('click', function (e) {
+      var widget = document.querySelector('.status-widget');
+      if (widget && !widget.contains(e.target)) document.getElementById('statusDropdown').hidden = true;
+    });
+
+    document.getElementById('accountRow').addEventListener('click', function () {
+      var menu = document.getElementById('accountMenu');
+      menu.hidden = !menu.hidden;
+    });
+    document.addEventListener('click', function (e) {
+      var widget = document.querySelector('.account-widget');
+      if (widget && !widget.contains(e.target)) document.getElementById('accountMenu').hidden = true;
+    });
+
+    // --- Period selector ---
+    var customRange = null; // { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' } while period === 'custom'
+    document.querySelectorAll('.period-selector > .period-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        currentPeriod = btn.dataset.period;
+        customRange = null;
+        document.querySelectorAll('.period-selector > .period-btn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        loadAnalytics();
+      });
+    });
+
+    document.getElementById('rangeApplyBtn').addEventListener('click', function () {
+      var from = document.getElementById('rangeFrom').value;
+      var to = document.getElementById('rangeTo').value;
+      if (!from || !to) return;
+      currentPeriod = 'custom';
+      customRange = { from: from, to: to };
+      document.querySelectorAll('.period-selector > .period-btn').forEach(function (b) { b.classList.remove('active'); });
+      loadAnalytics();
+    });
+
+    // "Обработанные" — a collapsed-by-default list of everything manually
+    // checked off in "Требует внимания" (see buildProcessedCell). Kept
+    // outside loadAnalytics so processedListOpen survives across reloads —
+    // otherwise every refresh would silently close it again.
+    var processedListOpen = false;
+    var lastProcessedItems = [];
+    function renderProcessedList(items) {
+      lastProcessedItems = items;
+      var panel = document.getElementById('processedPanel');
+      var rows = document.getElementById('processedRows');
+      rows.innerHTML = '';
+      if (!processedListOpen) { panel.hidden = true; return; }
+      panel.hidden = false;
+      document.getElementById('processedTable').style.display = items.length ? 'table' : 'none';
+      items.forEach(function (e) {
+        var tr = document.createElement('tr');
+        var reasonLabel =
+          e.reason === 'dissatisfaction' ? 'Недоволен ответом' :
+          e.reason === 'disliked' ? 'Дизлайк тестировщика' : 'Нет ответа';
+        tr.innerHTML =
+          '<td>' + reasonLabel + '</td>' + '<td>' + e.question + '</td>' +
+          '<td>' + (e.answer || e.botReply || '—') + '</td>' + '<td>' + fmtDate(e.processedAt) + '</td>';
+        var td = document.createElement('td');
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        td.appendChild(checkbox);
+        checkbox.addEventListener('change', function () {
+          checkbox.disabled = true;
+          fetch(withBotId('/api/cabinet/escalations/' + e.id + '/process'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ processed: false }),
+          })
+            .then(loadAnalytics)
+            .catch(function () { checkbox.disabled = false; checkbox.checked = true; });
+        });
+        tr.appendChild(td);
+        rows.appendChild(tr);
+      });
+    }
+    document.getElementById('processedToggle').addEventListener('click', function () {
+      processedListOpen = !processedListOpen;
+      renderProcessedList(lastProcessedItems);
+    });
+
+    function loadAnalytics() {
+      var url = '/api/cabinet/analytics?period=' + currentPeriod;
+      if (currentPeriod === 'custom' && customRange) {
+        url += '&from=' + encodeURIComponent(customRange.from) + '&to=' + encodeURIComponent(customRange.to);
+      }
+      fetch(withBotId(url))
+        .then(function (res) { return res.json(); })
+        .then(renderAnalytics);
+    }
+
+    function renderAnalytics(data) {
+      document.getElementById('statLeadsLabel').textContent = data.leadsLabel || 'Заявок получено';
+
+      document.getElementById('statShown').textContent = data.shown.count;
+      document.getElementById('statShownDelta').innerHTML = fmtDelta(data.shown.deltaPct);
+
+      document.getElementById('statDialogs').textContent = data.dialogs.count;
+      document.getElementById('statDialogsDelta').innerHTML = fmtConversion('Конверсия в диалог', data.dialogs.conversionRate);
+
+      document.getElementById('statLeads').textContent = data.leads.count;
+      document.getElementById('statLeadsDelta').innerHTML = fmtConversion(data.leadsConversionLabel || 'Конверсия в заявку', data.leads.conversionRate);
+
+      // Most client bots hand off to a human who closes the sale outside the
+      // chat — "заявок оплачено" is meaningless clutter for them. Only Алина
+      // (and any bot explicitly flagged) tracks it.
+      if (data.tracksPayments) {
+        document.getElementById('paidCard').style.display = 'block';
+        document.getElementById('statPaid').textContent = data.paid.count + ' (' + data.paid.conversionRate.toFixed(1) + '%)';
+        document.getElementById('statPaidDelta').innerHTML = fmtDelta(data.paid.deltaPct);
+        document.querySelector('.stat-grid').style.gridTemplateColumns = 'repeat(4, 1fr)';
+      } else {
+        document.getElementById('paidCard').style.display = 'none';
+        document.querySelector('.stat-grid').style.gridTemplateColumns = 'repeat(3, 1fr)';
+      }
+
+      document.getElementById('problemsTotal').textContent = data.problems.count;
+      document.getElementById('problemsResolved').textContent = data.problems.resolved;
+
+      var variantPending = document.getElementById('variantPending');
+      var variantContent = document.getElementById('variantContent');
+      if (!data.variantsAvailable) {
+        variantPending.style.display = 'block';
+        variantContent.style.display = 'none';
+      } else {
+        variantPending.style.display = 'none';
+        variantContent.style.display = 'block';
+        var table = document.getElementById('variantTable');
+        var rows = document.getElementById('variantRows');
+        rows.innerHTML = '';
+        if (data.variantReport && data.variantReport.length > 0) {
+          table.style.display = 'table';
+          data.variantReport.forEach(function (v) {
+            var tr = document.createElement('tr');
+            var showRate = v.shown > 0 ? (v.engaged / v.shown) * 100 : 0;
+            tr.innerHTML =
+              '<td><strong>' + v.label + '</strong></td>' +
+              '<td class="variant-text-cell">' + (v.text || '—') + '</td>' +
+              '<td class="variant-col-metric">' + v.shown + '</td>' +
+              '<td class="variant-col-metric">' + v.engaged + '</td>' +
+              '<td class="variant-col-metric">' + showRate.toFixed(1) + '%</td>';
+            rows.appendChild(tr);
+          });
+        } else {
+          table.style.display = 'none';
+        }
+      }
+
+      // Shared "Обработано" checkbox — a manual dismiss available on every
+      // pending/verify row, independent of whether a real answer exists (see
+      // CabinetService.setEscalationProcessed). Checking it removes the row
+      // from view immediately rather than waiting on a full reload, so it
+      // reads as instant rather than laggy.
+      function buildProcessedCell(escalationId, row) {
+        var td = document.createElement('td');
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        td.appendChild(checkbox);
+        checkbox.addEventListener('change', function () {
+          checkbox.disabled = true;
+          fetch(withBotId('/api/cabinet/escalations/' + escalationId + '/process'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ processed: true }),
+          })
+            .then(function () {
+              if (row.parentNode) row.parentNode.removeChild(row);
+              loadAnalytics();
+            })
+            .catch(function () { checkbox.disabled = false; checkbox.checked = false; });
+        });
+        return td;
+      }
+
+      // "Требует внимания" nav badge — pending (needs a Telegram reply) and
+      // needing-verification (answered but not yet tested) both count as
+      // things the owner still has to act on.
+      var pending = (data.escalations && data.escalations.pending) || [];
+      var needsVerificationCount = ((data.escalations && data.escalations.needsVerification) || []).length;
+      var attentionCount = pending.length + needsVerificationCount;
+      var attentionBadge = document.getElementById('attentionBadge');
+      attentionBadge.textContent = attentionCount;
+      attentionBadge.classList.toggle('nav-badge-ok', attentionCount === 0);
+
+      if (pending.length > 0) {
+        document.getElementById('pendingPanel').style.display = 'block';
+        document.getElementById('pendingTable').style.display = 'table';
+        var pendingRows = document.getElementById('pendingRows');
+        pendingRows.innerHTML = '';
+        pending.forEach(function (e) {
+          var tr = document.createElement('tr');
+          var reasonLabel =
+            e.reason === 'dissatisfaction' ? 'Недоволен ответом' :
+            e.reason === 'disliked' ? 'Дизлайк тестировщика' : 'Нет ответа';
+          // For "dissatisfaction" rows, e.question is the model's own "what went
+          // wrong" summary, not the real question — e.visitorQuestion (when
+          // present) is the actual message the unsatisfying reply answered.
+          var realQuestion = e.visitorQuestion || e.question;
+          var complaintNote = e.reason === 'dissatisfaction' ? e.question : '—';
+          tr.innerHTML =
+            '<td>' + reasonLabel + '</td>' + '<td>' + realQuestion + '</td>' +
+            '<td>' + (e.botReply || '—') + '</td>' + '<td>' + complaintNote + '</td>' +
+            '<td>' + fmtDate(e.createdAt) + '</td>';
+          var dialogCell = document.createElement('td');
+          var dialogBtn = document.createElement('button');
+          dialogBtn.type = 'button';
+          dialogBtn.className = 'copy-btn';
+          dialogBtn.textContent = 'Открыть диалог';
+          dialogBtn.addEventListener('click', function () { openEscalationDialog(e.id); });
+          dialogCell.appendChild(dialogBtn);
+          tr.appendChild(dialogCell);
+          tr.appendChild(buildProcessedCell(e.id, tr));
+          pendingRows.appendChild(tr);
+        });
+      }
+
+      var needsVerification = (data.escalations && data.escalations.needsVerification) || [];
+      if (needsVerification.length > 0) {
+        document.getElementById('verifyPanel').style.display = 'block';
+        document.getElementById('verifyTable').style.display = 'table';
+        var verifyRows = document.getElementById('verifyRows');
+        verifyRows.innerHTML = '';
+        needsVerification.forEach(function (e) {
+          var tr = document.createElement('tr');
+          var btnCell = document.createElement('td');
+          var btn = document.createElement('button');
+          btn.className = 'copy-btn';
+          btn.type = 'button';
+          btn.textContent = 'Отметить проверенным';
+          btn.addEventListener('click', function () {
+            fetch('/api/cabinet/escalations/' + e.id + '/verify', { method: 'POST' }).then(loadAnalytics);
+          });
+          btnCell.appendChild(btn);
+          tr.innerHTML = '<td>' + e.question + '</td>' + '<td>' + e.answer + '</td>';
+          tr.appendChild(btnCell);
+          var dialogCell2 = document.createElement('td');
+          var dialogBtn2 = document.createElement('button');
+          dialogBtn2.type = 'button';
+          dialogBtn2.className = 'copy-btn';
+          dialogBtn2.textContent = 'Открыть диалог';
+          dialogBtn2.addEventListener('click', function () { openEscalationDialog(e.id); });
+          dialogCell2.appendChild(dialogBtn2);
+          tr.appendChild(dialogCell2);
+          tr.appendChild(buildProcessedCell(e.id, tr));
+          verifyRows.appendChild(tr);
+        });
+      }
+
+      var recentVerified = (data.escalations && data.escalations.recentVerified) || [];
+      if (recentVerified.length > 0) {
+        document.getElementById('verifiedPanel').style.display = 'block';
+        document.getElementById('verifiedTable').style.display = 'table';
+        var verifiedRows = document.getElementById('verifiedRows');
+        verifiedRows.innerHTML = '';
+        recentVerified.forEach(function (e) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + e.question + '</td>' + '<td>' + e.answer + '</td>' + '<td>' + fmtDate(e.verifiedAt) + '</td>';
+          verifiedRows.appendChild(tr);
+        });
+      }
+
+      var processedItems = (data.escalations && data.escalations.processed) || [];
+      var processedToggleBtn = document.getElementById('processedToggle');
+      document.getElementById('processedBadge').textContent = String(processedItems.length);
+      processedToggleBtn.hidden = processedItems.length === 0;
+      renderProcessedList(processedItems);
+
+      // Leads view
+      document.getElementById('leadsPaidHeader').style.display = data.tracksPayments ? '' : 'none';
+      if (data.leadsList && data.leadsList.length > 0) {
+        document.getElementById('leadsTable').style.display = 'table';
+        document.getElementById('leadsEmpty').style.display = 'none';
+        var leadRows = document.getElementById('leadsRows');
+        leadRows.innerHTML = '';
+        data.leadsList.forEach(function (l) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + (l.name || '—') + '</td>' + '<td>' + (l.phone || '—') + '</td>' +
+            '<td>' + (l.email || '—') + '</td>' + '<td>' + (l.interest || '—') + '</td>' +
+            '<td>' + fmtDate(l.createdAt) + '</td>';
+          if (data.tracksPayments) {
+            var payCell = document.createElement('td');
+            if (l.paidAt) {
+              payCell.innerHTML = '<span class="badge ready">Оплачено</span>';
+            } else {
+              var payBtn = document.createElement('button');
+              payBtn.className = 'copy-btn';
+              payBtn.type = 'button';
+              payBtn.textContent = 'Отметить оплаченным';
+              payBtn.addEventListener('click', function () {
+                fetch('/api/cabinet/leads/' + l.id + '/mark-paid', { method: 'POST' }).then(loadAnalytics);
+              });
+              payCell.appendChild(payBtn);
+            }
+            tr.appendChild(payCell);
+          }
+          leadRows.appendChild(tr);
+        });
+      }
+    }
+
+    // Info popovers — same toggle/outside-click-closes pattern as the status
+    // badge and account menu, generalized over every ".info-widget" on the
+    // page (A/B/C/D test, goal, quality) instead of one hardcoded pair.
+    document.querySelectorAll('.info-widget').forEach(function (widget) {
+      var btn = widget.querySelector('.info-btn');
+      var popup = widget.querySelector('.info-popup');
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var wasHidden = popup.hidden;
+        document.querySelectorAll('.info-popup').forEach(function (p) { p.hidden = true; });
+        popup.hidden = !wasHidden;
+      });
+    });
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('.info-widget')) {
+        document.querySelectorAll('.info-popup').forEach(function (p) { p.hidden = true; });
+      }
+    });
+
+    // --- Goal ---
+    // Used to be settable only by typing a specific command into the
+    // training chat's menu (see widget.service.ts's TRAINING_BTN_GOAL) — the
+    // follow-up questions that flow used to ask were a nicety, not a real
+    // requirement, so a direct preset picker here works just as well.
+    var goalPresets = [];
+    function loadGoal() {
+      return fetch(withBotId('/api/cabinet/goal'))
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          goalPresets = data.presets || [];
+          var display = document.getElementById('goalDisplay');
+          var icon = document.getElementById('goalDisplayIcon');
+          var text = document.getElementById('goalCurrent');
+          if (data.goalLabel) {
+            display.classList.remove('goal-display-unset');
+            icon.textContent = '🎯';
+            text.textContent = data.goalLabel;
+          } else {
+            display.classList.add('goal-display-unset');
+            icon.textContent = '⚪';
+            text.textContent = 'Цель ещё не задана — бот просто собирает контакт заинтересованного посетителя.';
+          }
+
+          var select = document.getElementById('goalPresetSelect');
+          select.innerHTML = '';
+          goalPresets.forEach(function (p) {
+            var opt = document.createElement('option');
+            opt.value = p.key;
+            opt.textContent = p.label;
+            select.appendChild(opt);
+          });
+          var customOpt = document.createElement('option');
+          customOpt.value = 'custom';
+          customOpt.textContent = 'Свой вариант...';
+          select.appendChild(customOpt);
+        });
+    }
+
+    document.getElementById('goalDisplay').addEventListener('click', function () {
+      document.getElementById('goalEditForm').hidden = false;
+      document.getElementById('goalDisplay').hidden = true;
+    });
+    document.getElementById('goalEditCancelBtn').addEventListener('click', function () {
+      document.getElementById('goalEditForm').hidden = true;
+      document.getElementById('goalDisplay').hidden = false;
+      document.getElementById('goalEditStatus').textContent = '';
+    });
+    document.getElementById('goalPresetSelect').addEventListener('change', function () {
+      document.getElementById('goalCustomInput').hidden = this.value !== 'custom';
+    });
+    document.getElementById('goalEditSaveBtn').addEventListener('click', function () {
+      var preset = document.getElementById('goalPresetSelect').value;
+      var customText = document.getElementById('goalCustomInput').value.trim();
+      if (preset === 'custom' && !customText) {
+        document.getElementById('goalEditStatus').textContent = 'Опишите цель своими словами.';
+        return;
+      }
+      var btn = this;
+      btn.disabled = true;
+      fetch(withBotId('/api/cabinet/goal'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preset: preset, customText: customText }),
+      })
+        .then(function (res) { if (!res.ok) return res.json().then(function (d) { throw new Error(d.message); }); return res.json(); })
+        .then(function () {
+          document.getElementById('goalEditForm').hidden = true;
+          document.getElementById('goalDisplay').hidden = false;
+          document.getElementById('goalEditStatus').textContent = '';
+          loadGoal();
+        })
+        .catch(function (err) {
+          document.getElementById('goalEditStatus').textContent = err.message || 'Не получилось сохранить.';
+        })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    // --- Chat appearance (name, gender, color, position) ---
+    function setActiveToggle(containerId, dataAttr, value) {
+      document.querySelectorAll('#' + containerId + ' .period-btn').forEach(function (b) {
+        b.classList.toggle('active', b.dataset[dataAttr] === value);
+      });
+    }
+
+    // A proper palette instead of a fixed handful of swatches: a grid of named
+    // presets (also usable by typing the Russian name below), a free hex/CSS-
+    // color text field, the OS color dialog, and — where supported — an actual
+    // screen eyedropper so the owner can sample a color straight off their site.
+    var COLOR_PRESETS = [
+      ['Индиго', '#4f46e5'], ['Синий', '#2563eb'], ['Голубой', '#0ea5e9'], ['Бирюзовый', '#14b8a6'],
+      ['Изумрудный', '#059669'], ['Зелёный', '#16a34a'], ['Салатовый', '#65a30d'], ['Жёлтый', '#eab308'],
+      ['Янтарный', '#d97706'], ['Оранжевый', '#ea580c'], ['Красный', '#dc2626'], ['Малиновый', '#e11d48'],
+      ['Розовый', '#db2777'], ['Фуксия', '#c026d3'], ['Фиолетовый', '#7c3aed'], ['Пурпурный', '#9333ea'],
+      ['Лавандовый', '#8b5cf6'], ['Небесный', '#38bdf8'], ['Мятный', '#10b981'], ['Персиковый', '#fb923c'],
+      ['Коричневый', '#92400e'], ['Серый', '#6b7280'], ['Тёмно-серый', '#374151'], ['Чёрный', '#111827'],
+    ];
+    var COLOR_NAME_MAP = {};
+    COLOR_PRESETS.forEach(function (p) { COLOR_NAME_MAP[p[0].toLowerCase()] = p[1]; });
+
+    // Accepts a preset name, a #hex (with or without the #), or any valid CSS
+    // color the browser itself understands (named keywords, rgb()/hsl()...) —
+    // resolved by letting the browser parse it via a scratch element rather
+    // than hand-rolling a second color-name table.
+    function resolveColorInput(raw) {
+      var v = (raw || '').trim();
+      if (!v) return null;
+      if (COLOR_NAME_MAP[v.toLowerCase()]) return COLOR_NAME_MAP[v.toLowerCase()];
+      var hexCandidate = v.charAt(0) === '#' ? v : '#' + v;
+      if (/^#[0-9a-fA-F]{6}$/.test(hexCandidate)) return hexCandidate.toLowerCase();
+      var probe = document.createElement('div');
+      probe.style.display = 'none';
+      probe.style.color = v;
+      if (!probe.style.color) return null;
+      document.body.appendChild(probe);
+      var rgb = getComputedStyle(probe).color;
+      document.body.removeChild(probe);
+      var m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(rgb);
+      if (!m) return null;
+      return '#' + [m[1], m[2], m[3]].map(function (n) {
+        return Number(n).toString(16).padStart(2, '0');
+      }).join('');
+    }
+
+    function hexToRgbParts(hex) {
+      var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+      return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 79, g: 70, b: 229 };
+    }
+
+    // v (value/brightness) is fixed at 100% throughout — matches the wheel's
+    // own gradient (white center fading to a fully saturated edge at every
+    // hue), so a click/drag position maps onto it with no separate "how dark"
+    // axis. Anything darker than the wheel can produce is still reachable via
+    // the hex/name field or the native color input below it.
+    function hsvToHex(h, s, v) {
+      var i = Math.floor(h / 60) % 6;
+      var f = h / 60 - Math.floor(h / 60);
+      var p = v * (1 - s);
+      var q = v * (1 - f * s);
+      var t = v * (1 - (1 - f) * s);
+      var r, g, b;
+      switch (i) {
+        case 0: r = v; g = t; b = p; break;
+        case 1: r = q; g = v; b = p; break;
+        case 2: r = p; g = v; b = t; break;
+        case 3: r = p; g = q; b = v; break;
+        case 4: r = t; g = p; b = v; break;
+        default: r = v; g = p; b = q; break;
+      }
+      function to255(x) { return Math.round(x * 255); }
+      return '#' + [to255(r), to255(g), to255(b)].map(function (n) {
+        return n.toString(16).padStart(2, '0');
+      }).join('');
+    }
+
+    function hexToHsv(hex) {
+      var rgb = hexToRgbParts(hex);
+      var r = rgb.r / 255, g = rgb.g / 255, b = rgb.b / 255;
+      var max = Math.max(r, g, b), min = Math.min(r, g, b);
+      var d = max - min;
+      var h = 0;
+      if (d !== 0) {
+        if (max === r) h = ((g - b) / d) % 6;
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60;
+        if (h < 0) h += 360;
+      }
+      return { h: h, s: max === 0 ? 0 : d / max, v: max };
+    }
+
+    // Angle measured clockwise from the top (0deg), matching the conic-
+    // gradient's stop order (red@top, yellow@60deg, ... back to red@360deg) —
+    // so this is directly usable both ways: reading a click's hue, and
+    // placing the handle back at a given hue.
+    var colorWheel = document.getElementById('colorWheel');
+    var colorWheelHandle = document.getElementById('colorWheelHandle');
+    var colorWheelPreview = document.getElementById('colorWheelPreview');
+    var colorWheelPreviewSwatch = document.getElementById('colorWheelPreviewSwatch');
+    var colorWheelPreviewHex = document.getElementById('colorWheelPreviewHex');
+
+    function moveWheelHandle(h, s) {
+      var radius = colorWheel.clientWidth / 2;
+      var angleRad = h * Math.PI / 180;
+      var dist = Math.min(1, s) * radius;
+      colorWheelHandle.style.left = (radius + dist * Math.sin(angleRad)) + 'px';
+      colorWheelHandle.style.top = (radius - dist * Math.cos(angleRad)) + 'px';
+    }
+
+    function colorFromWheelEvent(e) {
+      var rect = colorWheel.getBoundingClientRect();
+      var radius = rect.width / 2;
+      var dx = e.clientX - (rect.left + radius);
+      var dy = e.clientY - (rect.top + radius);
+      var angle = Math.atan2(dx, -dy) * 180 / Math.PI;
+      if (angle < 0) angle += 360;
+      var s = Math.min(1, Math.sqrt(dx * dx + dy * dy) / radius);
+      return { hex: hsvToHex(angle, s, 1), h: angle, s: s };
+    }
+
+    var wheelDragging = false;
+    function handleWheelPointer(e, finalize) {
+      var result = colorFromWheelEvent(e);
+      moveWheelHandle(result.h, result.s);
+      colorWheelPreviewSwatch.style.background = result.hex;
+      colorWheelPreviewHex.textContent = result.hex;
+      colorWheelPreview.style.left = (e.clientX + 16) + 'px';
+      colorWheelPreview.style.top = (e.clientY - 12) + 'px';
+      colorWheelPreview.hidden = false;
+      if (finalize) {
+        setSelectedColor(result.hex);
+        colorWheelPreview.hidden = true;
+      }
+    }
+    colorWheel.addEventListener('pointerdown', function (e) {
+      wheelDragging = true;
+      colorWheel.setPointerCapture(e.pointerId);
+      handleWheelPointer(e, false);
+    });
+    colorWheel.addEventListener('pointermove', function (e) {
+      if (wheelDragging) handleWheelPointer(e, false);
+    });
+    colorWheel.addEventListener('pointerup', function (e) {
+      if (!wheelDragging) return;
+      wheelDragging = false;
+      handleWheelPointer(e, true);
+    });
+    colorWheel.addEventListener('pointercancel', function () {
+      wheelDragging = false;
+      colorWheelPreview.hidden = true;
+    });
+
+    function setSelectedColor(color) {
+      var hex = color || '#4f46e5';
+      currentAppearance.color = hex;
+      document.getElementById('colorPickerBtn').style.background = hex;
+      document.getElementById('colorCustomInput').value = hex;
+      var hsv = hexToHsv(hex);
+      moveWheelHandle(hsv.h, hsv.s);
+    }
+
+    // The wheel is hidden (display:none) until its popup opens, so any handle
+    // placement computed while closed reads a zero clientWidth and lands at
+    // dead-center. This runs after the shared .info-widget toggle above it (it's
+    // registered later, so it fires second on the same click) to reposition the
+    // handle once the popup — and therefore the wheel — is actually visible.
+    document.getElementById('colorPickerBtn').addEventListener('click', function () {
+      var hsv = hexToHsv(currentAppearance.color || '#4f46e5');
+      moveWheelHandle(hsv.h, hsv.s);
+    });
+
+    function applyAppearanceToForm(a) {
+      currentAppearance = a;
+      document.getElementById('botNameInput').value = a.name || '';
+      setActiveToggle('genderToggle', 'gender', a.gender);
+      setActiveToggle('positionToggle', 'position', a.position);
+      setSelectedColor(a.color);
+    }
+
+    document.querySelectorAll('#genderToggle .period-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { setActiveToggle('genderToggle', 'gender', btn.dataset.gender); });
+    });
+    document.querySelectorAll('#positionToggle .period-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { setActiveToggle('positionToggle', 'position', btn.dataset.position); });
+    });
+    document.getElementById('colorCustomInput').addEventListener('input', function () {
+      setSelectedColor(this.value);
+    });
+
+    function applyTypedColor() {
+      var input = document.getElementById('colorNameInput');
+      var errEl = document.getElementById('colorPopupError');
+      var raw = input.value.trim();
+      if (!raw) { errEl.hidden = true; return; }
+      var resolved = resolveColorInput(raw);
+      if (!resolved) {
+        errEl.textContent = 'Не получилось распознать цвет — попробуйте название или #HEX.';
+        errEl.hidden = false;
+        return;
+      }
+      errEl.hidden = true;
+      setSelectedColor(resolved);
+      input.value = '';
+    }
+    document.getElementById('colorNameInput').addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      applyTypedColor();
+    });
+    document.getElementById('colorNameInput').addEventListener('blur', applyTypedColor);
+
+    // Chromium's screen eyedropper — lets the owner sample a color from
+    // literally anywhere on screen (their own site open in another window,
+    // a brand guideline PDF, anything), not just inside this page.
+    var eyedropperBtn = document.getElementById('eyedropperBtn');
+    if (!('EyeDropper' in window)) {
+      eyedropperBtn.hidden = true;
+    } else {
+      eyedropperBtn.addEventListener('click', function () {
+        new window.EyeDropper().open()
+          .then(function (result) {
+            setSelectedColor(result.sRGBHex);
+            document.getElementById('colorPopup').hidden = true;
+          })
+          .catch(function () {});
+      });
+    }
+
+    document.getElementById('saveAppearanceBtn').addEventListener('click', function () {
+      var statusEl = document.getElementById('appearanceStatus');
+      var name = document.getElementById('botNameInput').value.trim();
+      var newCompanyName = document.getElementById('companyNameInput').value.trim();
+      if (!name) {
+        statusEl.style.color = '#b91c1c';
+        statusEl.textContent = 'Укажите имя бота.';
+        return;
+      }
+      if (!newCompanyName) {
+        statusEl.style.color = '#b91c1c';
+        statusEl.textContent = 'Укажите название компании.';
+        return;
+      }
+      var genderBtn = document.querySelector('#genderToggle .period-btn.active');
+      var positionBtn = document.querySelector('#positionToggle .period-btn.active');
+      var btn = this;
+      btn.disabled = true;
+      statusEl.style.color = '#9ca3af';
+      statusEl.textContent = 'Сохраняю…';
+      // Two separate resources (company is shared across every bot, appearance
+      // is per-bot) saved together from one button since they're set together
+      // in this one panel — only actually calls the company endpoint if the
+      // name was touched, so switching bots without editing it never fires an
+      // extra request.
+      Promise.resolve(
+        newCompanyName !== companyName
+          ? fetch('/api/cabinet/company', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: newCompanyName }),
+            }).then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+              .then(function (data) {
+                companyName = data.companyName;
+                document.getElementById('sidebarCompany').textContent = companyName;
+                if (document.querySelector('.nav-item[data-view="dashboard"]').classList.contains('active')) {
+                  document.getElementById('pageTitle').textContent = companyName;
+                }
+              })
+          : null
+      )
+        .then(function () {
+          return fetch(withBotId('/api/cabinet/appearance'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: name,
+              gender: genderBtn ? genderBtn.dataset.gender : currentAppearance.gender,
+              color: document.getElementById('colorCustomInput').value,
+              position: positionBtn ? positionBtn.dataset.position : currentAppearance.position,
+            }),
+          });
+        })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function (data) {
+          applyAppearanceToForm(data);
+          initTrainingPanes();
+          // Keep the bot switcher's label in sync — the name just typed here
+          // is the same one shown there.
+          var switched = allBots.filter(function (b) { return b.id === currentBotId; })[0];
+          if (switched) { switched.name = data.name; renderBotSwitcher(); }
+          statusEl.style.color = '#166534';
+          statusEl.textContent = 'Сохранено ✓';
+          return fetch(withBotId('/api/cabinet/embed-snippet'));
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          document.getElementById('snippet').textContent = data.snippet;
+          document.getElementById('testChatLink').textContent = data.testUrl;
+        })
+        .catch(function () {
+          statusEl.style.color = '#b91c1c';
+          statusEl.textContent = 'Не получилось сохранить — попробуйте ещё раз.';
+        })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    document.getElementById('addGreetingVariantBtn').addEventListener('click', function () {
+      var input = document.getElementById('greetingVariantInput');
+      var statusEl = document.getElementById('greetingVariantStatus');
+      var text = input.value.trim();
+      if (text.length < 3) {
+        statusEl.style.color = '#b91c1c';
+        statusEl.textContent = 'Минимум 3 символа.';
+        return;
+      }
+      var btn = this;
+      btn.disabled = true;
+      statusEl.style.color = '#9ca3af';
+      statusEl.textContent = 'Добавляю…';
+      fetch(withBotId('/api/cabinet/variants'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text }),
+      })
+        .then(function (res) { if (!res.ok) return res.json().then(function (d) { throw new Error(d.message); }); return res.json(); })
+        .then(function () {
+          input.value = '';
+          statusEl.style.color = '#166534';
+          statusEl.textContent = 'Добавлено ✓';
+        })
+        .catch(function (err) {
+          statusEl.style.color = '#b91c1c';
+          statusEl.textContent = (typeof err.message === 'string' && err.message) || 'Не получилось добавить.';
+        })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    // --- Knowledge base ---
+    var SOURCE_LABEL = { manual: 'Вручную', telegram: 'Telegram', test_chat: 'Тестовый чат', site: 'Сайт', bulk: 'Вручную', instruction: 'Инструкция' };
+    var kbEntries = [];
+    var kbCategories = [];
+    var kbCategoryFilter = 'all'; // 'all' | 'pending' | 'uncategorized' | <categoryId>
+    var kbSearchResults = null; // non-null while a search query is active — overrides the category filter
+
+    function kbCategoryClickable(key, label, count, isPending) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'kb-category-item' + (kbCategoryFilter === key ? ' active' : '') + (isPending ? ' kb-category-pending' : '');
+      var nameSpan = document.createElement('span');
+      nameSpan.textContent = label;
+      var countSpan = document.createElement('span');
+      countSpan.className = 'kb-category-count';
+      countSpan.textContent = String(count);
+      btn.appendChild(nameSpan);
+      btn.appendChild(countSpan);
+      btn.addEventListener('click', function () {
+        kbCategoryFilter = key;
+        kbSearchResults = null;
+        document.getElementById('kbSearchInput').value = '';
+        document.getElementById('kbSearchHint').style.display = 'none';
+        renderCategoryList();
+        renderArticlesFeed();
+      });
+      return btn;
+    }
+
+    function renderCategoryList() {
+      var list = document.getElementById('kbCategoryList');
+      list.innerHTML = '';
+      var pendingCount = kbEntries.filter(function (e) { return e.moderationStatus === 'pending'; }).length;
+      // Instructions also have categoryId: null, same as a plain Q/A entry —
+      // excluded here so they get their own bucket below instead of mixing
+      // into "Вопрос/Ответ" (a rule of behavior isn't a fact to look up).
+      var uncategorizedCount = kbEntries.filter(function (e) { return !e.categoryId && e.source !== 'instruction'; }).length;
+      var instructionCount = kbEntries.filter(function (e) { return e.source === 'instruction'; }).length;
+
+      list.appendChild(kbCategoryClickable('all', 'Все', kbEntries.length, false));
+      if (pendingCount > 0) list.appendChild(kbCategoryClickable('pending', 'На модерации', pendingCount, true));
+      list.appendChild(kbCategoryClickable('uncategorized', 'Вопрос/Ответ', uncategorizedCount, false));
+      if (instructionCount > 0) list.appendChild(kbCategoryClickable('instruction', 'Инструкция для чат-бота', instructionCount, false));
+      kbCategories.forEach(function (c) {
+        var count = kbEntries.filter(function (e) { return e.categoryId === c.id; }).length;
+        list.appendChild(kbCategoryClickable(c.id, c.name, count, false));
+      });
+    }
+
+    function kbEntriesForFilter() {
+      if (kbCategoryFilter === 'all') return kbEntries;
+      if (kbCategoryFilter === 'pending') return kbEntries.filter(function (e) { return e.moderationStatus === 'pending'; });
+      if (kbCategoryFilter === 'instruction') return kbEntries.filter(function (e) { return e.source === 'instruction'; });
+      if (kbCategoryFilter === 'uncategorized') return kbEntries.filter(function (e) { return !e.categoryId && e.source !== 'instruction'; });
+      return kbEntries.filter(function (e) { return e.categoryId === kbCategoryFilter; });
+    }
+
+    function kbModLabel(status) {
+      if (status === 'pending') return 'На модерации';
+      if (status === 'rejected') return 'Отклонено';
+      return '';
+    }
+
+    function openArticleEditor(wrap, e) {
+      wrap.innerHTML = '';
+      var editWrap = document.createElement('div');
+      editWrap.className = 'kb-article-edit';
+
+      var titleInput = document.createElement('input');
+      titleInput.type = 'text';
+      titleInput.value = e.question || '';
+      titleInput.placeholder = 'Заголовок';
+      editWrap.appendChild(titleInput);
+
+      var bodyInput = document.createElement('textarea');
+      bodyInput.rows = 4;
+      bodyInput.value = e.answer;
+      editWrap.appendChild(bodyInput);
+
+      var actions = document.createElement('div');
+      actions.className = 'kb-add-actions';
+      var cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'copy-btn';
+      cancelBtn.style.marginRight = '8px';
+      cancelBtn.textContent = 'Отмена';
+      cancelBtn.addEventListener('click', function () { renderArticlesFeed(); });
+      var saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'copy-btn';
+      saveBtn.textContent = 'Сохранить';
+      saveBtn.addEventListener('click', function () {
+        fetch('/api/cabinet/knowledge/' + e.id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: titleInput.value, answer: bodyInput.value }),
+        }).then(loadKnowledge);
+      });
+      actions.appendChild(cancelBtn);
+      actions.appendChild(saveBtn);
+      editWrap.appendChild(actions);
+
+      wrap.appendChild(editWrap);
+    }
+
+    function renderArticleNode(e) {
+      var wrap = document.createElement('div');
+      wrap.className = 'kb-article' + (e.moderationStatus === 'pending' ? ' kb-pending' : '') + (e.moderationStatus === 'rejected' ? ' kb-rejected' : '');
+      wrap.dataset.id = e.id;
+
+      var header = document.createElement('div');
+      header.className = 'kb-article-header';
+
+      var title = document.createElement('h3');
+      title.className = 'kb-article-title';
+      title.textContent = e.question || (e.source === 'instruction' ? 'Инструкция боту' : '(без заголовка)');
+      header.appendChild(title);
+
+      var controls = document.createElement('div');
+      controls.className = 'kb-article-controls';
+
+      var modLabel = document.createElement('label');
+      modLabel.className = 'kb-mod-checkbox';
+      var modCheckbox = document.createElement('input');
+      modCheckbox.type = 'checkbox';
+      modCheckbox.checked = e.moderationStatus === 'approved';
+      modCheckbox.addEventListener('change', function () {
+        fetch('/api/cabinet/knowledge/' + e.id + '/moderate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: modCheckbox.checked ? 'approved' : 'pending' }),
+        }).then(loadKnowledge);
+      });
+      modLabel.appendChild(modCheckbox);
+      modLabel.appendChild(document.createTextNode(' Живая'));
+      controls.appendChild(modLabel);
+
+      var rejectBtn = document.createElement('button');
+      rejectBtn.type = 'button';
+      rejectBtn.className = 'kb-article-btn kb-reject-btn';
+      rejectBtn.textContent = e.moderationStatus === 'rejected' ? 'Вернуть' : 'Отклонить';
+      rejectBtn.addEventListener('click', function () {
+        fetch('/api/cabinet/knowledge/' + e.id + '/moderate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: e.moderationStatus === 'rejected' ? 'pending' : 'rejected' }),
+        }).then(loadKnowledge);
+      });
+      controls.appendChild(rejectBtn);
+
+      var editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'kb-article-btn';
+      editBtn.textContent = 'Редактировать';
+      editBtn.addEventListener('click', function () { openArticleEditor(wrap, e); });
+      controls.appendChild(editBtn);
+
+      var delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'kb-article-btn';
+      delBtn.textContent = 'Удалить';
+      delBtn.addEventListener('click', function () {
+        if (!confirm('Удалить эту запись насовсем?')) return;
+        fetch('/api/cabinet/knowledge/' + e.id, { method: 'DELETE' }).then(loadKnowledge);
+      });
+      controls.appendChild(delBtn);
+
+      header.appendChild(controls);
+      wrap.appendChild(header);
+
+      var body = document.createElement('p');
+      body.className = 'kb-article-body';
+      body.textContent = e.answer;
+      wrap.appendChild(body);
+
+      var meta = document.createElement('div');
+      meta.className = 'kb-article-meta';
+      var metaParts = [SOURCE_LABEL[e.source] || e.source, fmtDate(e.createdAt)];
+      var modLbl = kbModLabel(e.moderationStatus);
+      if (modLbl) metaParts.push(modLbl);
+      meta.textContent = metaParts.join(' · ');
+      wrap.appendChild(meta);
+
+      return wrap;
+    }
+
+    function renderArticlesFeed() {
+      var feed = document.getElementById('kbArticlesFeed');
+      var empty = document.getElementById('kbEmpty');
+      feed.innerHTML = '';
+
+      var list = kbSearchResults !== null ? kbSearchResults : kbEntriesForFilter();
+
+      if (kbEntries.length === 0) {
+        empty.style.display = 'block';
+        empty.textContent = 'Записей пока нет — добавьте первую выше.';
+        return;
+      }
+      if (list.length === 0) {
+        empty.style.display = 'block';
+        empty.textContent = kbSearchResults !== null ? 'По запросу ничего не нашлось.' : 'В этом разделе пока пусто.';
+        return;
+      }
+      empty.style.display = 'none';
+
+      if (kbSearchResults !== null || kbCategoryFilter !== 'all') {
+        list.forEach(function (e) { feed.appendChild(renderArticleNode(e)); });
+        return;
+      }
+
+      // "Все" with no active search — one continuous feed grouped into
+      // sections by category, "Вопрос/Ответ" always first.
+      var buckets = [{ id: null, name: 'Вопрос/Ответ', entries: [] }];
+      kbCategories.forEach(function (c) { buckets.push({ id: c.id, name: c.name, entries: [] }); });
+      list.forEach(function (e) {
+        var bucket = buckets.filter(function (b) { return b.id === (e.categoryId || null); })[0];
+        (bucket || buckets[0]).entries.push(e);
+      });
+      buckets.forEach(function (b) {
+        if (b.entries.length === 0) return;
+        var heading = document.createElement('div');
+        heading.className = 'kb-category-heading';
+        heading.textContent = b.name;
+        feed.appendChild(heading);
+        b.entries.forEach(function (e) { feed.appendChild(renderArticleNode(e)); });
+      });
+    }
+
+    function loadKnowledge() {
+      return fetch(withBotId('/api/cabinet/knowledge'))
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          kbEntries = data;
+          renderCategoryList();
+          renderArticlesFeed();
+        });
+    }
+
+    function loadKnowledgeCategories() {
+      return fetch(withBotId('/api/cabinet/knowledge/categories'))
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          kbCategories = data;
+          renderCategoryList();
+          renderArticlesFeed();
+        });
+    }
+
+    function kbError(msg) {
+      var el = document.getElementById('kbAddError');
+      el.textContent = msg;
+      el.style.display = msg ? 'block' : 'none';
+    }
+
+    document.querySelectorAll('.kb-add-tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        document.querySelectorAll('.kb-add-tab').forEach(function (t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        document.getElementById('kbAddPaneBulk').hidden = tab.dataset.tab !== 'bulk';
+        document.getElementById('kbAddPaneSite').hidden = tab.dataset.tab !== 'site';
+        document.getElementById('kbAddPaneArticle').hidden = tab.dataset.tab !== 'article';
+        document.getElementById('kbAddPaneInstruction').hidden = tab.dataset.tab !== 'instruction';
+      });
+    });
+
+    document.getElementById('kbBulkAddBtn').addEventListener('click', function () {
+      var text = document.getElementById('kbBulkText').value.trim();
+      if (text.length < 10) { kbError('Вставьте чуть больше текста (минимум пару предложений).'); return; }
+      kbError('');
+      var btn = document.getElementById('kbBulkAddBtn');
+      btn.disabled = true;
+      btn.textContent = 'Разбираю…';
+      fetch(withBotId('/api/cabinet/knowledge/bulk'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function () {
+          document.getElementById('kbBulkText').value = '';
+          loadKnowledge();
+          fetch(withBotId('/api/cabinet/status')).then(function (res) { return res.json(); }).then(renderStatus);
+        })
+        .catch(function () { kbError('Не получилось разобрать текст, попробуйте ещё раз.'); })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Добавить и разобрать';
+        });
+    });
+
+    document.getElementById('kbAddSiteBtn').addEventListener('click', function () {
+      var url = document.getElementById('kbSiteUrl').value.trim();
+      if (url.length < 3) { kbError('Введите ссылку на сайт.'); return; }
+      kbError('');
+      var btn = document.getElementById('kbAddSiteBtn');
+      btn.disabled = true;
+      btn.textContent = 'Изучаю сайт…';
+      fetch(withBotId('/api/cabinet/knowledge/site'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function () {
+          document.getElementById('kbSiteUrl').value = '';
+          loadKnowledge();
+          fetch(withBotId('/api/cabinet/status')).then(function (res) { return res.json(); }).then(renderStatus);
+        })
+        .catch(function () { kbError('Не получилось прочитать сайт — проверьте ссылку и попробуйте ещё раз.'); })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Добавить ссылку';
+        });
+    });
+
+    document.getElementById('kbArticleAddBtn').addEventListener('click', function () {
+      var title = document.getElementById('kbArticleTitle').value.trim();
+      var body = document.getElementById('kbArticleBody').value.trim();
+      if (!title || !body) { kbError('Заполните и заголовок, и текст статьи.'); return; }
+      kbError('');
+      var btn = document.getElementById('kbArticleAddBtn');
+      btn.disabled = true;
+      btn.textContent = 'Добавляю…';
+      var isRealCategory = kbCategoryFilter !== 'all' && kbCategoryFilter !== 'pending' && kbCategoryFilter !== 'uncategorized' && kbCategoryFilter !== 'instruction';
+      fetch(withBotId('/api/cabinet/knowledge/article'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title, body: body, categoryId: isRealCategory ? kbCategoryFilter : null }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function () {
+          document.getElementById('kbArticleTitle').value = '';
+          document.getElementById('kbArticleBody').value = '';
+          loadKnowledge();
+        })
+        .catch(function () { kbError('Не получилось добавить статью, попробуйте ещё раз.'); })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Добавить статью';
+        });
+    });
+
+    document.getElementById('kbInstructionAddBtn').addEventListener('click', function () {
+      var text = document.getElementById('kbInstructionText').value.trim();
+      if (!text) { kbError('Опишите, как боту себя вести.'); return; }
+      kbError('');
+      var btn = document.getElementById('kbInstructionAddBtn');
+      btn.disabled = true;
+      btn.textContent = 'Добавляю…';
+      fetch(withBotId('/api/cabinet/knowledge/instruction'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function () {
+          // No "too many" case anymore — hitting the internal cap now merges
+          // existing instructions instead of ever refusing this.
+          document.getElementById('kbInstructionText').value = '';
+          loadKnowledge();
+        })
+        .catch(function () { kbError('Не получилось добавить инструкцию, попробуйте ещё раз.'); })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Добавить инструкцию';
+        });
+    });
+
+    document.getElementById('kbAddCategoryBtn').addEventListener('click', function () {
+      var input = document.getElementById('kbNewCategoryName');
+      var name = input.value.trim();
+      if (!name) return;
+      fetch(withBotId('/api/cabinet/knowledge/categories'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function () {
+          input.value = '';
+          loadKnowledgeCategories();
+        });
+    });
+
+    var kbSearchDebounce = null;
+    document.getElementById('kbSearchInput').addEventListener('input', function () {
+      var q = this.value.trim();
+      clearTimeout(kbSearchDebounce);
+      if (!q) {
+        kbSearchResults = null;
+        document.getElementById('kbSearchHint').style.display = 'none';
+        renderArticlesFeed();
+        return;
+      }
+      kbSearchDebounce = setTimeout(function () {
+        fetch(withBotId('/api/cabinet/knowledge/search?q=' + encodeURIComponent(q)))
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            kbSearchResults = data;
+            var hint = document.getElementById('kbSearchHint');
+            hint.style.display = 'block';
+            hint.textContent = 'Найдено: ' + data.length;
+            renderArticlesFeed();
+          });
+      }, 350);
+    });
+
+    var TRIAL_TOTAL_DAYS = 15;
+
+    function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+
+    // Blue when the trial just started, gradually shifting to red as it runs out.
+    function trialGradientColors(daysLeft) {
+      var t = 1 - Math.max(0, Math.min(1, daysLeft / TRIAL_TOTAL_DAYS));
+      var bg = [lerp(219, 254, t), lerp(234, 226, t), lerp(254, 226, t)];
+      var fg = [lerp(30, 153, t), lerp(64, 27, t), lerp(175, 27, t)];
+      return { bg: 'rgb(' + bg.join(',') + ')', fg: 'rgb(' + fg.join(',') + ')' };
+    }
+
+    function renderTrialBanner(me) {
+      var banner = document.getElementById('trialBanner');
+
+      if (me.subscriptionActive) {
+        banner.hidden = false;
+        banner.style.background = '#dcfce7';
+        banner.style.color = '#166534';
+        banner.textContent = '✓ Подписка активна — спасибо, что вы с нами!';
+        return;
+      }
+
+      if (!me.trialEndsAt) {
+        banner.hidden = true;
+        return;
+      }
+
+      var daysLeft = Math.ceil((new Date(me.trialEndsAt) - new Date()) / 86400000);
+      banner.hidden = false;
+
+      if (daysLeft > 0) {
+        var colors = trialGradientColors(daysLeft);
+        banner.style.background = colors.bg;
+        banner.style.color = colors.fg;
+        banner.textContent = 'Пробный период: осталось ' + daysLeft + ' дн. из ' + TRIAL_TOTAL_DAYS +
+          ' — свяжитесь с нами, чтобы продолжить без перерыва.';
+      } else {
+        banner.style.background = '#fee2e2';
+        banner.style.color = '#991b1b';
+        banner.textContent = 'Пробный период закончился. Свяжитесь с нами, чтобы продолжить пользоваться сервисом.';
+      }
+    }
+
+    // --- Boot ---
+    document.querySelector('.period-btn[data-period="week"]').classList.add('active');
+
+    fetch('/api/cabinet/me')
+      .then(function (res) {
+        if (!res.ok) throw new Error('unauthorized');
+        return res.json();
+      })
+      .then(function (me) {
+        document.getElementById('appShell').style.display = 'flex';
+        companyName = me.companyName || '';
+        document.getElementById('companyNameInput').value = companyName;
+        document.getElementById('pageTitle').textContent = companyName || VIEW_TITLES.dashboard;
+        // Always visible regardless of which view is open — unlike pageTitle
+        // (which shows the company name only on the Dashboard view and the
+        // section title everywhere else), this is the one place that answers
+        // "which account am I in right now?" no matter where you navigate,
+        // which matters a lot the moment you manage more than one company.
+        document.getElementById('sidebarCompany').textContent = companyName || '—';
+
+        // me.bots is already the full switcher list (same shape GET /bots
+        // returns) — no need for a second round-trip just to populate it.
+        allBots = me.bots || [];
+        var saved = localStorage.getItem(CURRENT_BOT_STORAGE_KEY);
+        var match = allBots.filter(function (b) { return b.id === saved; })[0];
+        currentBotId = match ? match.id : (allBots[0] ? allBots[0].id : null);
+        if (currentBotId) localStorage.setItem(CURRENT_BOT_STORAGE_KEY, currentBotId);
+        renderBotSwitcher();
+
+        var accountLabel = me.userName || me.userEmail || '';
+        document.getElementById('accountName').textContent = accountLabel;
+        document.getElementById('accountEmail').textContent = me.userName ? (me.userEmail || '') : '';
+        document.getElementById('accountAvatar').textContent = accountLabel ? accountLabel.trim()[0].toUpperCase() : '?';
+
+        renderTrialBanner(me);
+
+        if (me.impersonating) {
+          document.getElementById('impersonationBanner').hidden = false;
+          document.getElementById('impersonationBannerText').textContent =
+            'Режим поддержки — вы в кабинете «' + companyName + '»';
+        }
+
+        return fetch('/api/cabinet/telegram-connect');
+      })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var linkEl = document.getElementById('telegramLink');
+        linkEl.href = data.link;
+        linkEl.textContent = data.connected ? 'Открыть чат с ботом →' : 'Подключить Telegram →';
+        return loadBotScopedData();
+      })
+      .catch(function () {
+        location.href = '/cabinet/login.html';
+      });
+
+    // navigator.clipboard.writeText can reject even after user-gesture click
+    // (seen live: "NotAllowedError: Write permission denied") — with no
+    // .catch, that left the button silently doing nothing at all. Falls back
+    // to the older execCommand('copy') approach, which works off a real text
+    // selection rather than the permission-gated async API.
+    function legacyCopy(text) {
+      return new Promise(function (resolve, reject) {
+        var textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        document.body.removeChild(textarea);
+        if (ok) resolve(); else reject(new Error('execCommand copy failed'));
+      });
+    }
+
+    function copyTextToClipboard(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).catch(function () { return legacyCopy(text); });
+      }
+      return legacyCopy(text);
+    }
+
+    function wireCopyButton(buttonId, sourceId) {
+      document.getElementById(buttonId).addEventListener('click', function () {
+        var btn = document.getElementById(buttonId);
+        var text = document.getElementById(sourceId).textContent;
+        var original = btn.textContent;
+        copyTextToClipboard(text)
+          .then(function () {
+            btn.textContent = 'Скопировано!';
+            setTimeout(function () { btn.textContent = original; }, 1500);
+          })
+          .catch(function () {
+            btn.textContent = 'Не получилось — выделите текст вручную';
+            setTimeout(function () { btn.textContent = original; }, 2000);
+          });
+      });
+    }
+
+    wireCopyButton('copySnippet', 'snippet');
+    wireCopyButton('copyTestChatLink', 'testChatLink');
+
+    document.getElementById('openTestChatBtn').addEventListener('click', function () {
+      var url = document.getElementById('testChatLink').textContent.trim();
+      if (url && url !== '…') window.open(url, '_blank', 'noopener');
+    });
+
+    // "Обучение бота" used to be two fixed chat panes side by side (one
+    // menu-driven training chat, one real-funnel testing chat) — collapsed
+    // to just this one after it became clear two separate chats for one
+    // underlying "make the bot better" task was confusing more than it
+    // helped, and every menu action the training chat offered already had
+    // (or now has, see "Настройки чата") its own proper page anyway. A real
+    // embedded widget.js instance (data-preview=true) — same launcher
+    // button + teaser bubble + click-to-open a real site visitor gets,
+    // confined to this pane's own iframe box (position:fixed inside an
+    // iframe anchors to ITS viewport, not the cabinet page's).
+    function testingFrameSrc() {
+      return '/cabinet/test-widget-preview.html?token=' + encodeURIComponent(botWidgetToken) +
+        '&color=' + encodeURIComponent(currentAppearance.color || '#4f46e5');
+    }
+    function initTrainingPanes() {
+      if (!botWidgetToken) return;
+      document.getElementById('testingFrame').src = testingFrameSrc();
+    }
+
+    // Used by the "Требует внимания" dialog viewer (renderDialogViewDislikeControl
+    // below): a note is never saved straight into the bot's memory —
+    // first regenerate a candidate reply from it and show it, so a vague or
+    // badly-aimed note can't silently become what the bot repeats forever.
+    // "Попробовать ещё раз" just re-runs preview with whatever's currently in
+    // the textarea; only "Ответ подходит — запомнить" actually persists
+    // anything, and it persists the CANDIDATE reply (not the raw note) as
+    // the thing to remember.
+    function buildCorrectionForm(messageId, onSaved) {
+      var wrap = document.createElement('div');
+      wrap.className = 'dislike-item-note-form';
+
+      // Survives an accidental page reload / a background tab getting
+      // discarded by the browser mid-typing — seen live: a longer note typed
+      // over a couple of minutes was lost entirely with no way to recover it.
+      // Keyed per message so re-opening the same dialog later restores
+      // exactly what was being written; cleared once actually saved below.
+      var draftKey = 'smartchat_correction_draft_' + messageId;
+
+      var hint = document.createElement('div');
+      hint.className = 'dislike-item-hint';
+      hint.textContent = 'Если уже написали готовый правильный ответ — жмите «Сохранить как есть». Если написали только замечание (что не так) — жмите «Показать вариант ответа», бот сам составит полный ответ с учётом этого, и его можно будет поправить перед сохранением.';
+      wrap.appendChild(hint);
+
+      var textarea = document.createElement('textarea');
+      textarea.placeholder = 'Что не так и/или как правильно?';
+      try {
+        var savedDraft = localStorage.getItem(draftKey);
+        if (savedDraft) textarea.value = savedDraft;
+      } catch (e) {}
+      textarea.addEventListener('input', function () {
+        try { localStorage.setItem(draftKey, textarea.value); } catch (e) {}
+      });
+      wrap.appendChild(textarea);
+
+      var actions = document.createElement('div');
+      actions.className = 'dislike-item-note-actions';
+      wrap.appendChild(actions);
+
+      // Direct path — no regeneration, no rewording: exactly what's typed
+      // becomes what the bot remembers. Added after live confusion: writing
+      // out the full correct answer by hand and then having it run through
+      // the model again anyway (previewBtn below) felt like being ignored —
+      // this is for when there's nothing to draft, just something to save.
+      var saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.textContent = 'Сохранить как есть';
+      actions.appendChild(saveBtn);
+      saveBtn.addEventListener('click', function () {
+        var finalReply = textarea.value.trim();
+        if (!finalReply) return;
+        saveBtn.disabled = true;
+        previewBtn.disabled = true;
+        saveBtn.textContent = 'Сохраняю…';
+        fetch(withBotId('/api/cabinet/dislikes/' + messageId + '/resolve'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: finalReply }),
+        })
+          .then(function (res) { return res.json(); })
+          .then(function (result) {
+            try { localStorage.removeItem(draftKey); } catch (e) {}
+            onSaved(finalReply, result.resolution);
+          })
+          .catch(function () {
+            saveBtn.disabled = false;
+            previewBtn.disabled = false;
+            saveBtn.textContent = 'Сохранить как есть';
+          });
+      });
+
+      var previewBtn = document.createElement('button');
+      previewBtn.type = 'button';
+      previewBtn.textContent = 'Показать вариант ответа →';
+      actions.appendChild(previewBtn);
+
+      var previewBox = document.createElement('div');
+      previewBox.className = 'dislike-item-preview';
+      previewBox.hidden = true;
+      wrap.appendChild(previewBox);
+
+      function runPreview() {
+        var note = textarea.value.trim();
+        if (!note) return;
+        previewBtn.disabled = true;
+        saveBtn.disabled = true;
+        previewBtn.textContent = 'Генерирую…';
+        previewBox.hidden = true;
+        fetch(withBotId('/api/cabinet/dislikes/' + messageId + '/preview'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: note }),
+        })
+          .then(function (res) {
+            if (!res.ok) return res.json().then(function (body) { throw new Error(body.message || 'preview failed'); });
+            return res.json();
+          })
+          .then(function (result) {
+            previewBtn.disabled = false;
+            saveBtn.disabled = false;
+            previewBtn.textContent = 'Показать вариант ответа';
+            previewBox.hidden = false;
+            previewBox.innerHTML = '';
+
+            var label = document.createElement('div');
+            label.className = 'dislike-item-preview-label';
+            label.textContent = 'Новый вариант ответа — можно поправить перед сохранением:';
+            previewBox.appendChild(label);
+
+            // Editable, not a static line — the model's own wording is a
+            // starting point, not the final word. Seen live: it sometimes
+            // ignores part of the note, so the owner needs a way to fix that
+            // by hand rather than either accepting it as-is or starting over.
+            var editArea = document.createElement('textarea');
+            editArea.className = 'dislike-item-preview-text';
+            editArea.value = result.candidateReply;
+            previewBox.appendChild(editArea);
+
+            var confirmActions = document.createElement('div');
+            confirmActions.className = 'dislike-item-note-actions';
+            previewBox.appendChild(confirmActions);
+
+            var retryBtn = document.createElement('button');
+            retryBtn.type = 'button';
+            retryBtn.textContent = 'Попробовать ещё раз';
+            confirmActions.appendChild(retryBtn);
+            retryBtn.addEventListener('click', function () {
+              previewBox.hidden = true;
+              textarea.focus();
+            });
+
+            var confirmBtn = document.createElement('button');
+            confirmBtn.type = 'button';
+            confirmBtn.className = 'dislike-item-confirm-btn';
+            confirmBtn.textContent = 'Ответ подходит — запомнить';
+            confirmActions.appendChild(confirmBtn);
+            confirmBtn.addEventListener('click', function () {
+              var finalReply = editArea.value.trim();
+              if (!finalReply) return;
+              confirmBtn.disabled = true;
+              retryBtn.disabled = true;
+              confirmBtn.textContent = 'Сохраняю…';
+              fetch(withBotId('/api/cabinet/dislikes/' + messageId + '/resolve'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ note: finalReply }),
+              })
+                .then(function (res) { return res.json(); })
+                .then(function (result) {
+                  try { localStorage.removeItem(draftKey); } catch (e) {}
+                  onSaved(finalReply, result.resolution);
+                })
+                .catch(function () {
+                  confirmBtn.disabled = false;
+                  retryBtn.disabled = false;
+                  confirmBtn.textContent = 'Ответ подходит — запомнить';
+                });
+            });
+          })
+          .catch(function (err) {
+            previewBtn.disabled = false;
+            saveBtn.disabled = false;
+            previewBtn.textContent = 'Показать вариант ответа →';
+            previewBox.hidden = false;
+            previewBox.innerHTML = '';
+            var errEl = document.createElement('div');
+            errEl.className = 'dislike-item-preview-error';
+            errEl.textContent = (err && err.message) || 'Не получилось сгенерировать вариант.';
+            previewBox.appendChild(errEl);
+          });
+      }
+
+      previewBtn.addEventListener('click', runPreview);
+      return wrap;
+    }
+
+    document.getElementById('trainingHelpBtn').addEventListener('click', function () {
+      document.getElementById('trainingHelpModal').hidden = false;
+    });
+    document.getElementById('trainingHelpCloseBtn').addEventListener('click', function () {
+      document.getElementById('trainingHelpModal').hidden = true;
+    });
+    document.getElementById('trainingHelpModal').addEventListener('click', function (e) {
+      if (e.target.id === 'trainingHelpModal') e.target.hidden = true;
+    });
+
+    // "Требует внимания" only ever showed the escalation's own single
+    // question/reply snippet — not enough to tell whether the bot lost the
+    // thread several turns earlier. This pulls the full surrounding
+    // conversation (phone/email already redacted server-side) so the actual
+    // failure is visible, not just its symptom.
+    var REASON_LABEL = { dissatisfaction: 'Недоволен ответом', unanswered: 'Нет ответа', disliked: 'Дизлайк тестировщика' };
+    function openEscalationDialog(escalationId) {
+      fetch('/api/cabinet/escalations/' + escalationId + '/dialog')
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function (data) {
+          var metaParts = [REASON_LABEL[data.reason] || data.reason];
+          if (data.visitorQuestion) metaParts.push('Вопрос: «' + data.visitorQuestion + '»');
+          document.getElementById('dialogViewMeta').textContent = metaParts.join(' — ');
+
+          var thread = document.getElementById('dialogViewThread');
+          thread.innerHTML = '';
+          data.messages.forEach(function (m) {
+            var bubble = document.createElement('div');
+            bubble.className = 'support-thread-msg ' + (m.role === 'assistant' ? 'support' : 'client');
+            bubble.textContent = m.content;
+            thread.appendChild(bubble);
+
+            if (m.role === 'assistant' && m.id) {
+              var controlWrap = document.createElement('div');
+              controlWrap.className = 'dialog-view-dislike-wrap';
+              thread.appendChild(controlWrap);
+              renderDialogViewDislikeControl(controlWrap, m);
+            }
+          });
+          document.getElementById('dialogViewModal').hidden = false;
+          thread.scrollTop = thread.scrollHeight;
+        })
+        .catch(function () { alert('Не получилось загрузить диалог.'); });
+    }
+
+    // Lets the owner flag a real bad reply right from the redacted dialog
+    // view (not just from the test-chat widget) and, via buildCorrectionForm,
+    // walk through the same preview-before-remembering loop. If the message
+    // is already disliked (e.g. this dialog view was opened FROM a "disliked"
+    // escalation — a tester already flagged this exact reply), skip the flag
+    // step entirely and go straight to the correction form — the whole point
+    // of the escalation existing is that someone already said this was bad.
+    function renderDialogViewDislikeControl(container, message) {
+      container.innerHTML = '';
+
+      function showCorrectionForm() {
+        container.innerHTML = '';
+        var form = buildCorrectionForm(message.id, function () {
+          container.innerHTML = '';
+          var done = document.createElement('div');
+          done.className = 'dislike-item-meta';
+          done.textContent = 'Запомнено.';
+          container.appendChild(done);
+        });
+        container.appendChild(form);
+      }
+
+      if (message.dislikedAt) {
+        showCorrectionForm();
+        return;
+      }
+
+      var flagBtn = document.createElement('button');
+      flagBtn.type = 'button';
+      flagBtn.className = 'copy-btn';
+      flagBtn.textContent = '👎 Плохой ответ';
+      container.appendChild(flagBtn);
+      flagBtn.addEventListener('click', function () {
+        flagBtn.disabled = true;
+        fetch(withBotId('/api/cabinet/dislikes/' + message.id + '/mark'), { method: 'POST' })
+          .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+          .then(showCorrectionForm)
+          .catch(function () { flagBtn.disabled = false; });
+      });
+    }
+    document.getElementById('dialogViewCloseBtn').addEventListener('click', function () {
+      document.getElementById('dialogViewModal').hidden = true;
+    });
+    document.getElementById('dialogViewModal').addEventListener('click', function (e) {
+      if (e.target.id === 'dialogViewModal') e.target.hidden = true;
+    });
+    document.getElementById('resetTestingBtn').addEventListener('click', function () {
+      if (!botWidgetToken) return;
+      // widget.js manages its own keys (same origin, so the parent page can
+      // clear them directly) — must also drop the teaser-dismissed flag, or
+      // "reset" would reopen a blank chat without ever re-showing the
+      // launcher + teaser bubble.
+      localStorage.removeItem('smartchat_session_' + botWidgetToken);
+      localStorage.removeItem('smartchat_teaser_dismissed_' + botWidgetToken);
+      document.getElementById('testingFrame').src = testingFrameSrc();
+    });
+
+    // --- Поддержка (тикеты) ---
+    // Company-scoped, not bot-scoped — a company with several bots still has
+    // one shared support queue, so this never goes through withBotId().
+    var supportTickets = [];
+    var SUPPORT_STATUS_LABEL = { open: 'Открыт', resolved: 'Решён' };
+
+    function loadSupportTickets() {
+      return fetch('/api/cabinet/support-tickets')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          supportTickets = data;
+          renderSupportTicketList();
+        })
+        .catch(function () {});
+    }
+
+    function renderSupportTicketList() {
+      var list = document.getElementById('supportTicketList');
+      var empty = document.getElementById('supportEmpty');
+      list.innerHTML = '';
+      empty.hidden = supportTickets.length > 0;
+      supportTickets.forEach(function (t) {
+        var row = document.createElement('div');
+        row.className = 'support-ticket-item';
+
+        var main = document.createElement('div');
+        main.className = 'support-ticket-item-main';
+        var subj = document.createElement('div');
+        subj.className = 'support-ticket-item-subject';
+        subj.textContent = t.subject;
+        var meta = document.createElement('div');
+        meta.className = 'support-ticket-item-meta';
+        meta.textContent = fmtDate(t.updatedAt);
+        main.appendChild(subj);
+        main.appendChild(meta);
+
+        var status = document.createElement('span');
+        status.className = 'support-ticket-item-status ' + (t.status === 'resolved' ? 'resolved' : 'open');
+        status.textContent = SUPPORT_STATUS_LABEL[t.status] || t.status;
+
+        row.appendChild(main);
+        row.appendChild(status);
+        row.addEventListener('click', function () { openSupportTicket(t.id); });
+        list.appendChild(row);
+      });
+    }
+
+    function renderSupportThread(ticket) {
+      var statusEl = document.getElementById('supportDetailStatus');
+      if (ticket.status === 'resolved') {
+        statusEl.hidden = false;
+        statusEl.textContent = 'Обращение решено. Отчёт от поддержки: ' + (ticket.resolutionReport || '');
+      } else {
+        statusEl.hidden = true;
+      }
+
+      var thread = document.getElementById('supportDetailThread');
+      thread.innerHTML = '';
+      ticket.messages.forEach(function (m) {
+        var bubble = document.createElement('div');
+        bubble.className = 'support-thread-msg ' + (m.senderRole === 'support' ? 'support' : 'client');
+        bubble.textContent = m.content;
+        thread.appendChild(bubble);
+      });
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    function openSupportTicket(id) {
+      fetch('/api/cabinet/support-tickets/' + id)
+        .then(function (res) { return res.json(); })
+        .then(function (ticket) {
+          document.getElementById('supportListPanel').hidden = true;
+          document.getElementById('supportDetailPanel').hidden = false;
+          document.getElementById('supportDetailPanel').dataset.ticketId = ticket.id;
+          document.getElementById('supportDetailSubject').textContent = ticket.subject;
+          document.getElementById('supportReplyText').value = '';
+          renderSupportThread(ticket);
+        })
+        .catch(function () {});
+    }
+
+    document.getElementById('supportBackBtn').addEventListener('click', function () {
+      document.getElementById('supportDetailPanel').hidden = true;
+      document.getElementById('supportListPanel').hidden = false;
+      loadSupportTickets();
+    });
+
+    document.getElementById('supportNewTicketBtn').addEventListener('click', function () {
+      var form = document.getElementById('supportNewTicketForm');
+      form.hidden = !form.hidden;
+    });
+
+    document.getElementById('supportNewCancelBtn').addEventListener('click', function () {
+      document.getElementById('supportNewTicketForm').hidden = true;
+      document.getElementById('supportNewSubject').value = '';
+      document.getElementById('supportNewMessage').value = '';
+    });
+
+    document.getElementById('supportNewSubmitBtn').addEventListener('click', function () {
+      var subject = document.getElementById('supportNewSubject').value.trim();
+      var message = document.getElementById('supportNewMessage').value.trim();
+      if (!subject || !message) { alert('Заполните тему и опишите вопрос.'); return; }
+      var btn = document.getElementById('supportNewSubmitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Отправляю…';
+      fetch('/api/cabinet/support-tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject: subject, message: message }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function () {
+          document.getElementById('supportNewSubject').value = '';
+          document.getElementById('supportNewMessage').value = '';
+          document.getElementById('supportNewTicketForm').hidden = true;
+          loadSupportTickets();
+        })
+        .catch(function () { alert('Не получилось отправить обращение, попробуйте ещё раз.'); })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Отправить';
+        });
+    });
+
+    document.getElementById('supportReplySubmitBtn').addEventListener('click', function () {
+      var ticketId = document.getElementById('supportDetailPanel').dataset.ticketId;
+      var text = document.getElementById('supportReplyText').value.trim();
+      if (!text || !ticketId) return;
+      var btn = document.getElementById('supportReplySubmitBtn');
+      btn.disabled = true;
+      fetch('/api/cabinet/support-tickets/' + ticketId + '/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function () { return openSupportTicket(ticketId); })
+        .catch(function () { alert('Не получилось отправить сообщение.'); })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    // Support isn't bot-scoped, so its data can't ride along with the
+    // generic loadBotScopedData() chain — it lazy-loads the moment the
+    // tab is actually opened instead.
+    document.querySelector('.nav-item[data-view="support"]').addEventListener('click', function () {
+      loadSupportTickets();
+    });
+
+    document.getElementById('botSwitcherSelect').addEventListener('change', function () {
+      currentBotId = this.value;
+      localStorage.setItem(CURRENT_BOT_STORAGE_KEY, currentBotId);
+      updateSidebarBotSite();
+      loadBotScopedData();
+    });
+
+    document.getElementById('botSwitcherAddBtn').addEventListener('click', function () {
+      var name = prompt('Название нового бота:');
+      if (!name || !name.trim()) return;
+      fetch('/api/cabinet/bots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      })
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (e) { throw new Error(e.message || 'Не удалось создать бота'); });
+          return res.json();
+        })
+        .then(function (bot) {
+          allBots.push(bot);
+          currentBotId = bot.id;
+          localStorage.setItem(CURRENT_BOT_STORAGE_KEY, currentBotId);
+          renderBotSwitcher();
+          loadBotScopedData();
+        })
+        .catch(function (err) { alert(err.message || 'Не удалось создать бота'); });
+    });
+
+    document.getElementById('resetStatsLink').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (!confirm('Обнулить статистику? Старые диалоги и заявки не удалятся, но перестанут учитываться в показателях — считаться будет только то, что произойдёт начиная с этого момента.')) return;
+      fetch(withBotId('/api/cabinet/reset-stats'), { method: 'POST' }).then(function () { loadAnalytics(); });
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', function () {
+      fetch('/api/cabinet/logout', { method: 'POST' }).then(function () {
+        location.href = '/cabinet/login.html';
+      });
+    });
+
+    document.getElementById('exitImpersonationBtn').addEventListener('click', function () {
+      fetch('/api/cabinet/logout', { method: 'POST' }).then(function () {
+        location.href = '/cabinet/support-admin.html';
+      });
+    });
+  </script>
+</body>
+</html>

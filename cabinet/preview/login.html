@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Вход — личный кабинет</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a class="logo" href="/">
+      <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="24" height="24" rx="6" fill="#4f46e5"/>
+        <path d="M12 5.5c.5 3 1.8 4.3 4.5 4.5-2.7.2-4 1.5-4.5 4.5-.5-3-1.8-4.3-4.5-4.5 2.7-.2 4-1.5 4.5-4.5z" fill="#fff"/>
+      </svg>
+      Умный<em>Чат</em>
+    </a>
+    <a class="topbar-link" href="signup.html">Нет аккаунта? Зарегистрироваться</a>
+  </div>
+  <div class="auth-wrap">
+    <div class="card">
+      <h1>Вход в кабинет</h1>
+      <p class="sub">Управляйте своим ИИ-консультантом и смотрите статистику.</p>
+      <div class="error" id="error"></div>
+      <p class="switch-link" id="resendWrap" style="display:none;">
+        <a href="#" id="resendLink">Отправить письмо подтверждения ещё раз</a>
+      </p>
+      <form id="form">
+        <label for="email">Email</label>
+        <input type="email" id="email" required autocomplete="email" />
+        <label for="password">Пароль</label>
+        <input type="password" id="password" required autocomplete="current-password" />
+        <button type="submit" class="btn-primary" id="submitBtn">Войти</button>
+      </form>
+      <p class="switch-link"><a href="forgot-password.html">Забыли пароль?</a></p>
+      <p class="legal-link"><a href="privacy.html">Политика конфиденциальности</a></p>
+    </div>
+  </div>
+  <script>
+    var errorEl = document.getElementById('error');
+    var form = document.getElementById('form');
+    var submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      errorEl.classList.remove('visible');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Входим...';
+
+      fetch('/api/cabinet/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: document.getElementById('email').value.trim(),
+          password: document.getElementById('password').value,
+        }),
+      })
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (d) { throw new Error(d.message || 'Неверный email или пароль'); });
+          return res.json();
+        })
+        .then(function () {
+          location.href = '/cabinet/';
+        })
+        .catch(function (err) {
+          var msg = typeof err.message === 'string' ? err.message : 'Не получилось войти.';
+          errorEl.textContent = msg;
+          errorEl.classList.add('visible');
+          document.getElementById('resendWrap').style.display = msg.indexOf('Подтвердите почту') !== -1 ? 'block' : 'none';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Войти';
+        });
+    });
+
+    document.getElementById('resendLink').addEventListener('click', function (e) {
+      e.preventDefault();
+      fetch('/api/cabinet/resend-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: document.getElementById('email').value.trim(),
+          password: document.getElementById('password').value,
+        }),
+      })
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (d) { throw new Error(d.message || 'Не получилось отправить письмо'); });
+          errorEl.classList.remove('visible');
+          document.getElementById('resendWrap').style.display = 'none';
+          alert('Письмо отправлено ещё раз — проверьте почту (и папку «Спам», если письма нет через пару минут).');
+        })
+        .catch(function (err) {
+          errorEl.textContent = typeof err.message === 'string' ? err.message : 'Не получилось отправить письмо.';
+          errorEl.classList.add('visible');
+        });
+    });
+  </script>
+</body>
+</html>

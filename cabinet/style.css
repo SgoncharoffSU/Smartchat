@@ -1,0 +1,3333 @@
+* {
+  box-sizing: border-box;
+}
+
+/* Design tokens — lifted from the new cabinet reference design (colors read
+   straight out of its compiled CSS, not eyeballed from screenshots) so the
+   whole app shares one palette instead of each component hardcoding its own
+   hex. --ink is the PRIMARY action/text color in that design (buttons are
+   dark, not colored — see .btn-primary below); --blue is a softer accent
+   used for links, focus rings and small highlights, not primary CTAs. */
+:root {
+  --ink: #081522;
+  --canvas: #f2f4f2;
+  --line: #dfe5e7;
+  --blue: #8298ff;
+  --lime: #c8ff4d;
+  --navy: #0d1e30;
+  --muted: #687783;
+  --secondary: #edf0f1;
+  --accent: #eef1ff;
+  --destructive: #d54848;
+  --sidebar-fg: #dce5ec;
+  --sidebar-hover: rgba(255, 255, 255, 0.08);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --radius: 0.8rem;
+}
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  font-family: Inter, Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Cool enough that white panels/cards actually read as cards sitting on
+     top of it, instead of blending into an almost-white canvas. */
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tucked directly under the floating widget launcher. The cabinet's own test
+   widget is loaded with data-offset-bottom="36" (see index.html) specifically
+   to leave room here — without it this link crowds the true viewport edge and
+   reads as broken. Plain text, no pill/shadow — anything heavier fights the
+   launcher for visual weight in that gap. */
+.floating-reset {
+  position: fixed;
+  bottom: 22px;
+  right: 24px;
+  font-size: 11px;
+  color: var(--muted);
+  text-decoration: none;
+  z-index: 2147483000;
+}
+
+.floating-reset:hover {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.floating-reset[hidden] {
+  display: none;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.topbar .logo em {
+  font-style: normal;
+  color: var(--blue);
+}
+
+.topbar button {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.topbar-link {
+  font-size: 13.5px;
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.topbar-link:hover {
+  text-decoration: underline;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.topbar-back {
+  font-size: 13.5px;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.topbar-back:hover {
+  text-decoration: underline;
+}
+
+.auth-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 32px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+}
+
+.card h1 {
+  font-size: 20px;
+  margin: 0 0 6px;
+}
+
+.card p.sub {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 22px;
+}
+
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+input[type="email"],
+input[type="password"],
+input[type="text"],
+.auth-wrap textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  outline: none;
+}
+
+.auth-wrap textarea {
+  font-family: inherit;
+  resize: vertical;
+  min-height: 64px;
+}
+
+input:focus {
+  border-color: var(--blue);
+}
+
+.btn-primary {
+  width: 100%;
+  background: var(--ink);
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #1a2d40;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: none;
+}
+
+.error.visible {
+  display: block;
+}
+
+.switch-link {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 16px;
+}
+
+.switch-link a {
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.legal-link {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+.legal-link a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  margin: 4px 0 16px;
+  cursor: pointer;
+}
+
+.consent-check input[type="checkbox"] {
+  width: auto;
+  margin: 2px 0 0;
+  flex-shrink: 0;
+}
+
+.consent-check a {
+  color: var(--blue);
+}
+
+/* Only on the cabinet dashboard (index.html) — constrains the page to
+   exactly one viewport, so .app-shell's flex:1 below always has a real,
+   definite height to size against, with no fixed-position/JS-padding
+   handshake needed for the impersonation banner (see #impersonationBanner). */
+.cabinet-body {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+/* Sidebar + account are always visible on a PC screen — only .content
+   scrolls on its own when it doesn't fit, rather than the whole page.
+   height:100% (not 100vh) — sized against .app-shell's own actual height,
+   which already correctly excludes the banner above it when present. A
+   sibling fixed to 100vh regardless of what else shares the page is
+   exactly what caused the banner-overlap bug this replaced. */
+.sidebar {
+  width: 248px;
+  flex-shrink: 0;
+  background: var(--navy);
+  border-right: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.sidebar .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 16px;
+  color: #fff;
+  text-decoration: none;
+  padding: 0 10px;
+  margin-bottom: 14px;
+}
+
+.sidebar .logo em {
+  font-style: normal;
+  color: var(--lime);
+}
+
+/* Always visible regardless of which view is open — the one place that
+   answers "which of my companies' cabinets am I in right now?" no matter
+   where in the app you navigate. */
+.sidebar-company {
+  margin: 0 10px 8px;
+  padding: 6px 10px;
+  background: var(--sidebar-hover);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sidebar-fg);
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.3;
+}
+
+/* One company can run several bots with different contexts/skills (separate
+   products, separate site pages) — this picks which one the whole cabinet
+   (dashboard, база знаний, обучение...) is currently scoped to. A real
+   button + custom dropdown, not a native <select>: that couldn't wrap or
+   style its own closed-state text at all, which is exactly what made this
+   whole control look cramped/broken with anything longer than a short bot
+   name (seen live). */
+/* Lives in the new header bar now (see .app-topbar), not the sidebar — the
+   new reference design keeps this control in light-themed top chrome
+   rather than the dark sidebar, so it keeps its light styling as-is; only
+   the accent colors below were updated to the new token set. */
+.bot-switcher-widget {
+  position: relative;
+}
+
+.bot-switcher-current {
+  display: block;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.bot-switcher-current:hover {
+  border-color: var(--blue);
+}
+
+.bot-switcher-current-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.bot-switcher-current-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bot-switcher-current-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.3;
+}
+
+.bot-switcher-current-arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.bot-switcher-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 100%;
+  width: max-content;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  z-index: 20;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.bot-switcher-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.bot-switcher-menu-item:hover {
+  background: var(--secondary);
+}
+
+.bot-switcher-menu-item-active {
+  background: var(--accent);
+}
+
+.bot-switcher-menu-item-name {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.bot-switcher-menu-add {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--blue);
+}
+
+/* Same site shown in the switcher menu's own rows — surfaced here too so
+   the CURRENT bot's site is visible without opening the dropdown, which
+   matters most exactly when it's needed most: a company running several
+   bots for several sites. */
+.sidebar-bot-site {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+
+.sidebar-bot-site:hover {
+  color: var(--blue);
+  text-decoration: underline;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: 1;
+}
+
+.sidebar-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-nav-group-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sidebar-fg);
+  opacity: 0.55;
+  padding: 0 12px 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--sidebar-fg);
+  text-decoration: none;
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.nav-item span:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-icon {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.nav-item.active .nav-icon {
+  opacity: 1;
+}
+
+.nav-item:hover {
+  background: var(--sidebar-hover);
+}
+
+.nav-item.active {
+  background: var(--lime);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.nav-badge {
+  display: inline-block;
+  background: var(--destructive);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 4px;
+}
+
+.nav-badge.nav-badge-ok {
+  background: #22c55e;
+}
+
+.bot-status-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--sidebar-border);
+  color: var(--sidebar-fg);
+}
+
+.bot-status-card-live {
+  background: rgba(200, 255, 77, 0.1);
+  border-color: rgba(200, 255, 77, 0.3);
+  color: var(--lime);
+}
+
+.bot-status-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bot-status-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bot-status-sub {
+  font-size: 11.5px;
+  opacity: 0.75;
+}
+
+.account-widget {
+  position: relative;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sidebar-border);
+}
+
+.account-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  padding: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-gear-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--sidebar-fg);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-gear-btn:hover {
+  background: var(--sidebar-hover);
+  color: #fff;
+}
+
+.account-row:hover {
+  background: var(--sidebar-hover);
+}
+
+.account-avatar {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.account-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.account-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #fff;
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.3;
+}
+
+.account-email {
+  font-size: 11.5px;
+  color: var(--sidebar-fg);
+  opacity: 0.7;
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.3;
+}
+
+.account-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  z-index: 20;
+}
+
+.account-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.account-menu-item:hover {
+  background: var(--secondary);
+}
+
+/* A support agent working inside a real client's cabinet — always visible
+   regardless of which view is open, so it's never ambiguous whose account
+   is actually being looked at / acted on. A normal-flow block (NOT
+   position:fixed) — it's the first child of .cabinet-body's flex column, so
+   .app-shell is simply the next flex item and gets whatever height remains
+   automatically; no JS-toggled class or padding-compensation hack needed to
+   keep it from overlapping. That previous fixed+padding approach depended on
+   the "impersonating" body class landing before layout, or before the user
+   next looked at the screen — worth avoiding a whole class of bugs for.
+   Doesn't need to survive scrolling either: nothing on this page scrolls
+   except .sidebar/.content internally (see .cabinet-body), so there's no
+   outer page scroll for a fixed position to protect it from in the first
+   place. */
+/* :not([hidden]), not a bare display:flex — an ID selector's specificity
+   beats the browser's own [hidden]{display:none} rule, so an unconditional
+   display:flex here made the banner show for EVERY cabinet visit regardless
+   of the hidden attribute (confirmed live: real, non-impersonating owners
+   were seeing "Выйти из режима поддержки" in their own cabinet). This is
+   the actual fix, not a return to position:fixed. */
+#impersonationBanner:not([hidden]) {
+  flex-shrink: 0;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: #fbbf24;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#impersonationBanner button {
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 22px 32px 60px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* New header bar — holds the bot switcher (moved here from the sidebar,
+   see .bot-switcher-widget's own comment) plus a search field and a
+   notification bell. The search field and bell are visual chrome for now,
+   matching the reference design's layout, not wired to real search/
+   notifications yet — that's real new functionality, not a restyle. */
+.app-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: -22px -32px 20px;
+  padding: 14px 32px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.app-topbar-search {
+  flex: 1;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  background: var(--canvas);
+}
+
+.app-topbar-search svg {
+  flex-shrink: 0;
+}
+
+.app-topbar-search-kbd {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 6px;
+  background: #fff;
+}
+
+.app-topbar-bell {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.app-topbar-bell-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--destructive);
+  border: 1.5px solid #fff;
+}
+
+.notif-panel {
+  position: absolute;
+  top: 54px;
+  right: 32px;
+  width: 280px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  z-index: 30;
+}
+
+.notif-panel-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.notif-panel-item:hover {
+  background: var(--secondary);
+}
+
+.notif-panel-empty {
+  padding: 14px 10px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* :not([hidden]), not a bare display:flex — a class selector and the UA
+   stylesheet's [hidden]{display:none} tie on specificity, and author styles
+   win cascade ties, so an unscoped display here would show the overlay even
+   while the `hidden` attribute is set (same trap already fixed elsewhere in
+   this file for #impersonationBanner and .back-to-training-link). */
+.cmdk-overlay:not([hidden]) {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 21, 34, 0.4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  z-index: 100;
+}
+
+.cmdk-box {
+  width: 100%;
+  max-width: 560px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.25);
+  overflow: hidden;
+}
+
+.cmdk-input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  padding: 16px 18px;
+  font-size: 15px;
+  outline: none;
+  margin: 0;
+}
+
+.cmdk-results {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.cmdk-result-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.cmdk-result-item:hover {
+  background: var(--secondary);
+}
+
+.cmdk-result-item-kb {
+  color: var(--muted);
+}
+
+.cmdk-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.app-topbar-bell:hover {
+  background: var(--secondary);
+}
+
+/* :not([hidden]), not a bare display:flex — same trap already fixed
+   elsewhere in this file (#impersonationBanner, .cmdk-overlay): a class
+   selector and the UA stylesheet's [hidden]{display:none} tie on
+   specificity, so an unscoped display here would show the banner even
+   while JS has set the hidden attribute (no active trial, no subscription
+   message to show). */
+.trial-banner:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  background: var(--accent);
+  color: var(--ink);
+}
+
+.trial-banner-active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.trial-banner-expired {
+  background: #fef2f2;
+  color: var(--destructive);
+}
+
+.trial-banner-text {
+  flex-shrink: 0;
+}
+
+.trial-banner-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(8, 21, 34, 0.1);
+  overflow: hidden;
+}
+
+.trial-banner-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--blue);
+  transition: width 0.4s ease;
+}
+
+.trial-banner-cta {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.trial-banner-cta:hover {
+  text-decoration: underline;
+}
+
+.content-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.breadcrumb {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.content-header h1 {
+  font-size: 28px;
+  margin: 0 0 4px;
+}
+
+.page-subtitle:not([hidden]) {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+/* :not([hidden]), not a bare .back-to-training-link{display:block} — a class
+   selector and the UA stylesheet's [hidden]{display:none} tie on specificity,
+   and author styles win cascade ties, so an unscoped display here would show
+   the button even while the `hidden` attribute is set (same trap as the
+   impersonation banner earlier). */
+.back-to-training-link:not([hidden]) {
+  display: block;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--blue);
+  cursor: pointer;
+}
+
+.back-to-training-link:hover {
+  text-decoration: underline;
+}
+
+.content-header .sub {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.period-selector {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.date-range-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.date-range-picker input[type="date"] {
+  width: auto;
+  margin-bottom: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.date-range-sep {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.reset-stats-link {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.reset-stats-link:hover {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.goal-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--accent);
+  margin-top: 4px;
+  /* Now a <button> (used to be a plain div) — was purely a display before
+     goal-editing moved out of the training chat and into this panel. */
+  border: none;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.goal-display-icon {
+  font-size: 20px;
+}
+
+.goal-display-text {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--ink);
+  flex: 1;
+}
+
+.goal-display-edit {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--blue);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.goal-display:hover .goal-display-edit {
+  opacity: 1;
+}
+
+.goal-display.goal-display-unset {
+  background: var(--secondary);
+}
+
+.goal-display.goal-display-unset .goal-display-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.goal-edit-form {
+  margin-top: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--secondary);
+  border: 1px solid var(--line);
+}
+
+/* No official brand logo assets are bundled — these are plain text badges in
+   each brand's own rough accent color, not a rendered logo mark. */
+.crm-logos {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.crm-logo {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.crm-logo-bitrix24 {
+  background: #2fc7f7;
+}
+
+.crm-logo-amocrm {
+  background: #dd4a3d;
+}
+
+.crm-integration-block {
+  margin-top: 4px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--secondary);
+  border: 1px solid var(--line);
+}
+
+.crm-integration-block:last-child {
+  margin-bottom: 0;
+}
+
+.crm-integration-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.crm-status {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.crm-status.crm-status-connected {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.crm-mapping-warning {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0 0 10px;
+}
+
+.crm-mapping-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.crm-mapping-row:last-child {
+  border-bottom: none;
+}
+
+.crm-mapping-row-name {
+  min-width: 120px;
+  font-weight: 600;
+  font-size: 12.5px;
+  flex: none;
+}
+
+.crm-integration-block input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13.5px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}
+
+.goal-edit-form select,
+.goal-edit-form input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13.5px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}
+
+.goal-edit-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.period-btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.period-btn.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.goal-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.goal-pill-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  /* .info-widget's base rule absolutely-positions itself in a PANEL's own
+     top-right corner (see there) — every instance would stack on top of each
+     other in that same spot if left alone. Reused here purely for its
+     click-toggle JS wiring (see wireInfoWidgets), so it needs its own,
+     inline, non-absolute position instead. */
+  position: relative;
+  top: 0;
+  right: 0;
+}
+
+.goal-pill-wrap .info-popup {
+  width: 260px;
+  left: 0;
+  right: auto;
+}
+
+.goal-pill {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.goal-pill.selected {
+  background: var(--ink);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.goal-pill-wrap .info-btn {
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.stat-grid-4col {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--blue);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* A different top accent per stat so the row reads at a glance instead of
+   as four identical white boxes — Показов → Диалогов → Заявок → Оплачено. */
+.stat-grid .stat-card:nth-child(1) { border-top-color: #a5b4fc; }
+.stat-grid .stat-card:nth-child(2) { border-top-color: #7dd3fc; }
+.stat-grid .stat-card:nth-child(3) { border-top-color: #86efac; }
+.stat-grid .stat-card:nth-child(4) { border-top-color: #fcd34d; }
+
+.funnel-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.funnel-stages {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.funnel-stage {
+  flex: 1;
+  min-width: 0;
+}
+
+.funnel-stage-lbl {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.funnel-stage-val {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.funnel-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.funnel-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--blue);
+  transition: width 0.5s ease;
+}
+
+.funnel-bar-final .funnel-bar-fill {
+  background: var(--lime);
+}
+
+.funnel-arrow {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  padding-bottom: 22px;
+}
+
+.tariff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.tariff-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tariff-card h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.tariff-price {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.tariff-desc {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 8px;
+  flex: 1;
+}
+
+.tariff-buy-btn {
+  width: 100%;
+}
+
+.dash-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.dash-row .panel {
+  /* Without this, a grid item's default min-width:auto sizes the TRACK by
+     its content's min-content width instead of the declared 2fr/1fr ratio
+     — the events feed's long, nowrap .event-detail text has a bigger
+     min-content width than the quality panel's short stat labels, so
+     without this the side column was winning MORE space than the main one,
+     visually reversing the 2:1 split. Same root cause already hit three
+     times on the landing page this session. */
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.panel-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.panel-link-btn {
+  border: none;
+  background: none;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.panel-link-btn:hover {
+  text-decoration: underline;
+}
+
+.panel-cta-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.panel-cta-btn:hover {
+  background: var(--secondary);
+}
+
+.panel-cta-btn-block {
+  width: 100%;
+  margin-top: 16px;
+  text-align: center;
+}
+
+.funnel-tip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: var(--accent);
+  border-radius: 12px;
+  color: var(--ink);
+}
+
+.funnel-tip svg {
+  flex-shrink: 0;
+  color: var(--blue);
+}
+
+.funnel-tip-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.funnel-tip-text strong {
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.status-pill {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-pill-attention {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.ready-mini-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ready-donut {
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: conic-gradient(var(--lime) calc(var(--pct) * 1%), var(--line) 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.5s ease;
+}
+
+.ready-donut-hole {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.ready-mini-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ready-mini-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.ready-mini-desc {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.stat-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.stat-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon-blue { background: #e0e7ff; color: #4f46e5; }
+.stat-icon-teal { background: #cffafe; color: #0e7490; }
+.stat-icon-green { background: #dcfce7; color: #16a34a; }
+.stat-icon-amber { background: #fef3c7; color: #b45309; }
+
+.stat-menu-btn {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.stat-lbl {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.stat-val {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ink);
+  margin-top: 4px;
+}
+
+.stat-delta {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.delta-up { color: #166534; }
+.delta-down { color: var(--destructive); }
+.delta-flat { color: var(--muted); }
+
+.stat-conversion {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.problems-row {
+  display: flex;
+  gap: 32px;
+}
+
+.events-feed-empty {
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.event-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.event-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  margin-top: 2px;
+  background: var(--accent);
+}
+
+.event-icon-check {
+  background: #dcfce7;
+}
+
+.event-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.event-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.event-detail {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-time {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.problems-stat {
+  text-align: center;
+}
+
+.problems-num {
+  font-size: 28px;
+  font-weight: 800;
+  color: #92400e;
+}
+
+.problems-num.problems-ok {
+  color: #166534;
+}
+
+.problems-lbl {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* The hamburger button that opens .sidebar as an off-canvas drawer on a
+   phone (see the media query below) — invisible and inert on a PC screen,
+   where the sidebar is already always on-screen. */
+.mobile-menu-btn {
+  display: none;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: none;
+  margin-right: 4px;
+}
+.mobile-menu-btn:hover { background: var(--secondary); }
+
+.mobile-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  z-index: 99;
+}
+.mobile-scrim.active { display: block; }
+
+@media (max-width: 720px) {
+  /* The fixed-sidebar/scrolling-content split is a PC-screen thing — on a
+     phone the sidebar becomes an off-canvas drawer (opened via
+     .mobile-menu-btn, closed by tapping a nav item, the scrim, or picking a
+     bot) instead of a permanently-visible column, so the whole page just
+     scrolls normally. .cabinet-body's viewport-locked height (see base rule)
+     gets undone here too — needed for the same reason. Previously this
+     turned the sidebar into a horizontal scrolling strip of all 9 nav items
+     — a real usability problem with this many sections, not just a cosmetic
+     one (see the mobile design pass this replaces). */
+  .cabinet-body {
+    height: auto;
+    overflow: visible;
+  }
+  .app-shell {
+    flex: none;
+    height: auto;
+    overflow: visible;
+  }
+  .mobile-menu-btn { display: inline-flex; }
+  .content-header { align-items: center; }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 84vw;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: 8px 0 32px rgba(15, 23, 42, 0.18);
+  }
+  .sidebar.mobile-open { transform: translateX(0); }
+  .content { height: auto; overflow-y: visible; }
+  .stat-grid { grid-template-columns: 1fr; }
+  .dash-row { grid-template-columns: 1fr; }
+  /* Pre-existing overflow, found while checking this same mobile view —
+     the two native date inputs plus separator plus button don't fit a
+     390px-wide screen and weren't wrapping internally. */
+  .date-range-picker { flex-wrap: wrap; }
+  .date-range-picker input[type="date"] { max-width: 40vw; }
+  .app-topbar { flex-wrap: wrap; }
+  .app-topbar-search { order: 3; max-width: none; flex-basis: 100%; }
+  .app-topbar-search-kbd { display: none; }
+}
+
+.panel {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+}
+
+.appearance-row {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.appearance-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.appearance-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.appearance-field-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+
+.appearance-field input[type="text"] {
+  margin-bottom: 0;
+}
+
+.appearance-toggle-group {
+  display: flex;
+  gap: 8px;
+}
+
+/* The color-picker-widget reuses the generic .info-widget open/close-on-
+   outside-click behavior (see the JS wiring shared with the "?" info
+   popovers) but isn't pinned to a panel's corner, so its own positioning
+   overrides that inherited absolute top/right placement. */
+.color-picker-widget.info-widget {
+  position: relative;
+  top: auto;
+  right: auto;
+  display: inline-block;
+}
+
+.color-picker-btn.info-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+/* Opens rightward from the swatch button instead of the base .info-popup's
+   right:0 (which grows leftward — fine for the "?" buttons pinned to a
+   panel's top-right corner, but this button sits near the panel's left edge,
+   so that direction ran the popup straight off the viewport). Combined-class
+   selector so it reliably outweighs .info-popup's own width/right rule
+   regardless of which one is declared later in this file. */
+.color-popup.info-popup {
+  width: 240px;
+  left: 0;
+  right: auto;
+}
+
+.color-wheel-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+/* white(center)->transparent radial layered over a full hue ring — the
+   transparent radial reveals the saturated hue underneath as you move from
+   center to edge, giving the classic "white center, pure hue at the rim"
+   wheel with no canvas/JS drawing needed. */
+.color-wheel {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, #fff 0%, rgba(255, 255, 255, 0) 70%),
+    conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  box-shadow: 0 0 0 1px #e5e7eb;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.color-wheel-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Follows the pointer during drag (position:fixed, coordinates set in JS) so
+   it can render just to the right of wherever the owner is dragging, not
+   confined to the small popup box. An unconditional "display" here would
+   override the browser's own [hidden]->display:none default (an author-
+   origin rule always wins over that user-agent one, regardless of
+   specificity) — the [hidden] override below is what makes toggling the
+   hidden attribute in JS actually hide it again. */
+.color-wheel-preview {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #1a1a2e;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  z-index: 10000;
+}
+
+.color-wheel-preview[hidden] {
+  display: none;
+}
+
+.color-wheel-preview-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.color-wheel-preview-hex {
+  color: #fff;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.color-popup-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-name-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+.color-eyedropper-btn {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.color-eyedropper-btn:hover {
+  border-color: var(--blue);
+}
+
+.color-popup-error {
+  color: #b91c1c;
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
+.color-custom-input {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  overflow: hidden;
+}
+
+.color-custom-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-custom-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+.appearance-save-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.appearance-status {
+  margin: 0;
+}
+
+/* "Обучение бота" — one fixed, always-visible test-chat pane (used to be two
+   side by side; see cabinet/index.html for why that got collapsed to one),
+   with a small toolbar above linking out to whichever other page actually
+   owns a given kind of edit. */
+.training-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.training-toolbar-label {
+  font-size: 13px;
+  color: var(--muted);
+  margin-right: 2px;
+}
+
+.training-toolbar-link {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.training-toolbar-link:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.training-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  height: calc(100vh - 150px);
+}
+
+.training-grid-solo {
+  grid-template-columns: 1fr;
+  /* This used to be the entire view (calc(100vh - 210px), same as the
+     two-pane .training-grid above) — fine when nothing else lived below it.
+     Once the "поделиться ссылкой для тестирования" panel moved in right
+     below it, that height pushed the panel almost entirely off-screen — but
+     480px overcorrected: the real widget.js chat window is 560px tall,
+     anchored 90px from the bottom of whatever it's confined to (see
+     widget/loader/widget.js's desktopStyle) — needs ~650px just to render
+     without being clipped at the bottom, so 480px was cropping the actual
+     preview, not just the link panel below it. 680px fits the real window
+     with a little headroom; the link panel below may need a short scroll on
+     smaller screens, which is a fair trade for not clipping the widget itself. */
+  height: 680px;
+}
+
+.training-pane {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+  overflow: hidden;
+}
+
+.training-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 4px;
+}
+
+.training-pane-header h2 {
+  font-size: 15px;
+  margin: 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--blue);
+}
+
+.training-pane:nth-child(2) .training-pane-header h2 {
+  border-left-color: #22c55e;
+}
+
+.training-reset-btn {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.training-reset-btn:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.training-pane-sub {
+  margin: 4px 18px 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.training-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+}
+
+.training-pane-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.training-help-btn {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.training-help-btn:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.dislike-queue-toggle {
+  margin: 0 18px 10px;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.dislike-queue-badge {
+  background: #991b1b;
+  color: #fff;
+  border-radius: 999px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dislike-queue-list {
+  margin: 0 18px 12px;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid #f1f2f6;
+  border-radius: 10px;
+}
+
+.dislike-item {
+  border-bottom: 1px solid #f1f2f6;
+  padding: 10px 12px;
+}
+
+.dislike-item:last-child {
+  border-bottom: none;
+}
+
+.dislike-item-situation {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.dislike-item-reply {
+  font-size: 13px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.dislike-item-meta {
+  font-size: 11.5px;
+  color: #16a34a;
+}
+
+.dislike-item-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.dislike-item-note-form textarea {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 13px;
+  font-family: inherit;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.dislike-item-note-form button {
+  margin-top: 6px;
+  border: 1px solid var(--blue);
+  background: var(--ink);
+  color: #fff;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.dislike-item-note-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.dislike-item-note-actions button {
+  margin-top: 0;
+}
+
+.dislike-item-preview {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #f7f7fb;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.dislike-item-preview-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.dislike-item-preview-text {
+  width: 100%;
+  min-height: 60px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--ink);
+  margin-bottom: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  box-sizing: border-box;
+  resize: vertical;
+  background: #fff;
+}
+
+.dislike-item-preview-error {
+  font-size: 12.5px;
+  color: #b91c1c;
+}
+
+.dislike-item-confirm-btn {
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+}
+
+.dialog-view-dislike-wrap {
+  margin: -4px 0 10px;
+}
+
+.dialog-view-dislike-wrap .copy-btn {
+  font-size: 12px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 25, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal-box {
+  position: relative;
+  background: #fff;
+  border-radius: 14px;
+  padding: 26px 28px;
+  max-width: 460px;
+  width: calc(100% - 40px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+.modal-box h2 {
+  font-size: 16px;
+  margin: 0 0 14px;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: none;
+  background: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.training-help-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.training-help-list li {
+  margin-bottom: 10px;
+}
+
+@media (max-width: 900px) {
+  .training-grid {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .training-iframe {
+    height: 520px;
+  }
+}
+
+/* The reference design's own panel headings are plain bold text with no
+   colored accent bar — dropped the left-border-accent treatment this used
+   to have (including its per-workflow-stage color variants right below) to
+   match that, rather than carrying over a decorative pattern the new
+   design doesn't use. */
+.panel h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 14px;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+/* Sits in the panel's own top-right corner, slightly overhanging the edge —
+   deliberately taken out of the heading's flow (absolute, relative to
+   .panel) rather than inline next to it. */
+.info-widget {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+}
+
+.info-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #fde68a;
+  background: #fff;
+  color: #d97706;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.info-btn:hover {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.info-popup {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 340px;
+  max-width: 85vw;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+  padding: 16px 18px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+  text-align: left;
+  z-index: 20;
+}
+
+.info-popup-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.info-popup p {
+  margin: 0 0 10px;
+}
+
+.info-popup p:last-child {
+  margin-bottom: 0;
+}
+
+.info-popup-list {
+  margin: 0 0 12px;
+}
+
+.info-popup-list dt {
+  font-weight: 700;
+  color: var(--blue);
+  font-size: 12.5px;
+  margin-top: 9px;
+}
+
+.info-popup-list dt:first-child {
+  margin-top: 0;
+}
+
+.info-popup-list dd {
+  margin: 2px 0 0;
+}
+
+.info-popup-footnote {
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid #f1f5f9;
+  padding-top: 10px;
+}
+
+.snippet-box {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin-bottom: 10px;
+}
+
+.install-steps {
+  margin: 22px 0;
+  padding: 16px 18px;
+  background: var(--secondary);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.install-steps h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.install-steps ol {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.install-help-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  padding: 14px 16px;
+  background: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 13.5px;
+  color: #3730a3;
+}
+
+.install-help-note .copy-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.install-testlink-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.stat {
+  background: var(--secondary);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+
+.stat .val {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--blue);
+}
+
+.stat .lbl {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Seen live at 1024px (a common laptop width): "Требует внимания" grew a
+   7th column ("Обработано") and the table quietly overflowed its panel with
+   no way to reach the last column(s) — no horizontal scrollbar, content
+   just clipped off past the right edge. Every table with more than a
+   couple of columns gets this wrapper so an overflow becomes a scrollbar,
+   never invisible/unreachable content. */
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* Only a hint when there's actually somewhere to drag to — see the
+   dragscroll check in index.html, which only turns this on once the
+   content genuinely overflows the visible width. */
+.table-scroll.draggable {
+  cursor: grab;
+}
+
+.table-scroll.draggable.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th, td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* A/B/C/D table: the phrase column wraps and takes whatever width is left,
+   the label + metric columns stay narrow (slanted headers instead of wide
+   horizontal ones) so the whole table stays usable on a small laptop screen. */
+.variant-table {
+  table-layout: fixed;
+  /* Without this, table-layout:fixed's width:100% (see the base `table`
+     rule) divides whatever space a narrow phone screen happens to leave —
+     seen live shrinking the phrase column to a few px and wrapping every
+     word one letter per line. min-width forces .table-scroll (which this is
+     always wrapped in) to actually scroll instead of ever compressing this
+     far. */
+  min-width: 480px;
+}
+
+.variant-col-label {
+  width: 40px;
+}
+
+.variant-text-cell {
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.variant-col-metric {
+  width: 64px;
+  text-align: center;
+}
+
+.th-slanted {
+  display: inline-block;
+  transform: rotate(-25deg);
+  transform-origin: left bottom;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge.ready {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 12px 0;
+}
+
+.copy-btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.btn-inline {
+  width: auto;
+  display: inline-block;
+}
+
+/* Same visual weight as .copy-btn — just a clearer name for the mini-CRM's
+   own "delete stage/field" style buttons, which aren't copy actions. */
+.btn-secondary {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 7px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: var(--secondary);
+}
+
+/* --- Готовность бота --- */
+.nav-badge-readiness {
+  background: var(--accent);
+  color: var(--ink);
+}
+
+.readiness-header-panel h2 {
+  margin: 0 0 4px;
+}
+
+.readiness-headline {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 4px 0 2px;
+}
+
+.readiness-substeps {
+  color: var(--muted);
+  font-size: 13.5px;
+  margin: 0 0 14px;
+}
+
+.readiness-progress-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.readiness-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--lime);
+  transition: width 0.6s ease;
+}
+
+.readiness-next-panel {
+  border: 1px solid var(--line);
+  background: var(--accent);
+}
+
+.readiness-next-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.readiness-next-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.readiness-next-desc {
+  color: var(--muted);
+  font-size: 13.5px;
+  margin: 0 0 14px;
+}
+
+.readiness-done-panel {
+  text-align: center;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+}
+
+.readiness-done-icon {
+  font-size: 32px;
+  margin-bottom: 6px;
+}
+
+.readiness-checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.readiness-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+}
+
+.readiness-card-done {
+  border-color: #bbf7d0;
+  background: #f8fefb;
+}
+
+.readiness-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.readiness-card-title {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.readiness-card-weight {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--secondary);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.readiness-card-desc {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 8px 0 12px;
+}
+
+.readiness-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.readiness-card-status {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.readiness-card-status-done { color: #166534; }
+.readiness-card-status-todo { color: var(--muted); }
+
+.readiness-card-btn {
+  margin-left: auto;
+}
+
+.readiness-tips-list {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.9;
+}
+
+.kb-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.kb-add-row input {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.kb-add-row button {
+  flex-shrink: 0;
+}
+
+.kb-source-tag {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.kb-search-input {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+/* Content (articles) on the left, category menu on the right — the main
+   sidebar already owns the left edge of the whole cabinet, so a second menu
+   there would collide with it. */
+.support-new-form {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.support-new-form input,
+.support-new-form textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 13.5px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.support-new-form textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.support-new-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.support-ticket-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #f1f2f6;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.support-ticket-item:hover {
+  border-color: var(--blue);
+}
+
+.support-ticket-item-main {
+  min-width: 0;
+}
+
+.support-ticket-item-subject {
+  font-size: 13.5px;
+  color: var(--ink);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.support-ticket-item-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.dialogs-pagination {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.dialogs-pagination[hidden] {
+  display: none;
+}
+
+.dialog-row-escalation-badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  margin-left: 6px;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.dialog-row-view-btn {
+  border: none;
+  background: transparent;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.dialog-row-view-btn:hover {
+  text-decoration: underline;
+}
+
+.support-ticket-item-status {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.support-ticket-item-status.open {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.support-ticket-item-status.resolved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.support-status-banner {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 14px;
+  white-space: pre-wrap;
+}
+
+.support-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 4px 2px;
+  margin-bottom: 14px;
+}
+
+.support-thread-msg {
+  max-width: 78%;
+  padding: 9px 13px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.support-thread-msg.client {
+  align-self: flex-end;
+  background: var(--ink);
+  color: #fff;
+  border-bottom-right-radius: 3px;
+}
+
+.support-thread-msg.support {
+  align-self: flex-start;
+  background: var(--secondary);
+  color: var(--ink);
+  border-bottom-left-radius: 3px;
+}
+
+.support-reply-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.support-reply-form textarea {
+  flex: 1;
+  min-height: 46px;
+  max-height: 140px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 13.5px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.kb-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.kb-content {
+  flex: 1;
+  min-width: 0;
+  order: 1;
+}
+
+.kb-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  order: 2;
+}
+
+.kb-add-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.kb-add-tab {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.kb-add-tab.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.kb-add-pane textarea,
+.kb-add-pane input[type="text"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  margin-bottom: 0;
+}
+
+.kb-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.kb-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.kb-category-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13.5px;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.kb-category-item:hover {
+  background: var(--secondary);
+}
+
+.kb-category-item.active {
+  background: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.kb-category-count {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.kb-category-item.active .kb-category-count {
+  color: var(--ink);
+}
+
+.kb-category-item.kb-category-pending .kb-category-count {
+  background: #f59e0b;
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.kb-add-category-row {
+  display: flex;
+  gap: 6px;
+  border-top: 1px solid #e9ebf1;
+  padding-top: 12px;
+}
+
+.kb-add-category-row input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.kb-add-category-row button {
+  flex-shrink: 0;
+}
+
+.kb-category-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 20px 0 10px;
+}
+
+.kb-category-heading:first-child {
+  margin-top: 4px;
+}
+
+.kb-article {
+  padding: 14px 0;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.kb-article:last-child {
+  border-bottom: none;
+}
+
+.kb-article.kb-pending {
+  border-left: 3px solid #f59e0b;
+  padding-left: 12px;
+}
+
+.kb-article.kb-rejected {
+  opacity: 0.55;
+}
+
+.kb-article-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kb-article-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+.kb-article-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.kb-mod-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.kb-article-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+
+.kb-article-btn:hover {
+  color: var(--blue);
+  text-decoration: underline;
+}
+
+.kb-article-btn.kb-reject-btn:hover {
+  color: #b91c1c;
+}
+
+.kb-article-body {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  margin: 8px 0 6px;
+}
+
+.kb-article-file-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--blue);
+  text-decoration: none;
+  margin-bottom: 6px;
+}
+
+.kb-article-file-link:hover {
+  text-decoration: underline;
+}
+
+.kb-article-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.kb-article-edit textarea,
+.kb-article-edit input[type="text"] {
+  width: 100%;
+  border: 1px solid #c4b5fd;
+  border-radius: 9px;
+  padding: 8px 10px;
+  font-size: 13.5px;
+  font-family: inherit;
+  margin-bottom: 6px;
+}
+
+@media (max-width: 900px) {
+  .kb-layout {
+    flex-direction: column;
+  }
+  .kb-sidebar {
+    width: 100%;
+    order: -1;
+  }
+}
+

@@ -1,0 +1,581 @@
+:root {
+  --primary: #4f46e5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #ffffff;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #eef0f4;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.chat-header .avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-header .info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chat-header .name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-header .status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: #8a8f98;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+/* Replaces the plain "Онлайн" status in preview mode — lets the owner see
+   and switch between the wizard that trains the bot and the real
+   sales-facing experience, right where the status used to be. */
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mode-toggle-label {
+  color: #b0b4bb;
+  transition: color .15s;
+}
+
+.mode-toggle[data-mode="training"] .mode-toggle-label-on,
+.mode-toggle:not([data-mode="training"]) .mode-toggle-label-off {
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+.mode-switch {
+  position: relative;
+  display: inline-block;
+  width: 30px;
+  height: 17px;
+}
+
+.mode-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mode-switch-track {
+  position: absolute;
+  inset: 0;
+  background: #d1d5db;
+  border-radius: 999px;
+  transition: background .15s;
+}
+
+.mode-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .15s;
+}
+
+.mode-switch input:checked + .mode-switch-track {
+  background: #4f46e5;
+}
+
+.mode-switch input:checked + .mode-switch-track .mode-switch-thumb {
+  transform: translateX(13px);
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+
+.bubble {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bubble-visitor {
+  align-self: flex-end;
+  background: var(--primary);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.bubble-assistant {
+  align-self: flex-start;
+  background: #f1f2f6;
+  color: #1a1a1a;
+  border-bottom-left-radius: 4px;
+}
+
+/* Failed send — never a fake bot bubble (see requestReplyAndRender's catch
+   in chat.js). Sits right under the visitor's own message, same
+   right-aligned corner, mirroring how WhatsApp/Telegram mark an undelivered
+   message rather than answering on the sender's behalf. Only ever anchored
+   to a real visitor message — see showSendFailure in chat.js. */
+.send-failed-pill {
+  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  border: 1px solid #ef4444;
+  border-radius: 999px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12.5px;
+  font-family: inherit;
+  padding: 5px 6px;
+}
+
+.send-failed-pill-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send-failed-pill-action {
+  border: none;
+  background: none;
+  color: #b91c1c;
+  font-size: 12.5px;
+  font-family: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 2px 2px;
+}
+
+.send-failed-pill-action:hover {
+  color: #7f1d1d;
+}
+
+/* color: inherit + underline-only used to be the whole story here, but real
+   visitors reported a link like that "just looks like text" — same dark gray
+   as every other word in the bubble, easy to miss entirely. Assistant-bubble
+   links now use the bot's own brand color (var(--primary), same color as the
+   visitor bubble background) so they read as an obviously clickable element;
+   visitor-bubble links stay white since --primary-on-primary would vanish. */
+.bubble a {
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.bubble-assistant a {
+  color: var(--primary);
+}
+
+.bubble-attachment {
+  padding: 6px;
+}
+
+.attachment-image {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.attachment-file-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.attachment-file-link:hover {
+  text-decoration: underline;
+}
+
+.bubble-visitor a {
+  color: #fff;
+}
+
+.bubble.typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px;
+}
+
+.bubble.typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #94a3b8;
+  animation: smartchat-typing-bounce 1.2s infinite ease-in-out;
+}
+
+.bubble.typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.bubble.typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes smartchat-typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px 12px;
+}
+
+.quick-reply {
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.quick-reply:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.coach-bar {
+  padding: 8px 16px;
+  border-top: 1px solid #f1e8ff;
+  background: #faf5ff;
+}
+
+.coach-bar[hidden] {
+  display: none;
+}
+
+.coach-toggles {
+  display: flex;
+  gap: 6px;
+}
+
+.coach-toggle {
+  border: 1px solid #a78bfa;
+  color: #6d28d9;
+  background: #fff;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.coach-toggle:hover {
+  background: #f3e8ff;
+}
+
+.knowledge-form-wrap {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.knowledge-form-wrap textarea {
+  border: 1px solid #c4b5fd;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  min-height: 56px;
+}
+
+.knowledge-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.coach-form-wrap {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.coach-form-wrap[hidden] {
+  display: none;
+}
+
+.coach-form-wrap input {
+  flex: 1;
+  border: 1px solid #c4b5fd;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+  outline: none;
+}
+
+.coach-form-wrap button {
+  border: none;
+  background: #7c3aed;
+  color: #fff;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+#coachCancelBtn,
+#knowledgeCancelBtn {
+  background: #ede9fe;
+  color: #6d28d9;
+  padding: 7px 10px;
+}
+
+.bubble-note {
+  align-self: center;
+  background: #faf5ff;
+  color: #6d28d9;
+  border: 1px dashed #c4b5fd;
+  font-size: 12.5px;
+  text-align: center;
+}
+
+/* Owner-only (ownerPreview) — flags the bot's last reply of a turn as bad
+   and captures what it should have said instead. See attachCorrectionControl
+   in chat.js. */
+.correction-control {
+  align-self: flex-start;
+  max-width: 80%;
+  margin-top: -4px;
+}
+
+.correction-flag-btn {
+  border: none;
+  background: none;
+  color: #9ca3af;
+  font-size: 11.5px;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+}
+
+.correction-flag-btn:hover {
+  color: #6b7280;
+}
+
+.correction-textarea {
+  width: 100%;
+  min-height: 56px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.correction-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.correction-cancel-btn,
+.correction-submit-btn {
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.correction-cancel-btn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #6b7280;
+}
+
+.correction-submit-btn {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.correction-saved {
+  color: #166534;
+  font-size: 12.5px;
+}
+
+.correction-preview-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 3px;
+}
+
+.correction-preview-text {
+  width: 100%;
+  min-height: 60px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #f7f7fb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+/* Public tester (publicDislikeMode) — single-click report, no form. See
+   attachDislikeControl in chat.js. A bare emoji with no label read as
+   background chrome rather than a clickable control (seen live: testers
+   couldn't find it) — text + underline gives it the same affordance as
+   .correction-flag-btn, which never had this problem. */
+.dislike-flag-btn {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: #9ca3af;
+  font-size: 12.5px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 3px 4px;
+  margin-top: 2px;
+}
+
+.dislike-flag-btn:hover {
+  color: #6b7280;
+}
+
+.dislike-flag-sent {
+  color: #166534;
+  cursor: default;
+}
+
+.correction-error {
+  color: #b91c1c;
+  font-size: 12.5px;
+}
+
+.composer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #eaeaea;
+}
+
+.composer input {
+  flex: 1;
+  border: 1px solid #dcdcdc;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  outline: none;
+}
+
+.composer button {
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.footer-branding {
+  flex-shrink: 0;
+  text-align: center;
+  padding: 6px 0 10px;
+  font-size: 11px;
+  color: #b2b6bf;
+}
+
+.footer-branding strong {
+  color: #6b7280;
+  font-weight: 600;
+}
