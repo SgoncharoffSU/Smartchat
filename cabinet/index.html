@@ -233,34 +233,6 @@
       </div>
 
       <section class="view" id="view-dashboard">
-        <div class="panel">
-          <div class="info-widget">
-            <button class="info-btn" id="goalInfoBtn" type="button" aria-label="Как работает цель">?</button>
-            <div class="info-popup" id="goalInfoPopup" hidden>
-              <div class="info-popup-title">Зачем нужна цель</div>
-              <p>
-                От цели зависит, как бот завершает разговор с заинтересованным посетителем — ведёт на звонок,
-                оформляет продажу прямо в чате или доводит до регистрации.
-              </p>
-            </div>
-          </div>
-          <h2>Цель бота</h2>
-          <button type="button" class="goal-display" id="goalDisplay">
-            <span class="goal-display-icon" id="goalDisplayIcon">🎯</span>
-            <span class="goal-display-text" id="goalCurrent">…</span>
-            <span class="goal-display-edit">Изменить</span>
-          </button>
-          <div class="goal-edit-form" id="goalEditForm" hidden>
-            <div class="goal-pills" id="goalPillsContainer"></div>
-            <input type="text" id="goalCustomInput" placeholder="Своими словами, что должен делать бот" hidden />
-            <div class="goal-edit-actions">
-              <button type="button" class="copy-btn" id="goalEditCancelBtn">Отмена</button>
-              <button type="button" class="btn-primary btn-inline" id="goalEditSaveBtn">Сохранить</button>
-            </div>
-            <span class="empty" id="goalEditStatus"></span>
-          </div>
-        </div>
-
         <div class="period-selector">
           <button class="period-btn" data-period="yesterday" type="button">Вчера</button>
           <button class="period-btn" data-period="week" type="button">Неделя</button>
@@ -750,6 +722,43 @@
           <button type="button" class="training-toolbar-link" data-goto-view="telegram">Интеграции</button>
           <button type="button" class="training-help-btn" id="trainingHelpBtn" title="Как это работает">?</button>
         </div>
+
+        <!-- Moved here from the dashboard (see the commit that moved it) —
+             the prototype's own Dashboard has no such card at all (no
+             backend behind its demo, nothing to configure), and the account
+             owner wants the dashboard visually exact to the reference, not
+             carrying an extra real settings panel it doesn't have room for.
+             Обучение бота is where the bot's actual conversational behavior
+             is tested/tuned, so the goal that drives that behavior belongs
+             here more than on an analytics-only reference layout anyway. -->
+        <div class="panel">
+          <div class="info-widget">
+            <button class="info-btn" id="goalInfoBtn" type="button" aria-label="Как работает цель">?</button>
+            <div class="info-popup" id="goalInfoPopup" hidden>
+              <div class="info-popup-title">Зачем нужна цель</div>
+              <p>
+                От цели зависит, как бот завершает разговор с заинтересованным посетителем — ведёт на звонок,
+                оформляет продажу прямо в чате или доводит до регистрации.
+              </p>
+            </div>
+          </div>
+          <h2>Цель бота</h2>
+          <button type="button" class="goal-display" id="goalDisplay">
+            <span class="goal-display-icon" id="goalDisplayIcon">🎯</span>
+            <span class="goal-display-text" id="goalCurrent">…</span>
+            <span class="goal-display-edit">Изменить</span>
+          </button>
+          <div class="goal-edit-form" id="goalEditForm" hidden>
+            <div class="goal-pills" id="goalPillsContainer"></div>
+            <input type="text" id="goalCustomInput" placeholder="Своими словами, что должен делать бот" hidden />
+            <div class="goal-edit-actions">
+              <button type="button" class="copy-btn" id="goalEditCancelBtn">Отмена</button>
+              <button type="button" class="btn-primary btn-inline" id="goalEditSaveBtn">Сохранить</button>
+            </div>
+            <span class="empty" id="goalEditStatus"></span>
+          </div>
+        </div>
+
         <div class="training-layout">
           <section class="training-guide panel">
             <span class="funnel-eyebrow">Тестовая среда</span>

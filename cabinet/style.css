@@ -1527,18 +1527,10 @@ input:focus {
   min-width: 0;
   background: #fff;
   border: 1px solid var(--line);
-  border-top: 3px solid var(--blue);
   border-radius: var(--radius);
   padding: 18px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
-
-/* A different top accent per stat so the row reads at a glance instead of
-   as four identical white boxes — Показов → Диалогов → Заявок → Оплачено. */
-.stat-grid .stat-card:nth-child(1) { border-top-color: #a5b4fc; }
-.stat-grid .stat-card:nth-child(2) { border-top-color: #7dd3fc; }
-.stat-grid .stat-card:nth-child(3) { border-top-color: #86efac; }
-.stat-grid .stat-card:nth-child(4) { border-top-color: #fcd34d; }
 
 .funnel-eyebrow {
   font-size: 11px;
