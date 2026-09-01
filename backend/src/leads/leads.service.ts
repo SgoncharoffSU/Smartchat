@@ -14,33 +14,35 @@ export class LeadsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Used only to tell a genuinely NEW lead from a later turn that just adds
-   * more fields to the same dialog's Lead row (dialogId is @unique — one
-   * dialog, at most one Lead) — see widget.service.ts's chargeConfirmedLead
-   * call, which must only fire once per lead, not once per turn.
+   * Upserts this dialog's Lead row AND reports whether that upsert actually
+   * INSERTED a new row, atomically — see widget.service.ts's
+   * chargeConfirmedLead call, which must fire exactly once per real lead,
+   * never twice for one.
+   *
+   * Used to be a separate `existsForDialog` read-then-decide before the
+   * upsert — that has a real race: two near-simultaneous turns for the same
+   * dialog (a client retry, or two messages landing close together) could
+   * both read "no lead yet" before either upsert committed, both charge.
+   * Postgres serializes concurrent upserts on the same unique key
+   * (dialogId) — only ONE concurrent call actually performs the INSERT; the
+   * other blocks until it commits, then runs the UPDATE branch — so
+   * `xmax = 0` in the same RETURNING (true only for a row this exact
+   * statement inserted, never for one it updated) is a correct, DB-enforced
+   * "was this truly new" check with no window for two callers to both see
+   * "new".
    */
-  async existsForDialog(dialogId: string): Promise<boolean> {
-    const existing = await this.prisma.lead.findUnique({ where: { dialogId }, select: { id: true } });
-    return existing !== null;
-  }
-
-  upsert(dialogId: string, leadData: LeadData) {
-    return this.prisma.lead.upsert({
-      where: { dialogId },
-      create: {
-        dialogId,
-        name: leadData.name,
-        phone: leadData.phone,
-        email: leadData.email,
-        rawCapture: leadData as object,
-      },
-      update: {
-        name: leadData.name,
-        phone: leadData.phone,
-        email: leadData.email,
-        rawCapture: leadData as object,
-      },
-    });
+  async upsertAndCheckNew(dialogId: string, leadData: LeadData): Promise<{ id: string; isNew: boolean }> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; isNew: boolean }>>`
+      INSERT INTO "leads" ("id", "dialog_id", "name", "phone", "email", "raw_capture", "created_at")
+      VALUES (gen_random_uuid(), ${dialogId}, ${leadData.name ?? null}, ${leadData.phone ?? null}, ${leadData.email ?? null}, ${JSON.stringify(leadData)}::jsonb, now())
+      ON CONFLICT ("dialog_id") DO UPDATE SET
+        "name" = EXCLUDED."name",
+        "phone" = EXCLUDED."phone",
+        "email" = EXCLUDED."email",
+        "raw_capture" = EXCLUDED."raw_capture"
+      RETURNING "id", (xmax = 0) AS "isNew"
+    `;
+    return rows[0];
   }
 
   /**

@@ -1538,13 +1538,13 @@ export class WidgetService {
     // basis to store PII (152-FZ, and rule 17 of the sales-onboarding spec:
     // "не сохранять данные без необходимого согласия").
     if (structuredReply.leadCaptured && hasRealLeadData && visitorMeta.pdConsent === true) {
-      // Checked BEFORE the upsert below (dialogId is @unique — at most one
-      // Lead per dialog) so a 'lead'-plan company is only charged once per
-      // real lead, not again on every later turn that just fills in more
-      // fields on the same Lead row.
-      const isNewLead = !(await this.leads.existsForDialog(dialog.id));
-      const savedLead = await this.leads.upsert(dialog.id, effectiveLeadData);
-      if (isNewLead) {
+      // isNew comes back from the SAME atomic upsert (see leads.service.ts's
+      // own comment) so a 'lead'-plan company is charged exactly once per
+      // real lead — not again on every later turn that just fills in more
+      // fields on the same Lead row, and not twice for one lead if two turns
+      // land close together.
+      const savedLead = await this.leads.upsertAndCheckNew(dialog.id, effectiveLeadData);
+      if (savedLead.isNew) {
         this.billing.chargeConfirmedLead(bot.companyId).catch((error) => {
           this.logger.error(`Confirmed-lead charge failed for company ${bot.companyId}: ${String(error)}`);
         });

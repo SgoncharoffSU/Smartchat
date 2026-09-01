@@ -20,6 +20,20 @@ const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const WIDGET_POSITIONS = ['bottom-right', 'bottom-left'];
 const BOT_GENDERS = ['male', 'female'];
 
+// "YYYY-MM-DD" in the SERVER's own local time — not toISOString().slice(0,10),
+// which reads the UTC calendar day. Used by getConversionChart to both build
+// bucket keys and place each dialog's createdAt into one: since's own
+// day-boundary (setHours(0,0,0,0)) is likewise computed in local time, so
+// this must match it exactly. Mixing the two (a local-time boundary paired
+// with UTC-labeled buckets) silently shifts every date on the chart by up to
+// a day on any server whose local time isn't UTC.
+function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export const GOAL_PRESETS: Record<string, { label: string; instruction: string }> = {
   chat_sale: {
     label: 'Продать в чате',
@@ -1083,10 +1097,10 @@ export class CabinetService {
     for (let i = 0; i < days; i++) {
       const d = new Date(since);
       d.setDate(since.getDate() + i);
-      buckets.set(d.toISOString().slice(0, 10), { shown: 0, opened: 0, leads: 0 });
+      buckets.set(localDateKey(d), { shown: 0, opened: 0, leads: 0 });
     }
     for (const dialog of dialogs) {
-      const key = dialog.createdAt.toISOString().slice(0, 10);
+      const key = localDateKey(dialog.createdAt);
       const bucket = buckets.get(key);
       if (!bucket) continue; // outside the requested window after rounding — ignore
       bucket.shown += 1;
