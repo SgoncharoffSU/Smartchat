@@ -41,11 +41,16 @@ button, input, select, textarea {
 html, body {
   margin: 0;
   min-height: 100%;
-  /* "SF Pro Display" added to match the reference prototype's real font
-     stack exactly (its globals.css: Inter,Manrope,"SF Pro Display",
-     -apple-system,...) — a macOS-only fallback ahead of -apple-system, so
-     it's a no-op everywhere else. */
-  font-family: Inter, Manrope, "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Checked directly against the reference's own compiled CSS (not the
+     older, wrong assumption baked into this comment before — there is no
+     "SF Pro Display" in its real font stack at all) — exact stack, exact
+     base size, and the same font-feature-settings (Inter's alternate
+     stylistic sets — cv02/03/04/11 change the shape of a handful of
+     characters; omitting it is a real, visible difference on this exact
+     typeface, not a no-op). */
+  font-family: Inter, Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   /* Cool enough that white panels/cards actually read as cards sitting on
      top of it, instead of blending into an almost-white canvas. */
   background: var(--canvas);
@@ -56,6 +61,24 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* Base heading rules, verbatim from the reference's own compiled CSS — a
+   lower-specificity fallback underneath every more specific per-context
+   heading rule elsewhere in this file (.panel h2, .training-pane-header h2,
+   etc. all still win the cascade as before); this only fixes headings that
+   were falling back to the browser default (bold, 1.2 line-height, no
+   letter-spacing) instead of the reference's actual tighter, variable-
+   weight treatment. The 720/680 weights only render correctly because the
+   <link> above now loads Inter/Manrope as true variable fonts. */
+/* p excluded from this reset, unlike the reference's own h1,h2,h3,p{margin:0}
+   — our markup has ~18 bare <p> tags built assuming the browser's default
+   paragraph margin for spacing (the reference's own markup was authored
+   with its own reset in mind throughout, ours wasn't retrofitted that far);
+   zeroing it here would visibly collapse spacing in those spots. */
+h1, h2, h3 { margin: 0; }
+h1 { font-size: clamp(28px, 3vw, 40px); line-height: 1.08; letter-spacing: -0.04em; font-weight: 720; }
+h2 { font-size: 20px; line-height: 1.22; letter-spacing: -0.025em; font-weight: 680; }
+h3 { font-size: 16px; font-weight: 680; }
 
 /* Tucked directly under the floating widget launcher. The cabinet's own test
    widget is loaded with data-offset-bottom="36" (see index.html) specifically
@@ -1240,7 +1263,12 @@ input:focus {
 }
 
 .content-header h1 {
-  font-size: 28px;
+  /* No font-size override here on purpose — checked the reference's own
+     page-header h1 live: computed font-size is 40px at a normal desktop
+     width (the base h1 rule's clamp(28px,3vw,40px) resolves to its max,
+     not a smaller fixed size like this used to assume). Only margin is
+     this context's own; size/line-height/letter-spacing/weight all come
+     from the base h1 rule. */
   margin: 0 0 4px;
 }
 
