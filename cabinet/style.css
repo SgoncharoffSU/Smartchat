@@ -2450,6 +2450,8 @@ input:focus {
 
 .stat-menu-btn {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
   border: none;
   background: none;
   color: var(--muted);
