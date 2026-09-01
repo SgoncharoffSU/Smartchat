@@ -189,6 +189,14 @@ export class CabinetController {
     return this.cabinet.getAnalytics(req.companyId, p, from, to, botId);
   }
 
+  @Get('conversion-chart')
+  @UseGuards(AuthGuard)
+  getConversionChart(@Req() req: AuthedRequest, @Query('botId') botId?: string, @Query('days') days?: string) {
+    const parsedDays = Number(days);
+    const n = Number.isFinite(parsedDays) && parsedDays > 0 && parsedDays <= 31 ? parsedDays : 7;
+    return this.cabinet.getConversionChart(req.companyId, botId, n);
+  }
+
   // Same endpoint for Алина's own company and every client — no separate
   // internal-only admin path for connecting escalation notifications.
   @Get('telegram-connect')

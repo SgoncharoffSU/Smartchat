@@ -3513,13 +3513,6 @@ input:focus {
   font-size: 11px;
 }
 
-.team-summary-bar .btn-primary {
-  margin-left: auto;
-  background: var(--lime) !important;
-  color: var(--ink) !important;
-  box-shadow: none !important;
-}
-
 .team-table-grid {
   background: #fff;
   border: 1px solid var(--line);

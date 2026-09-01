@@ -49,6 +49,7 @@ export class BillingService {
         periodDays: p.periodDays,
         tokenRubPer1kInput: rates?.input ?? null,
         tokenRubPer1kOutput: rates?.output ?? null,
+        leadRubPerLead: p.leadRubPerLead ? p.leadRubPerLead.toNumber() : null,
       };
     });
   }
@@ -175,6 +176,52 @@ export class BillingService {
       where: { id: companyId },
       data: { tokenBalanceRub: { decrement: costRub } },
     });
+  }
+
+  /**
+   * Debits the flat per-lead price from a 'lead'-plan company's prepaid
+   * balance — called from WidgetService only the FIRST time a given dialog
+   * captures a lead (see widget.service.ts's own comment at the call site),
+   * never on later turns that just add more fields to the same Lead row. A
+   * no-op for any other plan kind (or no plan yet) — mirrors
+   * chargeTokenUsage's own shape/guards.
+   */
+  async chargeConfirmedLead(companyId: string) {
+    const company = await this.prisma.company.findUnique({ where: { id: companyId }, include: { tariffPlan: true } });
+    if (!company?.tariffPlan || company.tariffPlan.kind !== 'lead') return;
+    const rate = company.tariffPlan.leadRubPerLead?.toNumber();
+    if (!rate) return;
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { tokenBalanceRub: { decrement: rate } },
+    });
+  }
+
+  /** Real succeeded payments only — the billing page's "История операций"
+   * table, same rows a 'pending' checkout never surfaces here until the
+   * webhook actually confirms it (see confirmPayment above). */
+  async listPayments(companyId: string) {
+    const payments = await this.prisma.payment.findMany({
+      where: { companyId, status: 'succeeded' },
+      include: { tariffPlan: true },
+      orderBy: { confirmedAt: 'desc' },
+    });
+    return payments.map((p) => ({
+      id: p.id,
+      planName: p.tariffPlan.name,
+      amountRub: p.amountRub.toNumber(),
+      confirmedAt: p.confirmedAt,
+    }));
+  }
+
+  /**
+   * Toggle only — see Company.autoPayEnabled's own schema comment for why
+   * this doesn't yet trigger a real charge on its own (no saved YooKassa
+   * payment method integration in this pass).
+   */
+  async setAutoPay(companyId: string, enabled: boolean) {
+    await this.prisma.company.update({ where: { id: companyId }, data: { autoPayEnabled: enabled } });
+    return { ok: true };
   }
 
   /**

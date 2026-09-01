@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { BillingService } from './billing.service';
@@ -22,5 +22,15 @@ export class PaymentsController {
   @Post(':id/checkout')
   checkout(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.billing.createCheckout(req.companyId, id);
+  }
+
+  @Get('payments')
+  payments(@Req() req: AuthedRequest) {
+    return this.billing.listPayments(req.companyId);
+  }
+
+  @Post('autopay')
+  autopay(@Req() req: AuthedRequest, @Body() body: { enabled?: boolean }) {
+    return this.billing.setAutoPay(req.companyId, Boolean(body.enabled));
   }
 }

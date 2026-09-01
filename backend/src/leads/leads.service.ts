@@ -13,6 +13,17 @@ interface LeadData {
 export class LeadsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Used only to tell a genuinely NEW lead from a later turn that just adds
+   * more fields to the same dialog's Lead row (dialogId is @unique — one
+   * dialog, at most one Lead) — see widget.service.ts's chargeConfirmedLead
+   * call, which must only fire once per lead, not once per turn.
+   */
+  async existsForDialog(dialogId: string): Promise<boolean> {
+    const existing = await this.prisma.lead.findUnique({ where: { dialogId }, select: { id: true } });
+    return existing !== null;
+  }
+
   upsert(dialogId: string, leadData: LeadData) {
     return this.prisma.lead.upsert({
       where: { dialogId },

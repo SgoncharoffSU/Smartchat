@@ -1538,7 +1538,17 @@ export class WidgetService {
     // basis to store PII (152-FZ, and rule 17 of the sales-onboarding spec:
     // "не сохранять данные без необходимого согласия").
     if (structuredReply.leadCaptured && hasRealLeadData && visitorMeta.pdConsent === true) {
+      // Checked BEFORE the upsert below (dialogId is @unique — at most one
+      // Lead per dialog) so a 'lead'-plan company is only charged once per
+      // real lead, not again on every later turn that just fills in more
+      // fields on the same Lead row.
+      const isNewLead = !(await this.leads.existsForDialog(dialog.id));
       const savedLead = await this.leads.upsert(dialog.id, effectiveLeadData);
+      if (isNewLead) {
+        this.billing.chargeConfirmedLead(bot.companyId).catch((error) => {
+          this.logger.error(`Confirmed-lead charge failed for company ${bot.companyId}: ${String(error)}`);
+        });
+      }
       // Fire-and-forget, same reasoning as the domain-integrity check above —
       // a slow or misconfigured CRM must never delay the visitor's own reply.
       // The lead already exists in this bot's own "Заявки" list regardless of

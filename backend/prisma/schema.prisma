@@ -75,23 +75,34 @@ model Company {
   // TariffPlan.tokenRubPer1k (see BillingService.chargeTokenUsage). Unrelated
   // to (and not reset by) an 'unlimited' plan.
   tokenBalanceRub    Decimal     @default(0) @db.Decimal(10, 2) @map("token_balance_rub")
+  // Toggle only, in this pass — see BillingService.setAutoPay. Real
+  // auto-charging needs a saved YooKassa payment method (a separate,
+  // riskier integration), not built yet; the toggle itself is real, saved,
+  // and shown in the billing page, but doesn't trigger anything on its own.
+  autoPayEnabled     Boolean     @default(false) @map("auto_pay_enabled")
 
   @@map("companies")
 }
 
-// Both current tariffs live here as rows (not hardcoded) so the 1-RUB
-// placeholder price from this first pass can be edited later without a code
-// change or migration — see the seed data this migration inserts.
+// Every purchasable plan/pack lives here as a row (not hardcoded) — pricing
+// changes are a data edit, not a deploy. Multiple rows can share the same
+// `kind` (e.g. three 'token' packs of different sizes, or 'unlimited'
+// monthly vs annual) — `kind` only picks which Company billing fields and
+// which BillingService charge path govern that purchase, never how many
+// rows of that kind exist. isActive:false retires a row (e.g. the original
+// 1-RUB placeholder pair from the first pass) without deleting it — old
+// Payment/Company rows can still reference it.
 model TariffPlan {
   id       String  @id @default(uuid())
-  // 'unlimited' | 'token' — picks which Company billing fields actually
-  // govern access (see Company's own comments above) and which purchase flow
-  // PaymentsService.createPayment builds; a genuinely new kind is real code,
-  // not a config row, same convention as LlmProvider.type.
+  // 'unlimited' | 'token' | 'lead' — picks which Company billing fields
+  // actually govern access (see Company's own comments above) and which
+  // charge path BillingService uses. A genuinely new kind is real code, not
+  // a config row, same convention as LlmProvider.type.
   kind     String
   name     String
   priceRub Decimal @db.Decimal(10, 2) @map("price_rub")
-  // 'unlimited' only: how many days one payment covers.
+  // 'unlimited' only: how many days one payment covers (30 for the monthly
+  // row, 365 for the annual row — two separate rows, not a toggle).
   periodDays    Int?     @map("period_days")
   // 'token' only: FALLBACK flat rate (same for input/output), only used if
   // the active LlmProvider row has no costRubPer1kInput/Output set yet (see
@@ -104,6 +115,12 @@ model TariffPlan {
   // actual multiplication. Editable directly on this row, same as priceRub —
   // no code change to adjust the margin.
   markupMultiplier Decimal @default(4) @db.Decimal(6, 2) @map("markup_multiplier")
+  // 'lead' only: flat RUB charged per confirmed lead (same on every 'lead'
+  // pack row — the packs differ in how much prepaid balance you buy, not in
+  // the per-lead rate) — see BillingService.chargeConfirmedLead. Unlike the
+  // token rate, there's no real external cost to approximate here, so no
+  // fallback logic — it's just our own price, seeded directly.
+  leadRubPerLead Decimal? @db.Decimal(10, 2) @map("lead_rub_per_lead")
   isActive Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
 

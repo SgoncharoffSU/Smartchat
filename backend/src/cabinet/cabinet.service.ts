@@ -363,6 +363,7 @@ export class CabinetService {
         : null,
       planExpiresAt: company.planExpiresAt,
       tokenBalanceRub: company.tokenBalanceRub,
+      autoPayEnabled: company.autoPayEnabled,
       userName: user?.name ?? null,
       userEmail: user?.email ?? null,
       role: user?.role ?? 'owner',
@@ -1048,6 +1049,58 @@ export class CabinetService {
           processedAt: e.processedAt,
         })),
       },
+    };
+  }
+
+  /**
+   * Real day-by-day conversion rates for the dashboard's line chart — the
+   * reference design has this panel, we didn't have any per-day breakdown
+   * before (getAnalytics above only computes two totals: current period vs
+   * previous). No new tables: buckets the same Dialog rows getAnalytics
+   * already reads (isPreview: false), by calendar day of createdAt.
+   * "В открытие чата" = dialogs with a real visitor message / all dialogs
+   * shown that day; "В заявку" = dialogs that got a Lead / dialogs opened —
+   * same two ratios (and the same bases) as the "Конверсия в диалог" /
+   * "Конверсия в регистрацию" labels already shown on the metric cards
+   * above, just split per day instead of summed over the whole period.
+   */
+  async getConversionChart(companyId: string, botId?: string, days = 7) {
+    const bot = await this.findOwnedBot(companyId, botId);
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+    since.setDate(since.getDate() - (days - 1));
+
+    const dialogs = await this.prisma.dialog.findMany({
+      where: { botId: bot.id, isPreview: false, createdAt: { gte: since } },
+      select: {
+        createdAt: true,
+        messages: { where: { role: 'visitor' }, take: 1, select: { id: true } },
+        lead: { select: { id: true } },
+      },
+    });
+
+    const buckets = new Map<string, { shown: number; opened: number; leads: number }>();
+    for (let i = 0; i < days; i++) {
+      const d = new Date(since);
+      d.setDate(since.getDate() + i);
+      buckets.set(d.toISOString().slice(0, 10), { shown: 0, opened: 0, leads: 0 });
+    }
+    for (const dialog of dialogs) {
+      const key = dialog.createdAt.toISOString().slice(0, 10);
+      const bucket = buckets.get(key);
+      if (!bucket) continue; // outside the requested window after rounding — ignore
+      bucket.shown += 1;
+      if (dialog.messages.length > 0) bucket.opened += 1;
+      if (dialog.lead) bucket.leads += 1;
+    }
+
+    return {
+      days: [...buckets.entries()].map(([date, b]) => ({
+        date,
+        shown: b.shown,
+        openRate: b.shown > 0 ? Math.round((b.opened / b.shown) * 1000) / 10 : 0,
+        leadRate: b.opened > 0 ? Math.round((b.leads / b.opened) * 1000) / 10 : 0,
+      })),
     };
   }
 
