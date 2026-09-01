@@ -2,6 +2,16 @@
   box-sizing: border-box;
 }
 
+/* Form controls don't inherit font-family from the page by default (the UA
+   stylesheet gives them their own — resolves to Arial on Windows Chromium/
+   Edge instead of the Inter/Manrope stack below). Found live: .nav-item's
+   computed font-family was literally "Arial" while a plain span right next
+   to it correctly inherited the real stack — this is what read as
+   "brighter/bolder" than the reference design. Standard reset. */
+button, input, select, textarea {
+  font-family: inherit;
+}
+
 /* Design tokens — lifted from the new cabinet reference design (colors read
    straight out of its compiled CSS, not eyeballed from screenshots) so the
    whole app shares one palette instead of each component hardcoding its own
@@ -15,6 +25,9 @@
   --blue: #8298ff;
   --lime: #c8ff4d;
   --navy: #0d1e30;
+  /* Avatar circle background (company/account initials) — checked live on
+     the reference: NOT lime, a muted navy-blue distinct from --navy. */
+  --avatar-bg: #253c52;
   --muted: #687783;
   --secondary: #edf0f1;
   --accent: #eef1ff;
@@ -28,7 +41,11 @@
 html, body {
   margin: 0;
   min-height: 100%;
-  font-family: Inter, Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* "SF Pro Display" added to match the reference prototype's real font
+     stack exactly (its globals.css: Inter,Manrope,"SF Pro Display",
+     -apple-system,...) — a macOS-only fallback ahead of -apple-system, so
+     it's a no-op everywhere else. */
+  font-family: Inter, Manrope, "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   /* Cool enough that white panels/cards actually read as cards sitting on
      top of it, instead of blending into an almost-white canvas. */
   background: var(--canvas);
@@ -273,7 +290,18 @@ input:focus {
    definite height to size against, with no fixed-position/JS-padding
    handshake needed for the impersonation banner (see #impersonationBanner). */
 .cabinet-body {
+  /* 100vh is the LARGEST the viewport can ever be (address bar/toolbar
+     hidden) — on a phone/tablet browser whose toolbar dynamically shows and
+     hides (Chrome, Yandex Browser, most mobile browsers), the box this
+     computes is taller than what's actually on screen the moment that
+     toolbar IS visible. Combined with overflow:hidden here, whatever fell
+     in that gap was truly unreachable — not "below the fold, scroll for
+     it", genuinely clipped, since nothing outside .content is allowed to
+     scroll by design. 100dvh tracks the real, currently-visible viewport
+     instead; the 100vh line stays first as a fallback for browsers that
+     don't know `dvh` yet (they simply ignore the second declaration). */
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -300,7 +328,13 @@ input:focus {
   flex-direction: column;
   padding: 20px 16px;
   height: 100%;
-  overflow-y: auto;
+  /* .sidebar-nav (below) does its own scrolling now — see its own comment.
+     Found live: on a normal-height screen, the nav list (grown past 11 items
+     this session) pushed the account/logout row below the fold, and
+     scrolling the WHOLE sidebar to reach it meant the row — and the
+     dropdown it opens — was invisible until you knew to scroll down first.
+     Kept as a fallback only (nothing above should ever actually overflow). */
+  overflow-y: hidden;
 }
 
 .sidebar .logo {
@@ -322,18 +356,63 @@ input:focus {
 
 /* Always visible regardless of which view is open — the one place that
    answers "which of my companies' cabinets am I in right now?" no matter
-   where in the app you navigate. */
+   where in the app you navigate. Avatar + name + domain + chevron matches
+   the reference design's identity card; the chevron is decorative (see its
+   own comment in index.html) — actual bot/company switching lives in the
+   topbar widget, not here. */
 .sidebar-company {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 10px 8px;
-  padding: 6px 10px;
+  padding: 6px 8px;
   background: var(--sidebar-hover);
   border-radius: 8px;
+  color: var(--sidebar-fg);
+}
+
+.sidebar-company-avatar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  /* Checked live on the reference's own "БВ" avatar — navy, not lime. */
+  background: var(--avatar-bg);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-company-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.sidebar-company-name {
   font-size: 12px;
   font-weight: 600;
-  color: var(--sidebar-fg);
   white-space: normal;
   overflow-wrap: break-word;
-  line-height: 1.3;
+}
+
+.sidebar-company-domain {
+  font-size: 11px;
+  color: var(--sidebar-fg);
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-company-chevron {
+  flex-shrink: 0;
+  opacity: 0.5;
 }
 
 /* One company can run several bots with different contexts/skills (separate
@@ -475,6 +554,17 @@ input:focus {
   flex-direction: column;
   gap: 18px;
   flex: 1;
+  /* min-height:0 is the actual fix, not overflow-y alone — a flex child
+     defaults to min-height:auto (never shrinks below its own content), so
+     without this, overflow-y:auto here would never actually engage and the
+     overflow would just push everything below it (bot-status-card,
+     account-widget) off-screen instead — same underlying footgun as CSS
+     Grid's min-width:auto, just flexbox's version of it. */
+  min-height: 0;
+  overflow-y: auto;
+  /* Small breathing room so the last nav item isn't flush against the
+     scroll boundary/the panel below it. */
+  padding-bottom: 4px;
 }
 
 .sidebar-nav-group {
@@ -526,25 +616,29 @@ input:focus {
   background: var(--sidebar-hover);
 }
 
+/* Was a solid --lime fill with dark text — checked the reference site's own
+   live computed style directly (getComputedStyle on its active item): it's
+   actually background: rgba(200,255,77,0.1) [10% opacity], color: the lime
+   itself (not dark ink), font-weight normal (400, not 600), plus a 3px lime
+   left-edge stripe via inset box-shadow. Matched exactly below instead of
+   guessing at a "more neutral" tint. */
 .nav-item.active {
-  background: var(--lime);
-  color: var(--ink);
-  font-weight: 600;
+  background: rgba(200, 255, 77, 0.1);
+  color: var(--lime);
+  font-weight: 400;
+  box-shadow: inset 3px 0 0 0 var(--lime);
 }
 
+/* Reference design shows these as plain muted numbers ("0", "17", "90%"),
+   not colored pills — same flat styling regardless of the count, so
+   nav-badge-ok/nav-badge-readiness below no longer override color/background. */
 .nav-badge {
   display: inline-block;
-  background: var(--destructive);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: 999px;
-  padding: 1px 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
   margin-left: 4px;
-}
-
-.nav-badge.nav-badge-ok {
-  background: #22c55e;
 }
 
 .bot-status-card {
@@ -559,9 +653,15 @@ input:focus {
   color: var(--sidebar-fg);
 }
 
+/* Checked live on the reference: only the lightning icon turns lime here —
+   title stays white, subtitle stays the normal sidebar-fg. Background/border
+   are a faint lime tint (0.09/0.15 alpha), not the bolder 0.1/0.3 this had. */
 .bot-status-card-live {
-  background: rgba(200, 255, 77, 0.1);
-  border-color: rgba(200, 255, 77, 0.3);
+  background: rgba(200, 255, 77, 0.09);
+  border-color: rgba(200, 255, 77, 0.15);
+}
+
+.bot-status-card-live svg {
   color: var(--lime);
 }
 
@@ -574,6 +674,7 @@ input:focus {
 .bot-status-title {
   font-size: 13px;
   font-weight: 700;
+  color: #fff;
 }
 
 .bot-status-sub {
@@ -637,10 +738,12 @@ input:focus {
   height: 32px;
   min-width: 32px;
   border-radius: 50%;
-  background: var(--lime);
-  color: var(--ink);
+  /* Checked live on the reference's own account avatar ("О") — navy, not
+     lime; same token as .sidebar-company-avatar above. */
+  background: var(--avatar-bg);
+  color: #fff;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1192,6 +1295,7 @@ input:focus {
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
 }
 
 .crm-status {
@@ -1339,6 +1443,10 @@ input:focus {
 }
 
 .stat-card {
+  /* Preventive — same grid min-width:auto footgun as .readiness-card above
+     (see its comment); this card's content is normally short, but nothing
+     here stops a longer label/delta text from forcing the same overflow. */
+  min-width: 0;
   background: #fff;
   border: 1px solid var(--line);
   border-top: 3px solid var(--blue);
@@ -1361,6 +1469,71 @@ input:focus {
   text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 4px;
+}
+
+/* Conversion-by-day chart — colors match the reference design's own
+   globals.css (.line-main #6579e8, .line-open #9ec46b) exactly; real data
+   from getConversionChart, not the reference's fixed demo path. */
+.chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 14px 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chart-legend-dot {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+
+.chart-legend-lead { background: #6579e8; }
+.chart-legend-open { background: #9ec46b; }
+
+.chart-wrap {
+  position: relative;
+  margin-top: 6px;
+}
+
+#conversionChartSvg {
+  width: 100%;
+  height: 170px;
+  overflow: visible;
+}
+
+.chart-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: #98a2a9;
+  font-size: 10px;
+}
+
+.chart-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.chart-summary > div {
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--secondary);
+}
+
+.chart-summary small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.chart-summary b {
+  font-size: 17px;
 }
 
 .funnel-stages {
@@ -1398,12 +1571,14 @@ input:focus {
 .funnel-bar-fill {
   height: 100%;
   border-radius: 999px;
-  background: var(--blue);
+  /* Checked live on the reference: not a flat --blue, a two-tone gradient. */
+  background: linear-gradient(90deg, rgb(115, 137, 244), rgb(170, 183, 250));
   transition: width 0.5s ease;
 }
 
 .funnel-bar-final .funnel-bar-fill {
-  background: var(--lime);
+  /* Checked live on the reference: green-to-lime gradient, not flat --lime. */
+  background: linear-gradient(90deg, rgb(118, 184, 94), rgb(200, 255, 77));
 }
 
 .funnel-arrow {
@@ -1414,42 +1589,146 @@ input:focus {
   padding-bottom: 22px;
 }
 
-.tariff-grid {
+/* Billing page — colors/proportions matched from the reference design's own
+   globals.css (.pricing-grid/.price-card/.pack-selector block), renamed to
+   avoid clashing with our own existing class names (.price was already
+   generic enough to risk collision elsewhere). */
+.pricing-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
+  gap: 13px;
+  align-items: stretch;
 }
 
-.tariff-card {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 20px;
+.price-card {
+  position: relative;
   display: flex;
+  min-width: 0;
   flex-direction: column;
-  gap: 8px;
+  padding: 22px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  box-shadow: 0 5px 16px rgba(13, 30, 48, 0.035);
 }
 
-.tariff-card h3 {
-  margin: 0;
-  font-size: 16px;
+.price-card-recommended {
+  border-color: #9dacff;
+  box-shadow: 0 0 0 2px rgba(130, 152, 255, 0.16), 0 12px 28px rgba(39, 57, 117, 0.08);
 }
 
-.tariff-price {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
+.price-card-unlimited {
+  background: radial-gradient(circle at 90% 8%, rgba(200, 255, 77, 0.16), transparent 28%), linear-gradient(145deg, var(--navy), #132a40);
+  border-color: #1b344d;
+  color: #fff;
 }
 
-.tariff-desc {
-  font-size: 13px;
+.price-eyebrow {
+  color: #7b8892;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 800;
+}
+
+.price-card-unlimited .price-eyebrow { color: #8096a7; }
+
+.price-card h3 {
+  margin: 5px 0 0;
+  font-size: 20px;
+}
+
+.price-card-desc {
+  min-height: 48px;
+  margin: 7px 0 0;
   color: var(--muted);
-  margin: 0 0 8px;
-  flex: 1;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
-.tariff-buy-btn {
-  width: 100%;
+.price-card-unlimited .price-card-desc { color: #9fb0bc; }
+
+.price-card-price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 17px;
 }
+
+.price-card-price b { font-size: 25px; letter-spacing: -0.04em; }
+.price-card-price span { color: #7d8992; font-size: 11px; }
+.price-card-unlimited .price-card-price span { color: #8fa3b2; }
+
+.price-card-rate {
+  margin-top: 6px;
+  color: #8b969e;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.price-card-unlimited .price-card-rate { color: #b5c2cc; }
+
+.pack-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin: 12px 0;
+}
+
+.pack-btn {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #f8f9f8;
+  color: #586671;
+  font-size: 10px;
+}
+
+.pack-btn.active {
+  border-color: #8195f7;
+  background: var(--accent);
+  color: #3e53bd;
+}
+
+.pack-btn b { font-size: 11px; white-space: nowrap; }
+.pack-btn small { font-size: 9px; white-space: nowrap; }
+
+.switch-row-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+}
+
+.switch-row-label b { display: block; font-size: 13px; }
+.switch-row-label small { display: block; margin-top: 3px; color: var(--muted); font-size: 11.5px; }
+
+.billing-status-panel {
+  background: linear-gradient(135deg, var(--navy), #18314a);
+  color: #fff;
+}
+
+.billing-status-panel b { display: block; font-size: 14px; }
+.billing-status-panel p { margin: 6px 0 0; color: #aab9c5; font-size: 12px; }
+
+.payment-row-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+}
+
+.payment-row-item:first-child { border-top: none; }
+.payment-row-item span:nth-child(2) { color: var(--muted); font-size: 11px; }
 
 .dash-row {
   display: grid;
@@ -1558,6 +1837,428 @@ input:focus {
   background: #fef3c7;
   color: #92400e;
 }
+
+.status-pill-gray {
+  background: var(--secondary);
+  color: var(--muted);
+}
+
+/* Диалоги — двухпанельный инспектор (список слева, переписка справа) */
+.dialogs-shell {
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr);
+  min-height: 650px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  .dialogs-shell { grid-template-columns: 1fr; min-height: 0; }
+  .conversation { border-top: 1px solid var(--line); min-height: 520px; }
+}
+.dialog-list {
+  border-right: 1px solid var(--line);
+  padding: 14px;
+  overflow-y: auto;
+  max-height: 650px;
+}
+.dialog-tools { display: flex; gap: 7px; }
+.search-field {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.search-field svg { color: #84919a; flex-shrink: 0; }
+.search-field input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 12.5px; }
+.filter-chips { display: flex; align-items: center; gap: 6px; margin: 12px 0; flex-wrap: wrap; }
+.filter-chips button {
+  height: 29px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: #f0f2f2;
+  color: #6d7a83;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.filter-chips button.active { background: var(--ink); color: #fff; }
+
+.dialog-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: 9px;
+  align-items: center;
+  padding: 11px 9px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.dialog-row:hover { background: #f6f7f6; }
+.dialog-row.active { background: #edf0ff; }
+.dialog-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: #dde2ff;
+  color: #4359c7;
+  font-weight: 800;
+  font-size: 12px;
+}
+.dialog-row > span:nth-child(2) { display: flex; min-width: 0; flex-direction: column; }
+.dialog-row b { font-size: 12.5px; font-weight: 600; }
+.dialog-row small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dialog-row time { align-self: start; color: #98a3aa; font-size: 10px; flex-shrink: 0; }
+.dialog-row-escalation-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.conversation { display: grid; grid-template-rows: auto auto 1fr; min-width: 0; }
+.conversation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.conversation-head > div:first-child { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.conversation-head b { font-size: 13px; }
+.conversation-head span { color: var(--muted); font-size: 11px; }
+.conversation-context[hidden] { display: none; }
+.conversation-context {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+  background: #fafbfa;
+}
+.conversation-context > span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #5267c9;
+}
+.conversation-context p { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.conversation-context b { font-size: 11.5px; }
+.conversation-context small { margin-top: 2px; color: var(--muted); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conversation-context button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: #5367c7;
+  font-size: 11px;
+  cursor: pointer;
+}
+.messages { padding: 24px clamp(16px, 4vw, 50px); background: #f8f9f8; overflow-y: auto; }
+.message {
+  position: relative;
+  width: max-content;
+  max-width: min(520px, 80%);
+  padding: 12px 15px;
+  border-radius: 13px;
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.message small { display: block; margin-top: 5px; font-size: 10px; color: #84909a; }
+.bot-message { padding-left: 43px; background: #fff; border: 1px solid var(--line); }
+.client-message { margin-left: auto; background: var(--ink); color: #fff; }
+.mini-bot {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #4f64cd;
+}
+.dialogs-empty-conv {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Требует внимания — пустое состояние (когда нечего проверять) */
+.attention-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.75fr);
+  gap: 16px;
+  align-items: start;
+}
+.attention-layout[hidden] { display: none; }
+.attention-layout > * { min-width: 0; }
+@media (max-width: 900px) {
+  .attention-layout { grid-template-columns: 1fr; }
+}
+.empty-quality { text-align: center; padding: 50px 8%; }
+.empty-orbit {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  background: #e7f6ec;
+  color: #24764e;
+  box-shadow: 0 0 0 10px #f4f9f5;
+}
+.empty-quality p { max-width: 550px; margin: 12px auto 20px; color: var(--muted); line-height: 1.6; }
+.empty-actions { display: flex; justify-content: center; gap: 9px; flex-wrap: wrap; }
+.how-panel h3 { margin: 0 0 20px; font-size: 16px; }
+.how-panel ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 18px; }
+.how-panel li { display: flex; align-items: center; gap: 10px; color: #50606d; font-size: 12.5px; }
+.how-panel li span {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #5267ca;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* Интеграции — сводная строка статусов вверху страницы (клик скроллит к панели ниже) */
+.integration-status-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.integration-status-row > * { min-width: 0; }
+@media (max-width: 720px) {
+  .integration-status-row { grid-template-columns: 1fr; }
+}
+.integration-status-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+.integration-status-card:hover { border-color: var(--blue); }
+.integration-status-card-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #5065c7;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.integration-status-card-body { min-width: 0; }
+.integration-status-card-body b { display: block; font-size: 13px; }
+.integration-status-card-body .status-pill { display: inline-block; margin-top: 4px; }
+
+/* Автотесты (demo page — see its own comment in index.html) */
+.tests-overview-panel {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  align-items: center;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .tests-overview-panel {
+    grid-template-columns: 90px 1fr;
+  }
+  .tests-overview-panel .btn-primary {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+.tests-gauge {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.tests-gauge svg {
+  position: absolute;
+  inset: 0;
+  width: 108px;
+  height: 108px;
+  transform: rotate(-90deg);
+}
+
+.tests-gauge-track {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 8;
+}
+
+.tests-gauge-score {
+  fill: none;
+  stroke: #7bbd54;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 283;
+  stroke-dashoffset: 23;
+}
+
+.tests-gauge strong {
+  font-size: 23px;
+  letter-spacing: -0.04em;
+}
+
+.tests-gauge small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.tests-overview-body { min-width: 0; }
+.tests-overview-body h2 { margin: 4px 0 6px; }
+.tests-overview-body p { margin: 0 0 10px; color: var(--muted); font-size: 12.5px; max-width: 640px; }
+
+.tests-summary-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tests-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.65fr);
+  gap: 15px;
+}
+
+.tests-group-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.tests-group-row:first-child { border-top: none; }
+
+.tests-group-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #5267c9;
+}
+
+.tests-group-body { flex: 1; min-width: 0; }
+.tests-group-body b { display: block; font-size: 12.5px; }
+.tests-group-body small { display: block; margin: 2px 0 6px; color: var(--muted); font-size: 11px; }
+
+.tests-group-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.tests-group-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #7bbd54;
+}
+
+.tests-group-score {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.tests-issue-row {
+  display: flex;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.tests-issue-row:first-child { border-top: none; }
+
+.tests-issue-index {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #5368ca;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tests-issue-index-critical {
+  background: #fff0df;
+  color: #a45513;
+}
+
+.tests-issue-row b { display: block; font-size: 11.5px; }
+.tests-issue-row small { display: block; margin-top: 3px; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
 
 .ready-mini-body {
   display: flex;
@@ -1824,6 +2525,14 @@ input:focus {
   .app-topbar { flex-wrap: wrap; }
   .app-topbar-search { order: 3; max-width: none; flex-basis: 100%; }
   .app-topbar-search-kbd { display: none; }
+  /* Found live testing on a real phone-width viewport (390px) — no mobile
+     override existed here at all, so the grid tried to fit BOTH
+     minmax(0,1.45fr) AND the issues column's hard 280px minimum side by
+     side; the first column lost that fight and rendered as a near-0-width
+     sliver (test-group icons floating with no visible text/bars next to
+     them). .tests-overview-panel already has its own override at 900px,
+     which also covers this narrower width. */
+  .tests-layout { grid-template-columns: 1fr; }
 }
 
 .panel {
@@ -2041,6 +2750,91 @@ input:focus {
   gap: 12px;
 }
 
+/* Виджет и приветствие — двухколоночный лейаут формы + живой предпросмотр справа */
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.8fr) minmax(360px, 1.2fr);
+  gap: 18px;
+  align-items: start;
+}
+.settings-layout > * { min-width: 0; }
+@media (max-width: 900px) {
+  .settings-layout { grid-template-columns: 1fr; }
+}
+.settings-section .section-title {
+  display: flex;
+  gap: 11px;
+  margin-bottom: 18px;
+}
+.settings-section .section-title > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #5065c7;
+}
+.settings-section .section-title h2 { font-size: 15px; margin: 0; }
+.settings-section .section-title p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+
+.live-preview {
+  position: sticky;
+  top: 20px;
+  height: max-content;
+  padding: 14px;
+  background: #e4e8e6;
+  border-radius: 18px;
+}
+.preview-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 3px 11px;
+  color: #5f6c76;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.preview-label span { display: flex; align-items: center; gap: 6px; }
+.preview-label i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2ca566;
+}
+.preview-label a {
+  display: grid;
+  place-items: center;
+  color: #5f6c76;
+  text-decoration: none;
+}
+.preview-label a:hover { color: var(--blue); }
+.preview-site {
+  position: relative;
+  min-height: 480px;
+  height: calc(100vh - 340px);
+  height: calc(100dvh - 340px);
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+.preview-site iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.preview-site-caption {
+  margin: 8px 3px 0;
+  color: #5f6c76;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .appearance-status {
   margin: 0;
 }
@@ -2082,23 +2876,70 @@ input:focus {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
+  /* See .cabinet-body's own comment on 100vh vs 100dvh — same fix here. */
   height: calc(100vh - 150px);
+  height: calc(100dvh - 150px);
 }
+
+/* Обучение бота — гайд слева (советы + «поделиться»), реальный виджет справа */
+.training-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(400px, 1.2fr);
+  gap: 18px;
+  height: calc(100vh - 230px);
+  height: calc(100dvh - 230px);
+  min-height: 480px;
+}
+.training-layout > * { min-width: 0; }
+@media (max-width: 900px) {
+  .training-layout { grid-template-columns: 1fr; height: auto; }
+  .training-layout .training-iframe { height: 520px; }
+}
+.training-guide { padding: 25px; overflow-y: auto; }
+.training-guide > p { margin: 12px 0 20px; color: var(--muted); line-height: 1.6; font-size: 13px; }
+.tip-card,
+.share-test {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px;
+  border-radius: 13px;
+}
+.tip-card { background: var(--accent); color: #4054b7; }
+.tip-card svg,
+.share-test > svg { flex-shrink: 0; }
+.tip-card div,
+.share-test div { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.tip-card b,
+.share-test b { font-size: 12.5px; }
+.tip-card span,
+.share-test span { margin-top: 4px; color: #6e7da8; font-size: 12px; line-height: 1.5; }
+.share-test {
+  align-items: center;
+  margin-top: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.share-test span { color: var(--muted); }
+.share-test .install-testlink-actions { flex-shrink: 0; }
 
 .training-grid-solo {
   grid-template-columns: 1fr;
-  /* This used to be the entire view (calc(100vh - 210px), same as the
-     two-pane .training-grid above) — fine when nothing else lived below it.
-     Once the "поделиться ссылкой для тестирования" panel moved in right
-     below it, that height pushed the panel almost entirely off-screen — but
-     480px overcorrected: the real widget.js chat window is 560px tall,
-     anchored 90px from the bottom of whatever it's confined to (see
-     widget/loader/widget.js's desktopStyle) — needs ~650px just to render
-     without being clipped at the bottom, so 480px was cropping the actual
-     preview, not just the link panel below it. 680px fits the real window
-     with a little headroom; the link panel below may need a short scroll on
-     smaller screens, which is a fair trade for not clipping the widget itself. */
-  height: 680px;
+  /* Was a flat 680px regardless of actual screen height — found live: on a
+     shorter/tablet viewport this pushed the iframe (and the real widget's
+     own greeting bubble inside it, anchored near the BOTTOM of whatever
+     height the iframe actually renders at) well past the visible fold, with
+     nothing here adapting to the real available space. Back to a
+     viewport-driven height like the two-pane .training-grid above, just
+     with a bigger subtraction (the solo layout also carries the toolbar
+     above and the "поделиться ссылкой" panel below it). min-height is a
+     floor, not the old ceiling — the real widget.js already has to cope
+     with far less than this on an actual visitor's phone, so a shorter
+     container here is normal for it, not a special case. */
+  height: calc(100vh - 260px);
+  height: calc(100dvh - 260px);
+  min-height: 420px;
 }
 
 .training-pane {
@@ -2121,12 +2962,6 @@ input:focus {
 .training-pane-header h2 {
   font-size: 15px;
   margin: 0;
-  padding-left: 10px;
-  border-left: 3px solid var(--blue);
-}
-
-.training-pane:nth-child(2) .training-pane-header h2 {
-  border-left-color: #22c55e;
 }
 
 .training-reset-btn {
@@ -2177,6 +3012,10 @@ input:focus {
 .training-help-btn:hover {
   border-color: var(--blue);
   color: var(--blue);
+}
+
+.dislike-queue-toggle[hidden] {
+  display: none;
 }
 
 .dislike-queue-toggle {
@@ -2349,6 +3188,7 @@ input:focus {
   max-width: 460px;
   width: calc(100% - 40px);
   max-height: calc(100vh - 80px);
+  max-height: calc(100dvh - 80px);
   overflow-y: auto;
 }
 
@@ -2493,6 +3333,305 @@ input:focus {
   padding-top: 10px;
 }
 
+/* Shared by Установка/Команда/Поддержка (and reused for Attention later in
+   this pass) — same ratio as the reference design's own
+   .readiness-layout/.attention-layout/.install-layout/.support-layout,
+   which are all literally the same rule there too. min-width:0 on the
+   direct children is the by-now-standard fix for this session's recurring
+   grid overflow footgun (see .dash-row .panel's own comment). */
+.two-col-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.75fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.two-col-layout > * {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .two-col-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.icon-circle-lime {
+  display: grid;
+  place-items: center;
+  width: 55px;
+  height: 55px;
+  margin: 0 auto 18px;
+  border-radius: 15px;
+  background: var(--lime);
+  color: var(--ink);
+}
+
+.centered-hero-panel {
+  text-align: center;
+  padding: 50px 7%;
+}
+
+.centered-hero-panel > p {
+  max-width: 620px;
+  margin: 12px auto 22px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.chip-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+.chip-row button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 7px 9px;
+  color: #46545f;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip-row button:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+/* Aside cards used by both Установка and Поддержка — same visual role as
+   the reference's own .launch-help / .support-side aside panels. */
+.aside-help-panel {
+  height: max-content;
+}
+
+.aside-help-panel .icon-circle-lime {
+  margin: 0 0 14px;
+}
+
+.aside-help-panel h3 {
+  margin: 0 0 9px;
+  font-size: 16px;
+}
+
+.aside-help-panel p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.aside-link-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.aside-link-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: #475762;
+  text-align: left;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.aside-link-list button:first-child {
+  border-top: none;
+}
+
+.aside-link-list button:hover {
+  color: var(--blue);
+}
+
+/* Shared dark summary bar — reference's .knowledge-summary/.team-summary
+   are literally the same rule there too (icon + count + subtitle). */
+.knowledge-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 15px;
+  margin-bottom: 14px;
+}
+
+.knowledge-summary-bar svg {
+  color: var(--lime);
+  flex-shrink: 0;
+}
+
+.knowledge-summary-bar b {
+  display: block;
+  font-size: 13px;
+}
+
+.knowledge-summary-bar small {
+  display: block;
+  margin-top: 2px;
+  color: #8ea0ae;
+  font-size: 11px;
+}
+
+/* Команда — matches the reference's .team-summary/.team-table/.roles-panel */
+.team-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 15px;
+  margin-bottom: 14px;
+}
+
+.team-summary-bar > svg {
+  color: var(--lime);
+  flex-shrink: 0;
+}
+
+.team-summary-bar b {
+  display: block;
+  font-size: 13px;
+}
+
+.team-summary-bar small {
+  display: block;
+  margin-top: 2px;
+  color: #8ea0ae;
+  font-size: 11px;
+}
+
+.team-summary-bar .btn-primary {
+  margin-left: auto;
+  background: var(--lime) !important;
+  color: var(--ink) !important;
+  box-shadow: none !important;
+}
+
+.team-table-grid {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+.team-row-grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.5fr) 140px minmax(160px, 1fr) 110px 36px;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 17px;
+  border-top: 1px solid #edf0ef;
+  min-width: 0;
+}
+
+.team-row-grid:first-child {
+  border-top: none;
+}
+
+.team-row-grid .user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--avatar-bg);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  flex-shrink: 0;
+  margin-right: 9px;
+}
+
+.team-row-grid .team-person {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.team-row-grid .team-person > span {
+  min-width: 0;
+}
+
+.team-row-grid .team-person b {
+  display: block;
+  font-size: 12.5px;
+}
+
+.team-row-grid .team-person small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-row-grid select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  background: var(--accent);
+  color: #5064ca;
+}
+
+.roles-panel {
+  max-width: 700px;
+  margin-top: 16px;
+}
+
+.roles-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.roles-panel-row > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #5065c7;
+}
+
+.roles-panel-row b {
+  display: block;
+  font-size: 12.5px;
+}
+
+.roles-panel-row small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .team-row-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
 .snippet-box {
   background: #0f172a;
   color: #e2e8f0;
@@ -2561,6 +3700,7 @@ input:focus {
 }
 
 .stat {
+  min-width: 0;
   background: var(--secondary);
   border-radius: 10px;
   padding: 14px;
@@ -2645,14 +3785,19 @@ th {
 }
 
 .variant-col-metric {
-  width: 64px;
+  width: 92px;
   text-align: center;
 }
 
+/* Was rotate(-25deg) — a CSS transform doesn't change the element's layout
+   box, only its painted appearance, so the rotated text visually extended
+   well past the 64px column it was still laid out at, and .table-scroll's
+   overflow-x:auto (which does clip anything beyond ITS box) cut the tail off
+   — seen live as "Показ…", "Диало…", "Конве…". Plain upright text in a
+   wider column (above) instead, so nothing relies on a transform not
+   overflowing its own box. */
 .th-slanted {
   display: inline-block;
-  transform: rotate(-25deg);
-  transform-origin: left bottom;
   white-space: nowrap;
   font-size: 11px;
 }
@@ -2712,11 +3857,9 @@ th {
   background: var(--secondary);
 }
 
-/* --- Готовность бота --- */
-.nav-badge-readiness {
-  background: var(--accent);
-  color: var(--ink);
-}
+/* --- Готовность бота ---
+   Was its own colored pill; now shares .nav-badge's plain muted-number
+   style (see that rule's comment) — no override needed here. */
 
 .readiness-header-panel h2 {
   margin: 0 0 4px;
@@ -2734,18 +3877,67 @@ th {
   margin: 0 0 14px;
 }
 
+/* Checked live on the reference's own readiness page: this bar is
+   ink/primary-colored (dark), NOT lime — lime is reserved for the sidebar
+   active-state accent and a couple of specific icons, not this bar. */
 .readiness-progress-track {
   height: 10px;
   border-radius: 999px;
-  background: var(--line);
+  background: rgba(8, 21, 34, 0.2);
   overflow: hidden;
 }
 
 .readiness-progress-fill {
   height: 100%;
   border-radius: 999px;
-  background: var(--lime);
+  background: var(--ink);
   transition: width 0.6s ease;
+}
+
+/* Matches the reference design's own .manager-card treatment (dark gradient,
+   lime avatar) — same idea, real support-ticket callback instead of a
+   fabricated named contact (see requestCallbackBtn's own comment). */
+.readiness-manager-panel {
+  background: linear-gradient(145deg, var(--navy), #17324a);
+  color: #fff;
+}
+
+.readiness-manager-panel h2 {
+  font-size: 18px;
+  margin: 8px 0 6px;
+  color: #fff;
+}
+
+/* .funnel-eyebrow's default color (var(--muted), dark grey) is invisible on
+   this panel's dark background. */
+.readiness-manager-panel .funnel-eyebrow {
+  color: #8fa1af;
+}
+
+.readiness-manager-panel p {
+  margin: 0 0 14px;
+  color: #aab9c5;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.readiness-manager-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: var(--lime);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.readiness-manager-status {
+  margin: 10px 0 0 !important;
+  color: #cfe8d8 !important;
+  font-size: 12px !important;
 }
 
 .readiness-next-panel {
@@ -2793,6 +3985,15 @@ th {
 }
 
 .readiness-card {
+  /* Found live: a grid item's default min-width:auto sizes its track by the
+     card's own content (the long button label "Добавить информацию
+     вручную →" plus the description paragraph can't shrink below their
+     min-content width), not the declared minmax(260px,1fr) — with several
+     cards in the row, that pushed later ones past the visible container
+     width entirely, with no amount of scrolling bringing them back (nothing
+     was actually below the fold — they were beside it). Same root cause
+     already hit .dash-row three times earlier this session. */
+  min-width: 0;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -2803,6 +4004,15 @@ th {
 .readiness-card-done {
   border-color: #bbf7d0;
   background: #f8fefb;
+}
+
+/* The one card matching data.nextStep — checked live on the reference's own
+   readiness page: this exact border + glow (a desaturated lime border plus
+   a 25%-opacity lime ring), the only lime usage on this whole page. We had
+   no equivalent highlight for "which card is the next thing to do" before. */
+.readiness-card-next {
+  border-color: rgb(184, 198, 112);
+  box-shadow: 0 0 0 2px rgba(200, 255, 77, 0.25);
 }
 
 .readiness-card-top {
@@ -3099,6 +4309,7 @@ th {
   display: flex;
   gap: 6px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .kb-add-tab {
@@ -3235,6 +4446,7 @@ th {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .kb-article-title {

@@ -8,7 +8,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css" />
+<!-- ?v= bumped on every deploy that touches style.css — without it, some
+     browsers/data-saving proxies (Yandex Browser's Турбо, Chrome's Lite
+     mode, some mobile carriers) will keep serving an old compressed copy of
+     this file indefinitely regardless of the server's own Cache-Control
+     headers, since those work by re-serving whatever they already fetched
+     for this exact URL. A new query string is a new URL to them. -->
+<link rel="stylesheet" href="style.css?v=20260831b" />
 </head>
 <body class="cabinet-body">
   <div id="impersonationBanner" hidden>
@@ -25,7 +31,18 @@
         </svg>
         Умный<em>Чат</em>
       </a>
-      <div class="sidebar-company" id="sidebarCompany" title="Вы сейчас в кабинете этой компании"></div>
+      <div class="sidebar-company" title="Вы сейчас в кабинете этой компании">
+        <span class="sidebar-company-avatar" id="sidebarCompanyAvatar"></span>
+        <span class="sidebar-company-text">
+          <span class="sidebar-company-name" id="sidebarCompanyName"></span>
+          <span class="sidebar-company-domain" id="sidebarCompanyDomain"></span>
+        </span>
+        <!-- Same down-chevron glyph as .bot-switcher-current-arrow above —
+             purely visual here (this card isn't itself a control; bot/company
+             switching already lives in the topbar widget), matches the
+             reference design's identity-card look. -->
+        <svg class="sidebar-company-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
       <nav class="sidebar-nav">
         <div class="sidebar-nav-group">
           <div class="sidebar-nav-group-label">Работа</div>
@@ -46,6 +63,15 @@
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
             <span>Обучение бота</span>
           </button>
+          <!-- Demo only — no real automated test-run engine behind this yet
+               (see loadAutoTestsDemo's own comment). Badge says "ДЕМО", not a
+               fabricated score, so this reads honestly next to real badges
+               like "Требует внимания"/"Готовность бота" above. -->
+          <button class="nav-item" data-view="tests" type="button">
+            <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2v6.5l5 8.5a3 3 0 0 1-2.6 4.5H7.1A3 3 0 0 1 4.5 17l5-8.5V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>
+            <span>Автотесты</span>
+            <span class="nav-badge">демо</span>
+          </button>
           <button class="nav-item" data-view="knowledge" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
             <span>База знаний</span>
@@ -55,7 +81,7 @@
           <div class="sidebar-nav-group-label">Настройка</div>
           <button class="nav-item" data-view="readiness" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
-            <span>Готовность бота</span>
+            <span>Статус внедрения</span>
             <span class="nav-badge nav-badge-readiness" id="readinessNavBadge">…</span>
           </button>
           <!-- Same view-settings the gear icon by the account row already
@@ -81,11 +107,25 @@
           <!-- Not a view switch like the rest of this list — the mini-CRM is a
                separate standalone page (crm.html) so a teammate with no other
                cabinet access can be sent straight there (see cabinet.service.ts's
-               inviteTeammate) without ever touching bot/billing views. -->
+               inviteTeammate) without ever touching bot/billing views. Also
+               covers what the reference design calls a separate "Лиды" list —
+               the kanban already shows every lead, stage included, so a second
+               flat list would just be the same data twice. -->
           <a class="nav-item" href="crm.html">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
             <span>CRM</span>
           </a>
+        </div>
+        <div class="sidebar-nav-group">
+          <div class="sidebar-nav-group-label">Аккаунт</div>
+          <!-- Promoted from "reachable only via the trial banner" to a real
+               nav entry, matching the reference design's IA — see
+               goToTariffs/loadTariffs below (unchanged data flow, just a
+               second way in). -->
+          <button class="nav-item" data-view="tariffs" type="button" id="tariffsNavItem">
+            <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            <span>Тариф и оплата</span>
+          </button>
           <button class="nav-item" data-view="team" type="button" id="teamNavItem" hidden>
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <span>Команда</span>
@@ -324,6 +364,30 @@
           </div>
         </div>
 
+        <!-- Real per-day rates (see cabinet.service.ts's getConversionChart) —
+             same two ratios as the funnel above (открытие/заявка), split by
+             calendar day over the selected window instead of summed. -->
+        <div class="panel" id="conversionChartPanel">
+          <div class="panel-head-row">
+            <div>
+              <div class="funnel-eyebrow">ДИНАМИКА</div>
+              <h2 style="margin:0;">Конверсия по дням</h2>
+            </div>
+          </div>
+          <div class="chart-legend">
+            <span><i class="chart-legend-dot chart-legend-lead"></i>В заявку</span>
+            <span><i class="chart-legend-dot chart-legend-open"></i>В открытие чата</span>
+          </div>
+          <div class="chart-wrap">
+            <svg id="conversionChartSvg" viewBox="0 0 620 220" preserveAspectRatio="none"></svg>
+            <div class="chart-axis" id="conversionChartAxis"></div>
+          </div>
+          <div class="chart-summary">
+            <div><small>В заявку, среднее</small><b id="chartAvgLead">–</b></div>
+            <div><small>В открытие, среднее</small><b id="chartAvgOpen">–</b></div>
+          </div>
+        </div>
+
         <div class="dash-row">
           <div class="panel dash-row-main">
             <div class="info-widget">
@@ -414,17 +478,35 @@
         </div>
       </section>
 
+      <!-- Restructured to match the reference design's own install-layout
+           (two columns: hero card + "поможем с установкой" aside) — the
+           platform chips there are decorative in the reference (Tilda/
+           WordPress/Wix/"другой сайт" aren't wired to distinct per-platform
+           copy of their own); rather than invent per-platform instructions
+           I can't verify, each chip scrolls to the SAME real numbered steps
+           below, which already covers "constructor / CMS / custom site"
+           generically — see scrollToInstallSteps. -->
       <section class="view" id="view-install" hidden>
-        <div class="panel">
+      <div class="two-col-layout">
+        <div class="panel centered-hero-panel">
+          <span class="icon-circle-lime">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </span>
+          <div class="funnel-eyebrow">Одна строка кода</div>
           <h2>Установите бота на свой сайт</h2>
-          <p class="sub" style="margin-bottom:14px;">
-            Одна строка кода — и бот появится у вас на сайте ровно в таком же виде, в каком вы
-            только что его тестировали справа.
-          </p>
+          <p>Скопируйте код и добавьте его перед закрывающим тегом <code>&lt;/body&gt;</code>. Бот появится на
+            сайте ровно в таком же виде, в каком вы только что его тестировали в «Обучение бота».</p>
           <div class="snippet-box" id="snippet">…</div>
           <button class="copy-btn" id="copySnippet" type="button">Скопировать</button>
+          <div class="chip-row">
+            <span style="color:var(--muted);font-size:12px;">Инструкции для:</span>
+            <button type="button" class="install-platform-chip">Tilda</button>
+            <button type="button" class="install-platform-chip">WordPress</button>
+            <button type="button" class="install-platform-chip">Wix</button>
+            <button type="button" class="install-platform-chip">Другой сайт</button>
+          </div>
 
-          <div class="install-steps">
+          <div class="install-steps" id="installSteps" style="text-align:left;margin-top:24px;">
             <h3>Как установить — коротко</h3>
             <ol>
               <li>Скопируйте код кнопкой выше.</li>
@@ -436,23 +518,46 @@
               <li>Опубликуйте изменения — бот появится на сайте сразу.</li>
             </ol>
           </div>
-
-          <div class="install-help-note">
-            <span>🙋 Не получается установить самостоятельно? Наш менеджер может помочь — напишите в
-              поддержку, и мы поможем с установкой.</span>
-            <button type="button" class="copy-btn" id="installHelpBtn">Написать в поддержку →</button>
-          </div>
         </div>
+
+        <aside class="panel aside-help-panel">
+          <span class="icon-circle-lime">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+          </span>
+          <h3>Поможем с установкой</h3>
+          <p>Если не хотите разбираться с кодом, отправьте нам доступ или контакт разработчика — поможем
+            установить.</p>
+          <button type="button" class="btn-primary" style="width:100%;" id="installHelpBtn">Написать в поддержку</button>
+        </aside>
+      </div>
       </section>
 
       <section class="view" id="view-readiness" hidden>
         <div class="panel readiness-header-panel">
-          <h2>Готовность бота</h2>
-          <p class="readiness-headline" id="readinessHeadline">Ваш бот готов к работе на …%</p>
+          <h2>Статус внедрения</h2>
+          <p class="readiness-headline" id="readinessHeadline">Готовность к запуску — …%</p>
           <p class="readiness-substeps" id="readinessStepsLine">Выполнено … из … шагов</p>
           <div class="readiness-progress-track">
             <div class="readiness-progress-fill" id="readinessProgressFill" style="width:0%"></div>
           </div>
+        </div>
+
+        <!-- Real menedzher по внедрению — не выдуманное имя (заглушка ниже
+             специально нейтральная, пока клиент не пришлёт реальные
+             имя/контакт). Кнопка — не форма: один клик = заявка на обратный
+             звонок через уже существующий support-tickets эндпоинт (см.
+             requestOnboardingCallback), так же, как это делает форма
+             поддержки, просто без полей на заполнение. Все шаги ниже
+             по-прежнему можно выполнить самому — это не замена self-service,
+             а дополнительный канал получить помощь. -->
+        <div class="panel readiness-manager-panel">
+          <span class="readiness-manager-avatar" id="readinessManagerAvatar">М</span>
+          <div class="funnel-eyebrow">Ваш менеджер по внедрению</div>
+          <h2 id="readinessManagerName">Свяжется с вами в рабочее время</h2>
+          <p>Вопросы по настройке, базе знаний, тестам и установке можно передать менеджеру — не обязательно
+            разбираться самостоятельно. Шаги ниже остаются доступны и вам, если хотите сделать что-то сами.</p>
+          <button type="button" class="btn-primary btn-inline" id="requestCallbackBtn">Запросить обратный звонок</button>
+          <p class="readiness-manager-status" id="requestCallbackStatus" hidden></p>
         </div>
 
         <div class="panel readiness-next-panel" id="readinessNextPanel" hidden>
@@ -505,6 +610,29 @@
             </table>
           </div>
           <p class="empty" id="recurringEmpty" hidden>Повторяющихся вопросов не нашлось.</p>
+        </div>
+
+        <div class="attention-layout" id="attentionEmptyState" hidden>
+          <article class="panel empty-quality">
+            <div class="empty-orbit">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
+            </div>
+            <h2>Сейчас всё под контролем</h2>
+            <p>Нет ответов, которые требуют проверки. Когда бот столкнётся со сложным вопросом или получит негативную оценку, он появится здесь.</p>
+            <div class="empty-actions">
+              <button type="button" class="btn-secondary" id="emptyStateFindRecurringBtn">Найти повторяющиеся вопросы</button>
+              <button type="button" class="btn-primary" id="emptyStateCheckTrainingBtn">Проверить тестовый диалог</button>
+            </div>
+          </article>
+          <aside class="panel how-panel">
+            <span class="funnel-eyebrow">Как это работает</span>
+            <h3>Единый центр качества</h3>
+            <ul>
+              <li><span>1</span>Бот отмечает слабый ответ</li>
+              <li><span>2</span>Вы добавляете правильную информацию</li>
+              <li><span>3</span>Ответ сразу попадает в базу знаний</li>
+            </ul>
+          </aside>
         </div>
 
         <button type="button" class="dislike-queue-toggle" id="processedToggle" hidden>
@@ -561,21 +689,46 @@
       </section>
 
       <section class="view" id="view-dialogs" hidden>
-        <div class="panel">
-          <h2>Диалоги</h2>
-          <p class="sub" style="margin-bottom:14px;">Все переписки посетителей с ботом — для разбора ситуаций и проверки поведения, не только те, что попали в «Требует внимания».</p>
-          <div class="table-scroll">
-            <table id="dialogsTable" style="display:none">
-              <thead><tr><th>Бот</th><th>Последнее сообщение</th><th>Сообщений</th><th>Клиент</th><th>Сделка</th><th>Когда</th><th></th></tr></thead>
-              <tbody id="dialogsRows"></tbody>
-            </table>
-          </div>
-          <p class="empty" id="dialogsEmpty" hidden>Диалогов пока нет.</p>
-          <div class="dialogs-pagination" id="dialogsPagination" hidden>
-            <button type="button" class="training-reset-btn" id="dialogsPrevBtn" style="width:auto;padding:0 14px;">← Назад</button>
-            <span class="sub" id="dialogsPageInfo"></span>
-            <button type="button" class="training-reset-btn" id="dialogsNextBtn" style="width:auto;padding:0 14px;">Вперёд →</button>
-          </div>
+        <div class="dialogs-shell">
+          <aside class="dialog-list">
+            <div class="dialog-tools">
+              <div class="search-field">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="dialogsSearchInput" placeholder="Поиск по диалогам" />
+              </div>
+            </div>
+            <div class="filter-chips" id="dialogsFilterChips">
+              <button type="button" class="active" data-filter="all">Все</button>
+              <button type="button" data-filter="lead">С заявкой</button>
+              <button type="button" data-filter="escalation">Нужен человек</button>
+            </div>
+            <div id="dialogsRowsList"></div>
+            <p class="empty" id="dialogsEmpty" hidden style="padding:14px;">Диалогов пока нет.</p>
+            <div class="dialogs-pagination" id="dialogsPagination" hidden style="padding:10px 4px 4px;">
+              <button type="button" class="training-reset-btn" id="dialogsPrevBtn" style="width:auto;padding:0 14px;">← Назад</button>
+              <span class="sub" id="dialogsPageInfo"></span>
+              <button type="button" class="training-reset-btn" id="dialogsNextBtn" style="width:auto;padding:0 14px;">Вперёд →</button>
+            </div>
+          </aside>
+          <section class="conversation" id="dialogsConversationPanel">
+            <div class="conversation-head">
+              <div>
+                <b id="dialogsConvTitle">Выберите диалог слева</b>
+                <span id="dialogsConvSubtitle"></span>
+              </div>
+              <div>
+                <span class="status-pill status-pill-gray" id="dialogsConvStatusPill" hidden></span>
+              </div>
+            </div>
+            <div class="conversation-context" id="dialogsConvContext" hidden>
+              <span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/></svg>
+              </span>
+              <p><b id="dialogsConvContextTitle"></b><small id="dialogsConvContextSub"></small></p>
+              <button type="button" id="dialogsConvContextBtn">Открыть сделку<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg></button>
+            </div>
+            <div class="messages" id="dialogsConvMessages"></div>
+          </section>
         </div>
       </section>
 
@@ -587,33 +740,42 @@
           <button type="button" class="training-toolbar-link" data-goto-view="telegram">Интеграции</button>
           <button type="button" class="training-help-btn" id="trainingHelpBtn" title="Как это работает">?</button>
         </div>
-        <div class="training-grid training-grid-solo">
-          <div class="training-pane">
+        <div class="training-layout">
+          <section class="training-guide panel">
+            <span class="funnel-eyebrow">Тестовая среда</span>
+            <h2>Поговорите с ботом как клиент</h2>
+            <p>Точная копия того, что видит посетитель вашего сайта, включая всплывающее сообщение перед
+              открытием — тестовые сообщения не влияют на аналитику.</p>
+            <div class="tip-card">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 4.1L6 9l4.1 1.9L12 15l1.9-4.1L18 9l-4.1-1.9L12 3Z"/><path d="M5 21v-3M19 21v-3M3 19h3M18 19h3"/></svg>
+              <div>
+                <b>Как обучать быстрее</b>
+                <span>Под каждым ответом бота есть «👎 Плохой ответ?» — отметьте его и добавьте правильную информацию, бот запомнит её сразу.</span>
+              </div>
+            </div>
+            <!-- Just a data holder for the two buttons below (url text) — the
+                 owner acts through them, not by reading/copying this text, so
+                 it isn't shown. -->
+            <div class="snippet-box" id="testChatLink" hidden>…</div>
+            <div class="share-test">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div>
+                <b>Дать доступ коллеге</b>
+                <span>Без входа в личный кабинет</span>
+              </div>
+              <div class="install-testlink-actions">
+                <button class="btn-secondary btn-inline" id="openTestChatBtn" type="button">Открыть →</button>
+                <button class="btn-secondary btn-inline" id="shareTestChatBtn" type="button">Скопировать ссылку</button>
+              </div>
+            </div>
+          </section>
+          <section class="training-pane">
             <div class="training-pane-header">
               <h2>Чат с ботом</h2>
               <button type="button" class="training-reset-btn" id="resetTestingBtn" title="Сбросить и показать всплывающее сообщение заново">↺</button>
             </div>
-            <p class="training-pane-sub">
-              Точная копия того, что видит посетитель вашего сайта, включая всплывающее сообщение перед открытием —
-              не влияет на статистику. Под каждым ответом бота есть «👎 Плохой ответ?» — так можно поправить
-              конкретную реплику, и бот сразу это запомнит.
-            </p>
             <iframe id="testingFrame" class="training-iframe" title="Чат с ботом"></iframe>
-          </div>
-        </div>
-
-        <div class="panel" style="margin-top:16px;">
-          <p class="sub" style="margin-top:0;margin-bottom:10px;">
-            Хотите, чтобы кто-то ещё (партнёр, коллега) попробовал бота, но без доступа к кабинету?
-          </p>
-          <!-- Just a data holder for the two buttons below (url text) — the
-               owner acts through them, not by reading/copying this text, so
-               it isn't shown. -->
-          <div class="snippet-box" id="testChatLink" hidden>…</div>
-          <div class="install-testlink-actions">
-            <button class="copy-btn" id="openTestChatBtn" type="button">Открыть для тестирования →</button>
-            <button class="copy-btn" id="shareTestChatBtn" type="button">Поделиться</button>
-          </div>
+          </section>
         </div>
       </section>
 
@@ -641,7 +803,56 @@
         </div>
       </div>
 
+      <!-- Demo-only, per the account owner's own call ("сделай демо, в конце
+           дай список что сделано, а что нет") — there's no real engine here
+           that runs test dialogs through the bot and scores replies. All
+           numbers below (92%, 44/48, the 6 category rows) are fixed demo
+           data matching the reference design's own numbers, never presented
+           as this company's real results — see the "ДЕМО" badge in the nav
+           and the subtitle under the page header. -->
+      <section class="view" id="view-tests" hidden>
+        <div class="panel tests-overview-panel">
+          <div class="tests-gauge">
+            <svg viewBox="0 0 108 108"><circle class="tests-gauge-track" cx="54" cy="54" r="45"/><circle class="tests-gauge-score" cx="54" cy="54" r="45"/></svg>
+            <strong>92%</strong>
+            <small>качество</small>
+          </div>
+          <div class="tests-overview-body">
+            <div class="funnel-eyebrow">ПОСЛЕДНЯЯ ПРОВЕРКА · ДЕМО-ДАННЫЕ</div>
+            <h2>44 из 48 сценариев пройдены</h2>
+            <p>Бот готов к реальному трафику. Три ответа стоит уточнить, один сценарий требует исправления до запуска.</p>
+            <div class="tests-summary-pills">
+              <span class="status-pill">44 пройдено</span>
+              <span class="status-pill status-pill-attention">3 уточнить</span>
+              <span class="status-pill status-pill-gray">1 исправить</span>
+            </div>
+          </div>
+          <button type="button" class="btn-primary" id="runTestsBtn" style="justify-self:end;white-space:nowrap;">Запустить 48 тестов</button>
+        </div>
+
+        <div class="tests-layout">
+          <div class="panel tests-groups-panel" id="testGroupsList"></div>
+          <div class="panel tests-issues-panel">
+            <div class="funnel-eyebrow">ПРИОРИТЕТ ИСПРАВЛЕНИЯ</div>
+            <h2>Что мешает качеству</h2>
+            <div id="testIssuesList"></div>
+          </div>
+        </div>
+      </section>
+
       <section class="view" id="view-knowledge" hidden>
+        <!-- Matches the reference's own .knowledge-summary bar — real count
+             and moderation status (see renderKnowledgeSummaryBar), not the
+             reference's fixed "17 записей". The reference's single
+             "Добавить знания" sheet is our 5-tab kb-add-tabs block below —
+             genuinely richer (site import, file upload, standing
+             instruction, not just text/Q&A), kept as-is rather than
+             collapsed to match. -->
+        <div class="knowledge-summary-bar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <span><b id="kbSummaryCount">…</b><small id="kbSummaryStatus"></small></span>
+        </div>
+
         <div class="panel">
           <h2>База знаний</h2>
           <p class="sub" style="margin-bottom:14px;">
@@ -708,7 +919,30 @@
       </section>
 
       <section class="view" id="view-telegram" hidden>
-        <div class="panel">
+        <div class="integration-status-row" id="integrationStatusRow">
+          <button type="button" class="integration-status-card" data-scroll-target="telegramNotifyPanel">
+            <span class="integration-status-card-icon">TG</span>
+            <span class="integration-status-card-body">
+              <b>Telegram</b>
+              <span class="status-pill status-pill-gray" id="integrationStatusTelegram">Не подключено</span>
+            </span>
+          </button>
+          <button type="button" class="integration-status-card" data-scroll-target="bitrix24Panel">
+            <span class="integration-status-card-icon">B24</span>
+            <span class="integration-status-card-body">
+              <b>Bitrix24</b>
+              <span class="status-pill status-pill-gray" id="integrationStatusBitrix24">Не подключено</span>
+            </span>
+          </button>
+          <button type="button" class="integration-status-card" data-scroll-target="amocrmPanel">
+            <span class="integration-status-card-icon">A</span>
+            <span class="integration-status-card-body">
+              <b>amoCRM</b>
+              <span class="status-pill status-pill-gray" id="integrationStatusAmocrm">Не подключено</span>
+            </span>
+          </button>
+        </div>
+        <div class="panel" id="telegramNotifyPanel">
           <h2>Уведомления в Telegram</h2>
           <p class="sub" style="margin-bottom:14px;">
             Бот не молчит, когда не знает ответа — он сразу спрашивает вас. Всё, на что он не смог
@@ -745,7 +979,7 @@
             <span class="crm-logo crm-logo-amocrm">amoCRM</span>
           </div>
 
-          <div class="crm-integration-block">
+          <div class="crm-integration-block" id="bitrix24Panel">
             <div class="crm-integration-header">
               <span class="crm-logo crm-logo-bitrix24">Bitrix24</span>
               <span class="crm-status" id="bitrix24Status">Не подключено</span>
@@ -780,7 +1014,7 @@
             </div>
           </div>
 
-          <div class="crm-integration-block">
+          <div class="crm-integration-block" id="amocrmPanel">
             <div class="crm-integration-header">
               <span class="crm-logo crm-logo-amocrm">amoCRM</span>
               <span class="crm-status" id="amocrmStatus">Не подключено</span>
@@ -851,15 +1085,26 @@
         </div>
       </section>
 
+      <!-- Matches the reference's .team-summary/.team-table/.roles-panel —
+           real functionality kept: invite form (below the summary bar,
+           reference has no equivalent — a static demo has no real invite
+           flow to model), and a real companyRole <select> per row instead
+           of the reference's static "Руководитель" pill, since ours
+           actually changes access (see teamRow()). -->
       <section class="view" id="view-team" hidden>
-        <div class="panel">
-          <h2>Команда</h2>
+        <div class="team-summary-bar">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span><b id="teamCountLabel">…</b><small>Доступ к кабинету и CRM</small></span>
+        </div>
+        <div class="team-table-grid" id="teamList"></div>
+
+        <div class="panel" style="margin-top:14px;">
+          <h3 style="margin:0 0 4px;">Пригласить сотрудника</h3>
           <p class="sub" style="margin-bottom:14px;">
             Сотрудники видят только свои сделки в CRM; руководитель — все. Приглашённый сотрудник открывает
             CRM напрямую по ссылке crm.html и не видит остальной личный кабинет (бота, биллинг).
           </p>
-          <div id="teamList"></div>
-          <div class="goal-edit-actions" style="margin-top:14px;flex-wrap:wrap;">
+          <div class="goal-edit-actions" style="flex-wrap:wrap;">
             <input type="text" id="inviteNameInput" placeholder="Имя" style="max-width:160px;" />
             <input type="text" id="inviteEmailInput" placeholder="Email" style="max-width:220px;" />
             <select id="inviteRoleInput">
@@ -870,6 +1115,18 @@
           </div>
           <p class="empty" id="inviteStatus"></p>
         </div>
+
+        <article class="panel roles-panel">
+          <h2>Роли без лишней сложности</h2>
+          <div class="roles-panel-row">
+            <span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+            <div><b>Руководитель</b><small>Видит все сделки, аналитику и настройки бота.</small></div>
+          </div>
+          <div class="roles-panel-row">
+            <span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <div><b>Сотрудник</b><small>Работает только со своими сделками в CRM.</small></div>
+          </div>
+        </article>
       </section>
 
       <section class="view" id="view-leads" hidden>
@@ -885,145 +1142,253 @@
         </div>
       </section>
 
-      <!-- Reached only via the trial banner's "Выбрать тариф" (see
-           goToTariffs) — no sidebar nav entry, same convention as
-           view-settings before it got its own entry: a destination doesn't
-           strictly need one to be reachable. Real plans/prices come from
+      <!-- Reachable both from the "Аккаунт" nav group (id=tariffsNavItem)
+           and the trial banner's "Выбрать тариф" (see goToTariffs) — both
+           paths call loadTariffs(). Real plans/prices come from
            GET /api/cabinet/tariffs (see loadTariffs) — nothing here is
-           hardcoded copy. -->
+           hardcoded copy. Grouped into 3 cards by plan.kind (token/lead/
+           unlimited) with a pack-selector per card, matching the reference
+           design — startCheckout/goToTariffs below are unchanged from the
+           single-card version, still a plain redirect to YooKassa's own
+           hosted page (no reimplemented method picker — see startCheckout's
+           own comment). -->
       <section class="view" id="view-tariffs" hidden>
+        <div class="panel billing-status-panel" id="billingStatusPanel"></div>
+
         <div class="panel">
-          <h2>Выберите тариф</h2>
+          <h2>Три модели оплаты</h2>
           <p class="sub" style="margin-bottom:16px;">
-            Цены сейчас тестовые (1 ₽) — так проверяется сам платёж, реальную стоимость поставим отдельно.
+            Функции одинаковы на всех тарифах — меняется только единица расчёта.
           </p>
-          <div class="tariff-grid" id="tariffGrid"></div>
+          <div class="pricing-grid" id="pricingGrid"></div>
           <p class="empty" id="tariffEmpty" hidden>Тарифы пока не настроены — обратитесь в поддержку.</p>
+        </div>
+
+        <div class="panel">
+          <h2>Настройки платежей</h2>
+          <label class="switch-row-label">
+            <span>
+              <b>Автопополнение</b>
+              <small>При остатке баланса меньше 20% — сейчас только сохраняет ваш выбор; само списание пока делается вручную, см. ниже.</small>
+            </span>
+            <input type="checkbox" id="autoPayToggle" />
+          </label>
+          <button type="button" class="btn-secondary btn-inline" id="requestInvoiceBtn" style="margin-top:10px;">
+            Запросить счёт для юрлица
+          </button>
+          <p class="sub" id="requestInvoiceStatus" hidden style="margin-top:8px;"></p>
+        </div>
+
+        <div class="panel">
+          <h2>История операций</h2>
+          <div id="paymentsHistoryList"></div>
+          <p class="empty" id="paymentsHistoryEmpty" hidden>Платежей пока нет.</p>
         </div>
       </section>
 
+      <!-- Reference design's Support() is a single-shot contact form with no
+           ticket history at all — real functionality here (list of past
+           tickets + a full reply thread per ticket) is genuinely richer, so
+           it stays as the main column instead of being replaced by a
+           one-shot form; the aside quick-help card is the one real 1:1
+           match to the reference's own .support-side. -->
       <section class="view" id="view-support" hidden>
-        <div class="panel" id="supportListPanel">
-          <h2>Поддержка</h2>
-          <p class="sub" style="margin-bottom:14px;">Вопросы по работе кабинета, боту, оплате — сюда, не в чат с посетителями.</p>
-          <button type="button" class="btn-primary btn-inline" id="supportNewTicketBtn" style="margin-bottom:16px;">Новое обращение</button>
+      <div class="two-col-layout">
+        <div style="min-width:0;">
+          <div class="panel centered-hero-panel" style="padding:30px 7% 22px;">
+            <span class="icon-circle-lime">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </span>
+            <h2>Чем можем помочь?</h2>
+            <p>Вопросы по кабинету, боту, оплате или подключению — сюда, не в чат с посетителями сайта. Ответ
+              появится здесь и придёт на почту.</p>
+          </div>
 
-          <div id="supportNewTicketForm" class="support-new-form" hidden>
-            <input type="text" id="supportNewSubject" placeholder="Коротко, о чём вопрос" maxlength="200" />
-            <textarea id="supportNewMessage" placeholder="Опишите подробнее, что случилось"></textarea>
-            <div class="support-new-form-actions">
-              <button type="button" class="training-reset-btn" id="supportNewCancelBtn" style="width:auto;padding:0 14px;">Отмена</button>
-              <button type="button" class="btn-primary btn-inline" id="supportNewSubmitBtn">Отправить</button>
+          <div class="panel" id="supportListPanel" style="margin-top:14px;">
+            <button type="button" class="btn-primary btn-inline" id="supportNewTicketBtn" style="margin-bottom:16px;">Новое обращение</button>
+
+            <div id="supportNewTicketForm" class="support-new-form" hidden>
+              <input type="text" id="supportNewSubject" placeholder="Коротко, о чём вопрос" maxlength="200" />
+              <textarea id="supportNewMessage" placeholder="Опишите подробнее, что случилось"></textarea>
+              <div class="support-new-form-actions">
+                <button type="button" class="training-reset-btn" id="supportNewCancelBtn" style="width:auto;padding:0 14px;">Отмена</button>
+                <button type="button" class="btn-primary btn-inline" id="supportNewSubmitBtn">Отправить</button>
+              </div>
+            </div>
+
+            <div id="supportTicketList"></div>
+            <p class="empty" id="supportEmpty" hidden>Обращений пока нет.</p>
+          </div>
+
+          <div class="panel" id="supportDetailPanel" hidden style="margin-top:14px;">
+            <button type="button" class="training-reset-btn" id="supportBackBtn" style="width:auto;padding:0 14px;margin-bottom:14px;">← Все обращения</button>
+            <h2 id="supportDetailSubject"></h2>
+            <div id="supportDetailStatus" class="support-status-banner" hidden></div>
+            <div id="supportDetailThread" class="support-thread"></div>
+            <div class="support-reply-form">
+              <textarea id="supportReplyText" placeholder="Написать сообщение…"></textarea>
+              <button type="button" class="btn-primary btn-inline" id="supportReplySubmitBtn">Отправить</button>
             </div>
           </div>
-
-          <div id="supportTicketList"></div>
-          <p class="empty" id="supportEmpty" hidden>Обращений пока нет.</p>
         </div>
 
-        <div class="panel" id="supportDetailPanel" hidden>
-          <button type="button" class="training-reset-btn" id="supportBackBtn" style="width:auto;padding:0 14px;margin-bottom:14px;">← Все обращения</button>
-          <h2 id="supportDetailSubject"></h2>
-          <div id="supportDetailStatus" class="support-status-banner" hidden></div>
-          <div id="supportDetailThread" class="support-thread"></div>
-          <div class="support-reply-form">
-            <textarea id="supportReplyText" placeholder="Написать сообщение…"></textarea>
-            <button type="button" class="btn-primary btn-inline" id="supportReplySubmitBtn">Отправить</button>
+        <aside class="panel aside-help-panel">
+          <span class="icon-circle-lime">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+          </span>
+          <h3>Нужна помощь с запуском?</h3>
+          <p>Менеджер поможет настроить знания, протестировать ответы и установить виджет.</p>
+          <button type="button" class="btn-primary" style="width:100%;margin-bottom:18px;" id="supportContactManagerBtn">Связаться с менеджером</button>
+
+          <span class="icon-circle-lime">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </span>
+          <h3>Быстрые ответы</h3>
+          <div class="aside-link-list">
+            <button type="button" data-goto-view="training">Как обучать бота?</button>
+            <button type="button" data-goto-view="install">Как установить виджет?</button>
+            <button type="button" data-goto-view="dashboard">Как приходят заявки?</button>
           </div>
-        </div>
+        </aside>
+      </div>
       </section>
 
       <section class="view" id="view-settings" hidden>
-        <div class="panel">
-          <h2>Настройки чата</h2>
-          <div class="appearance-row">
-            <div class="appearance-field">
-              <label for="botLabelInput">Название бота</label>
-              <input type="text" id="botLabelInput" maxlength="60" placeholder="Например, «Продажа бань» или «Основной сайт»" />
-              <p class="appearance-field-hint">
-                Как вы сами называете этого бота — видно только вам, в переключателе ботов слева.
-                Не влияет на то, как бот представляется посетителям сайта, и не привязано к
-                конкретному сайту: один бот может стоять сразу на нескольких сайтах.
-              </p>
-            </div>
-          </div>
-          <div class="appearance-row">
-            <div class="appearance-field">
-              <label for="companyNameInput">Название компании</label>
-              <input type="text" id="companyNameInput" maxlength="80" placeholder="Например, «БаняХаус»" />
-              <p class="appearance-field-hint">
-                То, как бот называет вашу компанию, когда представляется — например, «Вас приветствует
-                Алина из «БаняХаус»!». Без этого бот пытается описать компанию своими словами и может
-                звучать не по-деловому.
-              </p>
-            </div>
-          </div>
-          <div class="appearance-row">
-            <div class="appearance-field">
-              <label for="botNameInput">Имя бота (как он представляется в чате)</label>
-              <input type="text" id="botNameInput" maxlength="40" placeholder="Например, Алина" />
-            </div>
-            <div class="appearance-field">
-              <label>Пол бота</label>
-              <div class="appearance-toggle-group" id="genderToggle">
-                <button type="button" class="period-btn" data-gender="female">Женский</button>
-                <button type="button" class="period-btn" data-gender="male">Мужской</button>
-              </div>
-            </div>
-          </div>
-          <div class="appearance-row">
-            <div class="appearance-field">
-              <label>Цвет чата</label>
-              <div class="color-picker-widget info-widget">
-                <button type="button" class="color-picker-btn info-btn" id="colorPickerBtn" style="background:#4f46e5" aria-label="Выбрать цвет чата"></button>
-                <div class="info-popup color-popup" id="colorPopup" hidden>
-                  <div class="color-wheel-wrap">
-                    <div class="color-wheel" id="colorWheel">
-                      <div class="color-wheel-handle" id="colorWheelHandle"></div>
-                    </div>
-                  </div>
-                  <div class="color-popup-row">
-                    <input type="text" id="colorNameInput" class="color-name-input" placeholder="Название или #HEX" />
-                    <button type="button" class="color-eyedropper-btn" id="eyedropperBtn" title="Пипетка — выбрать цвет с экрана">💧</button>
-                    <input type="color" id="colorCustomInput" class="color-custom-input" title="Свой цвет" />
-                  </div>
-                  <p class="color-popup-error" id="colorPopupError" hidden></p>
+        <div class="settings-layout">
+          <div class="settings-form">
+            <div class="settings-section">
+              <div class="section-title">
+                <span>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg>
+                </span>
+                <div>
+                  <h2>Личность бота</h2>
+                  <p>То, как он представляется посетителю</p>
                 </div>
               </div>
-              <div class="color-wheel-preview" id="colorWheelPreview" hidden>
-                <span class="color-wheel-preview-swatch" id="colorWheelPreviewSwatch"></span>
-                <span class="color-wheel-preview-hex" id="colorWheelPreviewHex"></span>
+              <div class="appearance-row">
+                <div class="appearance-field">
+                  <label for="botLabelInput">Название бота (видно только вам)</label>
+                  <input type="text" id="botLabelInput" maxlength="60" placeholder="Например, «Продажа бань» или «Основной сайт»" />
+                  <p class="appearance-field-hint">
+                    Видно только вам, в переключателе ботов слева — не влияет на то, как бот
+                    представляется посетителям, и не привязано к конкретному сайту.
+                  </p>
+                </div>
+              </div>
+              <div class="appearance-row">
+                <div class="appearance-field">
+                  <label for="companyNameInput">Название компании</label>
+                  <input type="text" id="companyNameInput" maxlength="80" placeholder="Например, «БаняХаус»" />
+                  <p class="appearance-field-hint">
+                    То, как бот называет вашу компанию, когда представляется — например, «Вас приветствует
+                    Алина из «БаняХаус»!».
+                  </p>
+                </div>
+              </div>
+              <div class="appearance-row">
+                <div class="appearance-field">
+                  <label for="botNameInput">Имя бота</label>
+                  <input type="text" id="botNameInput" maxlength="40" placeholder="Например, Алина" />
+                </div>
+                <div class="appearance-field">
+                  <label>Пол бота</label>
+                  <div class="appearance-toggle-group" id="genderToggle">
+                    <button type="button" class="period-btn" data-gender="female">Женский</button>
+                    <button type="button" class="period-btn" data-gender="male">Мужской</button>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="appearance-field">
-              <label>Расположение на сайте</label>
-              <div class="appearance-toggle-group" id="positionToggle">
-                <button type="button" class="period-btn" data-position="bottom-left">← Слева внизу</button>
-                <button type="button" class="period-btn" data-position="bottom-right">Справа внизу →</button>
-              </div>
-            </div>
-          </div>
-          <div class="appearance-save-row">
-            <button type="button" class="copy-btn" id="saveAppearanceBtn">Сохранить</button>
-            <span class="empty appearance-status" id="appearanceStatus"></span>
-          </div>
-        </div>
 
-        <div class="panel">
-          <h2>Варианты приветствия</h2>
-          <p class="appearance-field-hint" style="margin-top:0;">
-            Добавьте альтернативную первую фразу бота — она встанет в случайный перебор наравне с текущей,
-            и в аналитике будет видно, какая приводит к большему числу заявок (A/B/C/D-тест).
-          </p>
-          <div class="appearance-row">
-            <div class="appearance-field" style="flex:1;">
-              <input type="text" id="greetingVariantInput" maxlength="300" placeholder="Например: Здравствуйте! Подскажу, какая баня подойдёт именно вам." />
+            <div class="settings-section">
+              <div class="section-title">
+                <span>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 4.1L6 9l4.1 1.9L12 15l1.9-4.1L18 9l-4.1-1.9L12 3Z"/><path d="M5 21v-3M19 21v-3M3 19h3M18 19h3"/></svg>
+                </span>
+                <div>
+                  <h2>Внешний вид</h2>
+                  <p>Цвет и расположение виджета</p>
+                </div>
+              </div>
+              <div class="appearance-row">
+                <div class="appearance-field">
+                  <label>Цвет чата</label>
+                  <div class="color-picker-widget info-widget">
+                    <button type="button" class="color-picker-btn info-btn" id="colorPickerBtn" style="background:#4f46e5" aria-label="Выбрать цвет чата"></button>
+                    <div class="info-popup color-popup" id="colorPopup" hidden>
+                      <div class="color-wheel-wrap">
+                        <div class="color-wheel" id="colorWheel">
+                          <div class="color-wheel-handle" id="colorWheelHandle"></div>
+                        </div>
+                      </div>
+                      <div class="color-popup-row">
+                        <input type="text" id="colorNameInput" class="color-name-input" placeholder="Название или #HEX" />
+                        <button type="button" class="color-eyedropper-btn" id="eyedropperBtn" title="Пипетка — выбрать цвет с экрана">💧</button>
+                        <input type="color" id="colorCustomInput" class="color-custom-input" title="Свой цвет" />
+                      </div>
+                      <p class="color-popup-error" id="colorPopupError" hidden></p>
+                    </div>
+                  </div>
+                  <div class="color-wheel-preview" id="colorWheelPreview" hidden>
+                    <span class="color-wheel-preview-swatch" id="colorWheelPreviewSwatch"></span>
+                    <span class="color-wheel-preview-hex" id="colorWheelPreviewHex"></span>
+                  </div>
+                </div>
+                <div class="appearance-field">
+                  <label>Расположение на сайте</label>
+                  <div class="appearance-toggle-group" id="positionToggle">
+                    <button type="button" class="period-btn" data-position="bottom-left">← Слева внизу</button>
+                    <button type="button" class="period-btn" data-position="bottom-right">Справа внизу →</button>
+                  </div>
+                </div>
+              </div>
+              <div class="appearance-save-row" style="margin-top:16px;">
+                <button type="button" class="copy-btn" id="saveAppearanceBtn">Сохранить изменения</button>
+                <span class="empty appearance-status" id="appearanceStatus"></span>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="section-title">
+                <span>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2v6.6a2 2 0 0 0 .5 1.3l5 6a2 2 0 0 1-1.6 3.1H5.6A2 2 0 0 1 4 16l5-6a2 2 0 0 0 .5-1.3V2"/><path d="M6.5 2h11M9 8h6"/></svg>
+                </span>
+                <div>
+                  <h2>Приветствия</h2>
+                  <p>Сравнивайте варианты в A/B/C/D-тесте</p>
+                </div>
+              </div>
+              <p class="appearance-field-hint" style="margin-top:0;">
+                Добавьте альтернативную первую фразу бота — она встанет в случайный перебор наравне с текущей,
+                и в аналитике будет видно, какая приводит к большему числу заявок.
+              </p>
+              <div class="appearance-row">
+                <div class="appearance-field" style="flex:1;">
+                  <input type="text" id="greetingVariantInput" maxlength="300" placeholder="Например: Здравствуйте! Подскажу, какая баня подойдёт именно вам." />
+                </div>
+              </div>
+              <div class="appearance-save-row">
+                <button type="button" class="copy-btn" id="addGreetingVariantBtn">Добавить вариант</button>
+                <span class="empty appearance-status" id="greetingVariantStatus"></span>
+              </div>
             </div>
           </div>
-          <div class="appearance-save-row">
-            <button type="button" class="copy-btn" id="addGreetingVariantBtn">Добавить вариант</button>
-            <span class="empty appearance-status" id="greetingVariantStatus"></span>
-          </div>
+
+          <aside class="live-preview">
+            <div class="preview-label">
+              <span><i></i> Предпросмотр</span>
+              <a id="openWidgetPreviewLink" href="#" target="_blank" rel="noopener" title="Открыть в новой вкладке">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+              </a>
+            </div>
+            <div class="preview-site">
+              <iframe id="settingsPreviewFrame" title="Предпросмотр виджета"></iframe>
+            </div>
+            <p class="preview-site-caption">
+              Настоящий виджет с сайта — цвет обновляется сразу, остальное подтянется после сохранения.
+            </p>
+          </aside>
         </div>
       </section>
     </main>
@@ -1043,6 +1408,7 @@
     // business's own name here instead of a redundant "Аналитика" label is
     // more useful, especially for anyone managing more than one client's bot.
     var companyName = '';
+    var lastMeResponse = null;
     // 'owner' | 'manager' | 'employee' — gates the Команда nav item and the
     // pipeline/custom-fields settings block in Интеграции (see boot below).
     var myCompanyRole = 'owner';
@@ -1191,6 +1557,26 @@
       } else {
         link.hidden = true;
       }
+      renderSidebarCompanyCard(current ? current.sourceWebsite : '');
+    }
+
+    // "БВ" from "Бани Викинг" — first letter of the first two words, or the
+    // first two letters if the name is a single word. Purely a display
+    // initial, same idea as the account-row avatar below.
+    function sidebarCompanyInitials(name) {
+      var words = (name || '').trim().split(/\s+/).filter(Boolean);
+      if (words.length === 0) return '?';
+      if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+
+    // Called from updateSidebarBotSite (which already knows the current
+    // bot's site) and once directly wherever companyName itself changes —
+    // avatar/name don't depend on which bot is selected, domain does.
+    function renderSidebarCompanyCard(domain) {
+      document.getElementById('sidebarCompanyAvatar').textContent = sidebarCompanyInitials(companyName);
+      document.getElementById('sidebarCompanyName').textContent = companyName || '—';
+      document.getElementById('sidebarCompanyDomain').textContent = domain || '';
     }
 
     // Re-fetches everything that means something different per-bot —
@@ -1248,7 +1634,7 @@
     // --- Navigation ---
     var VIEW_TITLES = {
       dashboard: 'Обзор',
-      readiness: 'Готовность бота',
+      readiness: 'Статус внедрения',
       attention: 'Требует внимания',
       dialogs: 'Диалоги',
       training: 'Обучение бота',
@@ -1259,13 +1645,16 @@
       support: 'Поддержка',
       settings: 'Настройки',
       team: 'Команда',
-      tariffs: 'Тарифы',
+      tariffs: 'Тариф и оплата',
+      tests: 'Автотесты',
     };
-    // Only the dashboard carries one in the reference design — other views
-    // keep their existing descriptive text inside their own first panel
-    // instead of duplicating it up here.
+    // Only the dashboard carried one before tariffs got its own nav entry —
+    // other views keep their existing descriptive text inside their own
+    // first panel instead of duplicating it up here.
     var VIEW_SUBTITLES = {
       dashboard: 'Главное о работе бота и движении посетителей к заявке',
+      tariffs: 'Выберите удобную модель оплаты и управляйте расходами',
+      tests: 'Демонстрация — реального прогона тестовых диалогов пока нет',
     };
     // Shared by the sidebar nav items, the settings gear (which isn't itself
     // a .nav-item — see below), and the "Чат с ботом" toolbar's quick links
@@ -1320,10 +1709,42 @@
     // nav-item to highlight, which is correct: settings has no sidebar entry).
     document.getElementById('settingsGearBtn').addEventListener('click', function () { trainingBackFlow = false; goToView('settings'); });
 
+    // The generic loop above already switches the view for this button (it
+    // has a normal data-view) — this just ALSO loads the real plan/billing
+    // data, same as the trial banner's own button already did via
+    // goToTariffs (see refreshTariffsView, shared by both).
+    document.getElementById('tariffsNavItem').addEventListener('click', refreshTariffsView);
+
     document.querySelectorAll('.training-toolbar-link').forEach(function (btn) {
       btn.addEventListener('click', function () { trainingBackFlow = true; goToView(btn.dataset.gotoView); });
     });
     document.getElementById('backToTrainingBtn').addEventListener('click', function () { trainingBackFlow = false; goToView('training'); });
+
+    // Поддержка's "Быстрые ответы" aside — same data-goto-view convention,
+    // just without the training-specific back-button flow above.
+    document.querySelectorAll('.aside-link-list button[data-goto-view]').forEach(function (btn) {
+      btn.addEventListener('click', function () { goToView(btn.dataset.gotoView); });
+    });
+
+    // Same one-click-callback pattern as Статус внедрения's own
+    // "Запросить обратный звонок" (see requestCallbackBtn) — reuses the
+    // same real support-ticket endpoint, no new backend.
+    document.getElementById('supportContactManagerBtn').addEventListener('click', function () {
+      var btn = this;
+      btn.disabled = true;
+      fetch('/api/cabinet/support-tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: 'Запрос связи с менеджером',
+          message: 'Прошу связаться со мной по вопросам запуска бота.',
+        }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); })
+        .then(function () { alert('Заявка отправлена — менеджер свяжется с вами.'); })
+        .catch(function () { alert('Не получилось отправить заявку. Попробуйте ещё раз.'); })
+        .finally(function () { btn.disabled = false; });
+    });
 
     // Dashboard's new funnel/readiness/quality cards — real destinations,
     // not dead links: dialogs is the actual detail behind the funnel
@@ -1364,7 +1785,7 @@
     }
 
     function renderReadinessSection(data) {
-      document.getElementById('readinessHeadline').textContent = 'Ваш бот готов к работе на ' + data.percent + '%';
+      document.getElementById('readinessHeadline').textContent = 'Готовность к запуску — ' + data.percent + '%';
       document.getElementById('readinessStepsLine').textContent =
         'Выполнено ' + data.stepsCompleted + ' из ' + data.totalSteps + ' шагов';
       // rAF, not an immediate width set — lets the browser paint the 0%
@@ -1400,7 +1821,11 @@
       list.innerHTML = '';
       data.steps.forEach(function (step) {
         var card = document.createElement('div');
-        card.className = 'readiness-card' + (step.completed ? ' readiness-card-done' : '');
+        // .readiness-card-next highlights whichever card is data.nextStep
+        // (the same object, found via steps.find on the backend) — the one
+        // lime accent on this whole page, matched from the reference.
+        var isNext = !step.completed && data.nextStep && step.key === data.nextStep.key;
+        card.className = 'readiness-card' + (step.completed ? ' readiness-card-done' : '') + (isNext ? ' readiness-card-next' : '');
         var statusHtml = step.completed
           ? '<span class="readiness-card-status readiness-card-status-done">✓ Выполнено</span>'
           : '<span class="readiness-card-status readiness-card-status-todo">Не выполнено</span>';
@@ -1422,6 +1847,90 @@
         list.appendChild(card);
       });
     }
+
+    // One click, no form — per the account owner's own call: this should
+    // work like a callback request, not another form to fill out. Reuses
+    // the existing support-ticket endpoint (same one the "Поддержка" view's
+    // own form posts to) with a fixed subject/message, so it shows up in
+    // the owner's ticket history and alerts the platform team the same way
+    // any other ticket does — no new backend needed.
+    document.getElementById('requestCallbackBtn').addEventListener('click', function () {
+      var btn = this;
+      var status = document.getElementById('requestCallbackStatus');
+      btn.disabled = true;
+      status.hidden = true;
+      fetch('/api/cabinet/support-tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: 'Запрос обратного звонка — статус внедрения',
+          message: 'Прошу перезвонить по вопросам внедрения бота.',
+        }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); })
+        .then(function () {
+          status.hidden = false;
+          status.textContent = 'Заявка отправлена — менеджер свяжется с вами в рабочее время.';
+        })
+        .catch(function () {
+          status.hidden = false;
+          status.textContent = 'Не получилось отправить заявку. Попробуйте ещё раз или напишите в поддержку.';
+        })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    // Static demo content — see the view-tests section's own comment in the
+    // HTML for why (no real test-execution engine yet). Rendered once, not
+    // fetched from any endpoint; "Запустить 48 тестов" only re-plays the
+    // same fixed numbers after a fake delay, exactly like the reference
+    // design's own demo button, never a real request to the bot.
+    var TEST_GROUPS_DEMO = [
+      ['Продажи', 'Цены, подбор и следующий шаг', 8, 8],
+      ['Возражения', 'Дорого, сравнение и сомнения', 7, 6],
+      ['Знания', 'Доставка, гарантия и оплата', 9, 8],
+      ['Сложные ситуации', 'Не по теме, грубость и попытка взлома', 6, 6],
+      ['Сбор заявки', 'Контакты, согласие и неполные данные', 8, 7],
+      ['Виджет', 'Приветствие и быстрые подсказки', 10, 9],
+    ];
+    var TEST_ISSUES_DEMO = [
+      { critical: true, title: 'Доставка за пределы региона', desc: 'В базе нет правила расчёта стоимости.' },
+      { critical: false, title: 'Возражение «у конкурентов дешевле»', desc: 'Ответ слишком общий и не раскрывает ценность.' },
+      { critical: false, title: 'Невалидный номер телефона', desc: 'Бот не просит проверить одну цифру.' },
+    ];
+
+    function renderTestsDemoContent() {
+      var groupsList = document.getElementById('testGroupsList');
+      groupsList.innerHTML = TEST_GROUPS_DEMO.map(function (g) {
+        var pct = Math.round((g[3] / g[2]) * 100);
+        return '<div class="tests-group-row">' +
+          '<span class="tests-group-icon">◆</span>' +
+          '<div class="tests-group-body"><b>' + g[0] + '</b><small>' + g[1] + '</small>' +
+          '<div class="tests-group-bar"><div class="tests-group-bar-fill" style="width:' + pct + '%"></div></div></div>' +
+          '<span class="tests-group-score">' + g[3] + '/' + g[2] + '</span>' +
+          '</div>';
+      }).join('');
+
+      var issuesList = document.getElementById('testIssuesList');
+      issuesList.innerHTML = TEST_ISSUES_DEMO.map(function (issue, i) {
+        return '<div class="tests-issue-row">' +
+          '<span class="tests-issue-index' + (issue.critical ? ' tests-issue-index-critical' : '') + '">' + (i + 1) + '</span>' +
+          '<div><b>' + issue.title + '</b><small>' + issue.desc + '</small></div>' +
+          '</div>';
+      }).join('');
+    }
+    renderTestsDemoContent();
+
+    document.getElementById('runTestsBtn').addEventListener('click', function () {
+      var btn = this;
+      btn.disabled = true;
+      var original = btn.textContent;
+      btn.textContent = 'Проверяем…';
+      setTimeout(function () {
+        btn.disabled = false;
+        btn.textContent = original;
+        renderTestsDemoContent(); // same fixed numbers — this is the demo, not a real re-run
+      }, 1800);
+    });
 
     function loadReadiness() {
       return fetch(withBotId('/api/cabinet/readiness'))
@@ -1519,6 +2028,60 @@
       fetch(withBotId(url))
         .then(function (res) { return res.json(); })
         .then(renderAnalytics);
+      // Always the last real 7 days, independent of the period tabs above —
+      // "Месяц"/"Всё время"/a custom range don't map onto one clean per-day
+      // line chart the same way a fixed week does, and the reference design
+      // itself only ever shows a week here too.
+      loadConversionChart();
+    }
+
+    // See cabinet.service.ts's getConversionChart for what these two rates
+    // actually are (same bases as "Конверсия в диалог"/"Конверсия в
+    // регистрацию" above, just per day). SVG path built by hand instead of a
+    // charting library — same viewBox convention (620x220, x in [28,610])
+    // as the reference design's own hand-built chart.
+    function loadConversionChart() {
+      fetch(withBotId('/api/cabinet/conversion-chart?days=7'))
+        .then(function (res) { return res.json(); })
+        .then(renderConversionChart)
+        .catch(function () {});
+    }
+
+    function renderConversionChart(data) {
+      var days = data.days || [];
+      var svg = document.getElementById('conversionChartSvg');
+      var axis = document.getElementById('conversionChartAxis');
+      if (!days.length) { svg.innerHTML = ''; axis.innerHTML = ''; return; }
+
+      var X0 = 28, X1 = 610, Y0 = 205, Y1 = 35; // Y0 = 0%, Y1 = 100%, inverted (SVG y grows down)
+      function x(i) { return days.length > 1 ? X0 + ((X1 - X0) * i) / (days.length - 1) : X0; }
+      function y(pct) { return Y0 + ((Y1 - Y0) * Math.max(0, Math.min(100, pct))) / 100; }
+
+      var leadPts = days.map(function (d, i) { return x(i) + ',' + y(d.leadRate); }).join(' ');
+      var openPts = days.map(function (d, i) { return x(i) + ',' + y(d.openRate); }).join(' ');
+      var areaPath = 'M' + leadPts.split(' ').join(' L') + ' L' + X1 + ',' + Y0 + ' L' + X0 + ',' + Y0 + ' Z';
+      var gridY = [35, 92, 149, 205];
+
+      svg.innerHTML =
+        '<defs><linearGradient id="convChartFill" x1="0" x2="0" y1="0" y2="1">' +
+        '<stop offset="0" stop-color="#6579e8" stop-opacity=".22"/><stop offset="1" stop-color="#6579e8" stop-opacity="0"/>' +
+        '</linearGradient></defs>' +
+        '<g>' + gridY.map(function (gy) { return '<line x1="' + X0 + '" y1="' + gy + '" x2="' + X1 + '" y2="' + gy + '" stroke="#e8ecea"/>'; }).join('') + '</g>' +
+        '<path d="' + areaPath + '" fill="url(#convChartFill)"/>' +
+        '<polyline points="' + openPts + '" fill="none" stroke="#9ec46b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+        '<polyline points="' + leadPts + '" fill="none" stroke="#6579e8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>';
+
+      axis.innerHTML = days.map(function (d) {
+        var parts = d.date.split('-'); // YYYY-MM-DD
+        return '<span>' + parts[2] + '.' + parts[1] + '</span>';
+      }).join('');
+
+      function avg(key) {
+        var sum = days.reduce(function (s, d) { return s + d[key]; }, 0);
+        return (sum / days.length).toFixed(1).replace('.', ',') + '%';
+      }
+      document.getElementById('chartAvgLead').textContent = avg('leadRate');
+      document.getElementById('chartAvgOpen').textContent = avg('openRate');
     }
 
     function renderAnalytics(data) {
@@ -1639,6 +2202,10 @@
       var attentionBadge = document.getElementById('attentionBadge');
       attentionBadge.textContent = attentionCount;
       attentionBadge.classList.toggle('nav-badge-ok', attentionCount === 0);
+      // Nothing waiting on the owner right now — show the same reassuring
+      // empty state as the rest of the redesign instead of just leaving a
+      // gap where "Ждут ответа"/"Ответили — осталось проверить" would be.
+      document.getElementById('attentionEmptyState').hidden = attentionCount !== 0;
 
       if (pending.length > 0) {
         document.getElementById('pendingPanel').style.display = 'block';
@@ -1670,6 +2237,8 @@
           tr.appendChild(buildProcessedCell(e.id, tr));
           pendingRows.appendChild(tr);
         });
+      } else {
+        document.getElementById('pendingPanel').style.display = 'none';
       }
 
       var needsVerification = (data.escalations && data.escalations.needsVerification) || [];
@@ -1702,6 +2271,8 @@
           tr.appendChild(buildProcessedCell(e.id, tr));
           verifyRows.appendChild(tr);
         });
+      } else {
+        document.getElementById('verifyPanel').style.display = 'none';
       }
 
       var recentVerified = (data.escalations && data.escalations.recentVerified) || [];
@@ -1932,6 +2503,7 @@
           document.getElementById('leadNotifyTelegramInput').disabled = !data.telegramConnected;
           document.getElementById('leadNotifyTelegramHint').hidden = data.telegramConnected;
           document.getElementById('leadNotifyEmailInput').value = data.notificationEmail || '';
+          setIntegrationStatusPill('integrationStatusTelegram', Boolean(data.telegramConnected));
         });
     }
     document.getElementById('leadNotifySaveBtn').addEventListener('click', function () {
@@ -1953,6 +2525,20 @@
         .finally(function () { btn.disabled = false; });
     });
 
+    // Сводные плашки статуса вверху страницы «Интеграции» — клик скроллит к панели ниже.
+    document.querySelectorAll('.integration-status-card').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var target = document.getElementById(btn.dataset.scrollTarget);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+    function setIntegrationStatusPill(id, connected) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = connected ? 'Подключено' : 'Не подключено';
+      el.classList.toggle('status-pill-gray', !connected);
+    }
+
     // --- CRM integrations (Bitrix24, amoCRM) ---
     function loadCrmIntegrations() {
       return fetch(withBotId('/api/cabinet/integrations/crm'))
@@ -1961,10 +2547,12 @@
           var bStatus = document.getElementById('bitrix24Status');
           bStatus.textContent = data.bitrix24Connected ? 'Подключено' : 'Не подключено';
           bStatus.classList.toggle('crm-status-connected', Boolean(data.bitrix24Connected));
+          setIntegrationStatusPill('integrationStatusBitrix24', Boolean(data.bitrix24Connected));
 
           var aStatus = document.getElementById('amocrmStatus');
           aStatus.textContent = data.amocrmConnected ? 'Подключено' : 'Не подключено';
           aStatus.classList.toggle('crm-status-connected', Boolean(data.amocrmConnected));
+          setIntegrationStatusPill('integrationStatusAmocrm', Boolean(data.amocrmConnected));
           if (data.amocrmSubdomain) {
             document.getElementById('amocrmSubdomainInput').value = data.amocrmSubdomain;
           }
@@ -2341,17 +2929,20 @@
     var companyRoleLabels = { owner: 'Владелец', manager: 'Руководитель', employee: 'Сотрудник' };
     function teamRow(user) {
       var row = document.createElement('div');
-      row.className = 'crm-integration-block';
-      row.style.marginBottom = '8px';
+      row.className = 'team-row-grid';
       var roleOptions = ['owner', 'manager', 'employee'].map(function (r) {
         return '<option value="' + r + '"' + (r === user.companyRole ? ' selected' : '') + '>' + companyRoleLabels[r] + '</option>';
       }).join('');
+      var initials = (user.name || user.email || '?').trim().slice(0, 1).toUpperCase();
       row.innerHTML =
-        '<div class="crm-integration-header">' +
-        '<span>' + (user.name || user.email) + ' <span style="color:#9ca3af;font-weight:400;">' + user.email + '</span></span>' +
-        '<select class="team-role-select" style="margin-left:auto;">' + roleOptions + '</select>' +
+        '<div class="team-person">' +
+          '<span class="user-avatar">' + initials + '</span>' +
+          '<span><b>' + (user.name || user.email) + '</b><small>' + user.email + '</small></span>' +
         '</div>' +
-        (user.emailVerifiedAt ? '' : '<p class="empty" style="margin-top:6px;">Ждём подтверждения приглашения по почте</p>');
+        '<select class="team-role-select">' + roleOptions + '</select>' +
+        '<span class="team-access-desc">' + (user.companyRole === 'employee' ? 'Только свои сделки в CRM' : 'Все сделки и настройки') + '</span>' +
+        '<span class="status-pill' + (user.emailVerifiedAt ? '' : ' status-pill-attention') + '">' + (user.emailVerifiedAt ? 'Активен' : 'Ждёт подтверждения') + '</span>' +
+        '<span></span>';
       row.querySelector('.team-role-select').addEventListener('change', function () {
         fetch('/api/cabinet/team/' + user.id + '/role', {
           method: 'POST',
@@ -2369,6 +2960,9 @@
           var list = document.getElementById('teamList');
           list.innerHTML = '';
           users.forEach(function (u) { list.appendChild(teamRow(u)); });
+          var count = users.length;
+          document.getElementById('teamCountLabel').textContent =
+            count + ' ' + (count === 1 ? 'сотрудник' : count < 5 ? 'сотрудника' : 'сотрудников');
         });
     }
 
@@ -2559,6 +3153,7 @@
       document.getElementById('colorCustomInput').value = hex;
       var hsv = hexToHsv(hex);
       moveWheelHandle(hsv.h, hsv.s);
+      updateSettingsPreviewFrame();
     }
 
     // The wheel is hidden (display:none) until its popup opens, so any handle
@@ -2664,7 +3259,7 @@
             }).then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
               .then(function (data) {
                 companyName = data.companyName;
-                document.getElementById('sidebarCompany').textContent = companyName;
+                updateSidebarBotSite();
                 document.getElementById('pageBreadcrumb').textContent = (companyName || '—') + ' / ' + document.getElementById('pageTitle').textContent;
               })
           : null
@@ -2974,6 +3569,18 @@
       });
     }
 
+    function renderKnowledgeSummaryBar() {
+      var total = kbEntries.length;
+      var live = kbEntries.filter(function (e) { return !kbModLabel(e.moderationStatus); }).length;
+      document.getElementById('kbSummaryCount').textContent =
+        total + ' ' + (total === 1 ? 'запись' : total < 5 ? 'записи' : 'записей');
+      document.getElementById('kbSummaryStatus').textContent = total === 0
+        ? 'Пока пусто — добавьте первую запись ниже'
+        : live === total
+          ? 'Все записи проверены и используются ботом'
+          : live + ' из ' + total + ' проверено и используется ботом';
+    }
+
     function loadKnowledge() {
       return fetch(withBotId('/api/cabinet/knowledge'))
         .then(function (res) { return res.json(); })
@@ -2981,6 +3588,7 @@
           kbEntries = data;
           renderCategoryList();
           renderArticlesFeed();
+          renderKnowledgeSummaryBar();
         });
     }
 
@@ -3257,43 +3865,51 @@
 
     var SPARKLE_ICON_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3c.6 3.6 2.2 5.2 5.8 5.8-3.6.4-5.2 2-5.8 5.8-.6-3.8-2.2-5.4-5.8-5.8C9.8 8.2 11.4 6.6 12 3z" fill="currentColor"/></svg>';
 
-    function goToTariffs() {
-      goToView('tariffs');
+    // Shared by both entry points — the "Аккаунт" nav item's own click
+    // handler (see tariffsNavItem below) and the trial banner's "Выбрать
+    // тариф" (goToTariffs) — so neither path can drift out of sync with
+    // the other again.
+    function refreshTariffsView() {
       loadTariffs();
+      loadBillingStatusPanel();
+      loadPaymentsHistory();
     }
 
-    // Real plans from GET /api/cabinet/tariffs, not hardcoded copy — priceRub
-    // is whatever's actually in the tariff_plans table (1 ₽ placeholder today,
-    // see the migration seed; editing that row is the only thing that
-    // changes what's shown here). Re-fetched every time the view opens
-    // rather than cached — a superadmin could change pricing between visits.
+    function goToTariffs() {
+      goToView('tariffs');
+      refreshTariffsView();
+    }
+
+    // Real plans from GET /api/cabinet/tariffs, not hardcoded copy — several
+    // rows can share the same kind (different pack sizes/periods) — grouped
+    // here into one card per kind with a pack-selector, matching the
+    // reference design. Re-fetched every time the view opens rather than
+    // cached — a superadmin could change pricing between visits.
+    var KIND_META = {
+      token: { title: 'Токены', eyebrow: 'Низкий порог входа', desc: 'Для небольшого или нерегулярного трафика. Баланс не сгорает.', rateLine: function (p) { return p.tokenRubPer1kInput + ' ₽/1000 вх. и ' + p.tokenRubPer1kOutput + ' ₽/1000 исх. токенов'; } },
+      lead: { title: 'Подтверждённые лиды', eyebrow: 'За результат', desc: 'Платите только когда бот получил контакт и зафиксировал потребность.', rateLine: function (p) { return p.leadRubPerLead + ' ₽ за подтверждённый лид'; } },
+      unlimited: { title: 'Полный безлимит', eyebrow: 'Без расчётов', desc: 'Для активных продаж: никаких расчётов по токенам, диалогам или лидам.', rateLine: function (p) { return (p.periodDays || 30) + ' дней безлимита'; } },
+    };
+    var KIND_ORDER = ['token', 'lead', 'unlimited'];
+    var pricingGroups = {};
+    var pricingSelected = {};
+
     function loadTariffs() {
-      var grid = document.getElementById('tariffGrid');
+      var grid = document.getElementById('pricingGrid');
       var empty = document.getElementById('tariffEmpty');
       grid.innerHTML = '<p class="empty">Загрузка…</p>';
       fetch('/api/cabinet/tariffs')
         .then(function (res) { return res.json(); })
         .then(function (plans) {
-          grid.innerHTML = '';
+          pricingGroups = {};
+          plans.forEach(function (p) { (pricingGroups[p.kind] = pricingGroups[p.kind] || []).push(p); });
           empty.hidden = plans.length > 0;
-          plans.forEach(function (plan) {
-            var card = document.createElement('div');
-            card.className = 'tariff-card';
-            var priceLine = plan.kind === 'unlimited'
-              ? plan.priceRub + ' ₽ / ' + (plan.periodDays || 30) + ' дней, безлимит'
-              : plan.priceRub + ' ₽ за старт + ' + plan.tokenRubPer1kInput + ' ₽/1000 вх. и ' + plan.tokenRubPer1kOutput + ' ₽/1000 исх. токенов';
-            var descLine = plan.kind === 'unlimited'
-              ? 'Без ограничений по количеству диалогов на весь оплаченный период.'
-              : 'Списывается за реально использованные токены, по мере общения бота с посетителями.';
-            card.innerHTML =
-              '<h3>' + plan.name + '</h3>' +
-              '<div class="tariff-price">' + priceLine + '</div>' +
-              '<p class="tariff-desc">' + descLine + '</p>' +
-              '<button type="button" class="btn-primary tariff-buy-btn" data-plan-id="' + plan.id + '">Оплатить</button>';
-            grid.appendChild(card);
-          });
-          grid.querySelectorAll('.tariff-buy-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () { startCheckout(btn.dataset.planId, btn); });
+          grid.innerHTML = '';
+          KIND_ORDER.forEach(function (kind) {
+            if (pricingGroups[kind] && pricingGroups[kind].length) {
+              if (!(kind in pricingSelected)) pricingSelected[kind] = 0;
+              grid.appendChild(renderPricingCard(kind, pricingGroups[kind]));
+            }
           });
         })
         .catch(function () {
@@ -3301,6 +3917,125 @@
           empty.hidden = false;
           empty.textContent = 'Не удалось загрузить тарифы. Попробуйте ещё раз позже.';
         });
+    }
+
+    function renderPricingCard(kind, packs) {
+      var meta = KIND_META[kind];
+      var card = document.createElement('div');
+      card.className = 'price-card' + (kind === 'lead' ? ' price-card-recommended' : '') + (kind === 'unlimited' ? ' price-card-unlimited' : '');
+
+      var selectorHtml = packs.length > 1
+        ? '<div class="pack-selector">' + packs.map(function (p, i) {
+            return '<button type="button" class="pack-btn' + (i === pricingSelected[kind] ? ' active' : '') + '" data-idx="' + i + '">' +
+              '<b>' + p.name.split(' — ')[1] + '</b><small>' + Math.round(p.priceRub).toLocaleString('ru-RU') + ' ₽</small></button>';
+          }).join('') + '</div>'
+        : '';
+
+      function renderBody() {
+        var plan = packs[pricingSelected[kind]];
+        card.querySelector('.price-card-price').innerHTML = '<b>' + Math.round(plan.priceRub).toLocaleString('ru-RU') + ' ₽</b>' +
+          (kind === 'unlimited' ? '<span> / ' + (plan.periodDays === 365 ? 'год' : 'месяц') + '</span>' : '<span> за пакет</span>');
+        card.querySelector('.price-card-rate').textContent = meta.rateLine(plan);
+        var buyBtn = card.querySelector('.price-card-buy');
+        buyBtn.dataset.planId = plan.id;
+        buyBtn.disabled = false;
+        buyBtn.textContent = 'Оплатить';
+      }
+
+      card.innerHTML =
+        '<span class="price-eyebrow">' + meta.eyebrow + '</span>' +
+        '<h3>' + meta.title + '</h3>' +
+        '<p class="price-card-desc">' + meta.desc + '</p>' +
+        '<div class="price-card-price"></div>' +
+        '<div class="price-card-rate"></div>' +
+        selectorHtml +
+        '<button type="button" class="btn-primary price-card-buy" style="width:100%;margin-top:12px;">Оплатить</button>';
+
+      card.querySelectorAll('.pack-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          pricingSelected[kind] = Number(btn.dataset.idx);
+          card.querySelectorAll('.pack-btn').forEach(function (b) { b.classList.toggle('active', b === btn); });
+          renderBody();
+        });
+      });
+      card.querySelector('.price-card-buy').addEventListener('click', function () {
+        startCheckout(this.dataset.planId, this);
+      });
+      renderBody();
+      return card;
+    }
+
+    // Real state from GET /api/cabinet/me (already fetched at boot for the
+    // rest of the cabinet — see the main fetch below) — re-read here rather
+    // than re-fetched, since this view can only open after boot anyway.
+    function loadBillingStatusPanel() {
+      var panel = document.getElementById('billingStatusPanel');
+      if (!lastMeResponse) { panel.innerHTML = ''; return; }
+      var plan = lastMeResponse.tariffPlan;
+      var html;
+      if (!plan) {
+        html = '<b>Пробный период</b><p>Тариф ещё не выбран — бот работает по пробному доступу.</p>';
+      } else if (plan.kind === 'unlimited') {
+        var until = lastMeResponse.planExpiresAt ? new Date(lastMeResponse.planExpiresAt).toLocaleDateString('ru-RU') : '—';
+        html = '<b>' + plan.name + '</b><p>Активен до ' + until + '.</p>';
+      } else {
+        var balance = Number(lastMeResponse.tokenBalanceRub || 0).toLocaleString('ru-RU');
+        html = '<b>' + plan.name + '</b><p>Баланс: ' + balance + ' ₽.</p>';
+      }
+      panel.innerHTML = html;
+      document.getElementById('autoPayToggle').checked = Boolean(lastMeResponse.autoPayEnabled);
+    }
+
+    document.getElementById('autoPayToggle').addEventListener('change', function () {
+      var checked = this.checked;
+      fetch('/api/cabinet/tariffs/autopay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: checked }),
+      }).then(function (res) { if (!res.ok) throw new Error(); if (lastMeResponse) lastMeResponse.autoPayEnabled = checked; })
+        .catch(function () { this.checked = !checked; }.bind(this));
+    });
+
+    document.getElementById('requestInvoiceBtn').addEventListener('click', function () {
+      var btn = this;
+      var status = document.getElementById('requestInvoiceStatus');
+      btn.disabled = true;
+      fetch('/api/cabinet/support-tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: 'Запрос счёта для юридического лица',
+          message: 'Прошу выставить счёт для оплаты по реквизитам компании.',
+        }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); })
+        .then(function () {
+          status.hidden = false;
+          status.textContent = 'Заявка отправлена — счёт пришлём в ответ на обращение в поддержке.';
+        })
+        .catch(function () {
+          status.hidden = false;
+          status.textContent = 'Не получилось отправить заявку. Попробуйте ещё раз.';
+        })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    function loadPaymentsHistory() {
+      var list = document.getElementById('paymentsHistoryList');
+      var empty = document.getElementById('paymentsHistoryEmpty');
+      fetch('/api/cabinet/tariffs/payments')
+        .then(function (res) { return res.json(); })
+        .then(function (payments) {
+          empty.hidden = payments.length > 0;
+          list.innerHTML = payments.map(function (p) {
+            return '<div class="payment-row-item">' +
+              '<span>' + p.planName + '</span>' +
+              '<span>' + new Date(p.confirmedAt).toLocaleDateString('ru-RU') + '</span>' +
+              '<b>' + Math.round(p.amountRub).toLocaleString('ru-RU') + ' ₽</b>' +
+              '</div>';
+          }).join('');
+        })
+        .catch(function () {});
     }
 
     // Redirects the visitor's own browser to YooKassa's hosted payment page
@@ -3425,9 +4160,50 @@
     // searches the sidebar's own sections plus (once loaded) База знаний
     // entries by title/question, Enter or click jumps straight there via
     // the same goToView() every nav-item itself uses.
+    // childNodes[0] here used to be a whitespace-only text node (the source
+    // indentation between the opening <button> tag and the <svg> icon
+    // inside it), not the label — every entry's label was '', so nothing
+    // ever matched a real query (empty-query only "worked" by accident,
+    // showing blank rows). The label always lives in the item's own
+    // <span> (icon is an <svg>, never wrapped in one), so select that
+    // directly instead of relying on DOM whitespace layout.
     var CMDK_TARGETS = Array.prototype.map.call(document.querySelectorAll('.nav-item[data-view]'), function (btn) {
-      return { label: btn.childNodes[0].textContent.trim(), view: btn.dataset.view };
+      return { label: btn.querySelector('span').textContent.trim(), view: btn.dataset.view };
     });
+    // Section names alone only get you to the right PAGE — this covers real
+    // headings/settings labels a person might actually remember and search
+    // for (e.g. "Автопополнение"), one entry per distinct <h2>/<h3> across
+    // the app (skipping ones that just repeat their own section's nav
+    // label, and view-leads — unreachable, no nav item points at it any
+    // more since CRM replaced it). A static list, not a live DOM scan: kept
+    // in sync by hand when a heading changes, same trade-off as
+    // VIEW_TITLES/VIEW_SUBTITLES above.
+    var CMDK_STATIC_INDEX = [
+      { label: 'Цель бота', view: 'dashboard' },
+      { label: 'A/B/C/D-тест приветствия', view: 'dashboard' },
+      { label: 'Установите бота на свой сайт', view: 'install' },
+      { label: 'Как установить — коротко', view: 'install' },
+      { label: 'Как сделать бота ещё лучше', view: 'readiness' },
+      { label: 'Повторяющиеся вопросы', view: 'attention' },
+      { label: 'Ждут ответа', view: 'attention' },
+      { label: 'Ответили — осталось проверить', view: 'attention' },
+      { label: 'Недавно решённые', view: 'attention' },
+      { label: 'Чат с ботом', view: 'training' },
+      { label: 'Как обучать бота', view: 'training' },
+      { label: 'Что мешает качеству', view: 'tests' },
+      { label: 'Разделы', view: 'knowledge' },
+      { label: 'Уведомления в Telegram', view: 'telegram' },
+      { label: 'Уведомления о новых заявках', view: 'telegram' },
+      { label: 'Стадии сделок', view: 'telegram' },
+      { label: 'Кастомные поля сделки', view: 'telegram' },
+      { label: 'Три модели оплаты', view: 'tariffs' },
+      { label: 'Настройки платежей', view: 'tariffs' },
+      { label: 'Автопополнение', view: 'tariffs' },
+      { label: 'История операций', view: 'tariffs' },
+      { label: 'Настройки чата', view: 'settings' },
+      { label: 'Варианты приветствия', view: 'settings' },
+    ];
+    CMDK_TARGETS = CMDK_TARGETS.concat(CMDK_STATIC_INDEX);
 
     function openCmdk() {
       document.getElementById('cmdkOverlay').hidden = false;
@@ -3493,6 +4269,10 @@
       })
       .then(function (me) {
         document.getElementById('appShell').style.display = 'flex';
+        // Kept around so the billing view (opened later, on demand) can read
+        // tariffPlan/tokenBalanceRub/autoPayEnabled without a second round
+        // trip — see loadBillingStatusPanel.
+        lastMeResponse = me;
         companyName = me.companyName || '';
         document.getElementById('companyNameInput').value = companyName;
         // pageTitle itself is always the section name (goToView already set
@@ -3502,8 +4282,10 @@
         // Always visible regardless of which view is open — the one place
         // that answers "which account am I in right now?" no matter where
         // you navigate, which matters a lot the moment you manage more than
-        // one company.
-        document.getElementById('sidebarCompany').textContent = companyName || '—';
+        // one company. Domain isn't known yet here (needs currentBotId,
+        // resolved just below) — renderBotSwitcher()'s updateSidebarBotSite()
+        // fills that in a few lines down; avatar/name show immediately.
+        renderSidebarCompanyCard('');
 
         // me.bots is already the full switcher list (same shape GET /bots
         // returns) — no need for a second round-trip just to populate it.
@@ -3597,6 +4379,15 @@
       document.querySelector('.nav-item[data-view="support"]').click();
     });
 
+    // See this section's own HTML comment — no real per-platform copy to
+    // show yet, so each chip just jumps to the one real set of steps
+    // (already platform-agnostic) instead of a dead decorative button.
+    document.querySelectorAll('.install-platform-chip').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.getElementById('installSteps').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
     document.getElementById('openTestChatBtn').addEventListener('click', function () {
       var url = document.getElementById('testChatLink').textContent.trim();
       if (url && url !== '…') window.open(url, '_blank', 'noopener');
@@ -3644,6 +4435,17 @@
     function initTrainingPanes() {
       if (!botWidgetToken) return;
       document.getElementById('testingFrame').src = testingFrameSrc();
+      updateSettingsPreviewFrame();
+    }
+    // «Виджет и приветствие» reuses the same real widget preview as the
+    // training pane, in its own aside — only the src (color) needs to update
+    // when the user picks a new color, since name/greeting only change after
+    // an actual save (initTrainingPanes runs again then too).
+    function updateSettingsPreviewFrame() {
+      if (!botWidgetToken) return;
+      var src = testingFrameSrc();
+      document.getElementById('settingsPreviewFrame').src = src;
+      document.getElementById('openWidgetPreviewLink').href = src;
     }
 
     // Used by the "Требует внимания" dialog viewer (renderDialogViewDislikeControl
@@ -3889,6 +4691,17 @@
     // "Найти повторяющиеся вопросы" — an on-demand LLM call (see
     // CabinetService.getRecurringQuestions), never auto-run, since it costs
     // a real completion every click.
+    // Empty-state shortcuts just trigger the same two real actions already
+    // available on this page — scroll to + fire the real "найти повторы"
+    // button, or jump to the real testing chat.
+    document.getElementById('emptyStateFindRecurringBtn').addEventListener('click', function () {
+      document.getElementById('recurringPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('findRecurringBtn').click();
+    });
+    document.getElementById('emptyStateCheckTrainingBtn').addEventListener('click', function () {
+      goToView('training');
+    });
+
     document.getElementById('findRecurringBtn').addEventListener('click', function () {
       var btn = this;
       btn.disabled = true;
@@ -4174,6 +4987,9 @@
     // rather than riding loadBotScopedData(), same convention as support.
     var dialogsPage = 1;
     var dialogsTotalPages = 1;
+    var dialogsCurrentList = [];
+    var dialogsActiveFilter = 'all';
+    var dialogsActiveId = null;
     function loadDialogsRegistry(page) {
       dialogsPage = page || 1;
       fetch('/api/cabinet/dialogs?page=' + dialogsPage)
@@ -4181,73 +4997,163 @@
         .then(renderDialogsRegistry)
         .catch(function () {});
     }
+    function dialogsMatchesFilter(d) {
+      if (dialogsActiveFilter === 'lead') return Boolean(d.lead);
+      if (dialogsActiveFilter === 'escalation') return Boolean(d.hasUnansweredEscalation);
+      return true;
+    }
+    function dialogsMatchesSearch(d, query) {
+      if (!query) return true;
+      var haystack = [
+        d.botName, d.lastMessagePreview, d.dealTitle,
+        d.lead && (d.lead.name || d.lead.phone || d.lead.email),
+      ].filter(Boolean).join(' ').toLowerCase();
+      return haystack.indexOf(query) !== -1;
+    }
     function renderDialogsRegistry(data) {
-      var table = document.getElementById('dialogsTable');
-      var rows = document.getElementById('dialogsRows');
-      var empty = document.getElementById('dialogsEmpty');
+      dialogsCurrentList = (data && data.dialogs) || [];
+      dialogsTotalPages = Math.max(1, Math.ceil((data.total || 0) / (data.pageSize || 20)));
       var pagination = document.getElementById('dialogsPagination');
-      rows.innerHTML = '';
-
-      if (!data.dialogs || data.dialogs.length === 0) {
-        table.style.display = 'none';
-        empty.hidden = false;
-        pagination.hidden = true;
-        return;
-      }
-      empty.hidden = true;
-      table.style.display = 'table';
-
-      data.dialogs.forEach(function (d) {
-        var tr = document.createElement('tr');
-
-        var botTd = document.createElement('td');
-        botTd.textContent = d.botName || '—';
-        tr.appendChild(botTd);
-
-        var lastTd = document.createElement('td');
-        lastTd.textContent = d.lastMessagePreview || '—';
-        if (d.hasUnansweredEscalation) {
-          var badge = document.createElement('span');
-          badge.className = 'dialog-row-escalation-badge';
-          badge.textContent = 'ждёт ответа';
-          lastTd.appendChild(badge);
-        }
-        tr.appendChild(lastTd);
-
-        var countTd = document.createElement('td');
-        countTd.textContent = String(d.messageCount);
-        tr.appendChild(countTd);
-
-        var clientTd = document.createElement('td');
-        clientTd.textContent = d.lead ? (d.lead.name || d.lead.phone || d.lead.email || 'без имени') : '—';
-        tr.appendChild(clientTd);
-
-        var dealTd = document.createElement('td');
-        dealTd.textContent = d.dealTitle || '—';
-        tr.appendChild(dealTd);
-
-        var dateTd = document.createElement('td');
-        dateTd.textContent = fmtDate(d.updatedAt);
-        tr.appendChild(dateTd);
-
-        var actionTd = document.createElement('td');
-        var viewBtn = document.createElement('button');
-        viewBtn.type = 'button';
-        viewBtn.className = 'dialog-row-view-btn';
-        viewBtn.textContent = 'Открыть';
-        viewBtn.addEventListener('click', function () { openDialogById(d.id); });
-        actionTd.appendChild(viewBtn);
-        tr.appendChild(actionTd);
-
-        rows.appendChild(tr);
-      });
-
-      dialogsTotalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
       pagination.hidden = dialogsTotalPages <= 1;
       document.getElementById('dialogsPageInfo').textContent = 'Стр. ' + data.page + ' из ' + dialogsTotalPages;
       document.getElementById('dialogsPrevBtn').disabled = data.page <= 1;
       document.getElementById('dialogsNextBtn').disabled = data.page >= dialogsTotalPages;
+      renderDialogsList();
     }
+    // Search/filter run client-side over the currently loaded page — the
+    // list is already fetched for pagination, so this needs no extra
+    // request and stays instant.
+    function renderDialogsList() {
+      var list = document.getElementById('dialogsRowsList');
+      var empty = document.getElementById('dialogsEmpty');
+      var query = document.getElementById('dialogsSearchInput').value.trim().toLowerCase();
+      var visible = dialogsCurrentList.filter(function (d) { return dialogsMatchesFilter(d) && dialogsMatchesSearch(d, query); });
+      list.innerHTML = '';
+
+      if (dialogsCurrentList.length === 0) {
+        empty.hidden = false;
+        empty.textContent = 'Диалогов пока нет.';
+        renderDialogsConversationEmpty();
+        return;
+      }
+      if (visible.length === 0) {
+        empty.hidden = false;
+        empty.textContent = 'Ничего не нашлось.';
+        return;
+      }
+      empty.hidden = true;
+
+      visible.forEach(function (d) {
+        var row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'dialog-row' + (d.id === dialogsActiveId ? ' active' : '');
+        var initial = (d.lead && d.lead.name ? d.lead.name : d.botName || '?').trim().slice(0, 1).toUpperCase();
+        var title = d.lead && d.lead.name ? d.lead.name : (d.botName || 'Диалог');
+        row.innerHTML =
+          '<span class="dialog-avatar">' + initial + '</span>' +
+          '<span><b>' + title + '</b><small>' + (d.lastMessagePreview || '—') +
+            (d.hasUnansweredEscalation ? '<span class="dialog-row-escalation-badge">ждёт ответа</span>' : '') +
+            '</small></span>' +
+          '<time>' + fmtDate(d.updatedAt) + '</time>';
+        row.addEventListener('click', function () { openDialogInline(d); });
+        list.appendChild(row);
+      });
+
+      // Keep whatever was open in view in sync when the list re-renders
+      // (filter change, search, page load) — auto-open the first row so the
+      // panel is never just blank the moment the page loads.
+      var stillVisible = visible.some(function (d) { return d.id === dialogsActiveId; });
+      if (!stillVisible) {
+        openDialogInline(visible[0]);
+      }
+    }
+    document.getElementById('dialogsSearchInput').addEventListener('input', renderDialogsList);
+    document.querySelectorAll('#dialogsFilterChips button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('#dialogsFilterChips button').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        dialogsActiveFilter = btn.dataset.filter;
+        renderDialogsList();
+      });
+    });
+
+    function renderDialogsConversationEmpty() {
+      dialogsActiveId = null;
+      document.getElementById('dialogsConvTitle').textContent = 'Выберите диалог слева';
+      document.getElementById('dialogsConvSubtitle').textContent = '';
+      document.getElementById('dialogsConvStatusPill').hidden = true;
+      document.getElementById('dialogsConvContext').hidden = true;
+      document.getElementById('dialogsConvMessages').innerHTML = '<div class="dialogs-empty-conv">Пока нет ни одного диалога</div>';
+    }
+
+    // Inline conversation pane for the "Диалоги" split view — deliberately
+    // separate from openDialogById()/renderDialogThread() (the modal), which
+    // stays as-is for the CRM deal panel's "Показать переписку" link.
+    function openDialogInline(d) {
+      if (!d) { renderDialogsConversationEmpty(); return; }
+      dialogsActiveId = d.id;
+      renderDialogsList();
+      var titleEl = document.getElementById('dialogsConvTitle');
+      var subtitleEl = document.getElementById('dialogsConvSubtitle');
+      var pillEl = document.getElementById('dialogsConvStatusPill');
+      titleEl.textContent = (d.lead && d.lead.name ? d.lead.name : d.botName || 'Диалог');
+      subtitleEl.textContent = (d.botName || '') + ' · ' + fmtDate(d.updatedAt);
+      if (d.hasUnansweredEscalation) {
+        pillEl.hidden = false;
+        pillEl.textContent = 'Ждёт ответа';
+        pillEl.className = 'status-pill status-pill-attention';
+      } else if (d.lead) {
+        pillEl.hidden = false;
+        pillEl.textContent = 'Заявка получена';
+        pillEl.className = 'status-pill';
+      } else {
+        pillEl.hidden = true;
+      }
+
+      var contextEl = document.getElementById('dialogsConvContext');
+      if (d.dealTitle) {
+        contextEl.hidden = false;
+        document.getElementById('dialogsConvContextTitle').textContent = 'Сделка в CRM: ' + d.dealTitle;
+        document.getElementById('dialogsConvContextSub').textContent = d.lead ? (d.lead.name || d.lead.phone || d.lead.email || '') : '';
+        document.getElementById('dialogsConvContextBtn').onclick = function () { location.href = '/cabinet/crm.html'; };
+      } else {
+        contextEl.hidden = true;
+      }
+
+      var messagesEl = document.getElementById('dialogsConvMessages');
+      messagesEl.innerHTML = '<div class="dialogs-empty-conv">Загружаю…</div>';
+      fetch('/api/cabinet/dialogs/' + d.id)
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function (data) {
+          if (dialogsActiveId !== d.id) return;
+          messagesEl.innerHTML = '';
+          (data.messages || []).forEach(function (m) {
+            var bubble = document.createElement('div');
+            bubble.className = 'message ' + (m.role === 'assistant' ? 'bot-message' : 'client-message');
+            if (m.role === 'assistant') {
+              var miniBot = document.createElement('span');
+              miniBot.className = 'mini-bot';
+              miniBot.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><path d="M8 16h.01M16 16h.01"/></svg>';
+              bubble.appendChild(miniBot);
+            }
+            var textNode = document.createElement('span');
+            textNode.textContent = m.content;
+            bubble.appendChild(textNode);
+            messagesEl.appendChild(bubble);
+            if (m.role === 'assistant' && m.id) {
+              var controlWrap = document.createElement('div');
+              controlWrap.className = 'dialog-view-dislike-wrap';
+              messagesEl.appendChild(controlWrap);
+              renderDialogViewDislikeControl(controlWrap, m);
+            }
+          });
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        })
+        .catch(function () {
+          messagesEl.innerHTML = '<div class="dialogs-empty-conv">Не получилось загрузить диалог.</div>';
+        });
+    }
+
     document.getElementById('dialogsPrevBtn').addEventListener('click', function () {
       if (dialogsPage > 1) loadDialogsRegistry(dialogsPage - 1);
     });
