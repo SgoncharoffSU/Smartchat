@@ -320,13 +320,17 @@ input:focus {
    sibling fixed to 100vh regardless of what else shares the page is
    exactly what caused the banner-overlap bug this replaced. */
 .sidebar {
-  width: 248px;
+  /* Reference's own shadcn Sidebar primitive: SIDEBAR_WIDTH = 16rem. */
+  width: 256px;
   flex-shrink: 0;
-  background: var(--navy);
+  /* Checked live on the reference's own [data-sidebar=sidebar]: a subtle
+     top-to-bottom gradient (navy fading to near-black), not a flat fill,
+     and 12px padding all around, not 20/16. */
+  background: linear-gradient(180deg, var(--navy), #091725);
   border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
-  padding: 20px 16px;
+  padding: 12px;
   height: 100%;
   /* .sidebar-nav (below) does its own scrolling now — see its own comment.
      Found live: on a normal-height screen, the nav list (grown past 11 items
@@ -340,19 +344,42 @@ input:focus {
 .sidebar .logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-height: 44px;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 14px;
   color: #fff;
   text-decoration: none;
-  padding: 0 10px;
-  margin-bottom: 14px;
+  padding: 0 8px;
+  margin-bottom: 12px;
 }
 
 .sidebar .logo em {
   font-style: normal;
   color: var(--lime);
 }
+
+/* Verbatim from the reference's own compiled .brand-icon rule. */
+.brand-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  border-radius: 9px;
+  background: var(--lime);
+  transform: rotate(-8deg);
+}
+.brand-icon i {
+  position: absolute;
+  width: 12px;
+  height: 2px;
+  background: var(--ink);
+  border-radius: 3px;
+}
+.brand-icon i:first-child { transform: rotate(60deg); }
+.brand-icon i:nth-child(2) { transform: rotate(-60deg); }
 
 /* Always visible regardless of which view is open — the one place that
    answers "which bot am I in right now?" no matter where in the app you
@@ -363,17 +390,21 @@ input:focus {
    as the topbar widget, convenient when a company has more than one bot. */
 .sidebar-company-wrap {
   position: relative;
-  margin: 0 10px 8px;
+  margin: 0 0 8px;
 }
+/* Checked live on the reference's own .company-switch/.sidebar-user (same
+   card styling for both): a persistent translucent-white fill + hairline
+   border, not just a hover-only tint — and the avatar is a 30×30 rounded
+   square (radius 9), not our old 26×26/8-radius. */
 .sidebar-company {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
-  padding: 6px 8px;
-  background: var(--sidebar-hover);
-  border: none;
-  border-radius: 8px;
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
   color: var(--sidebar-fg);
   font-family: inherit;
   text-align: left;
@@ -385,9 +416,9 @@ input:focus {
 
 .sidebar-company-avatar {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   /* Checked live on the reference's own "БВ" avatar — navy, not lime. */
   background: var(--avatar-bg);
   color: #fff;
@@ -414,9 +445,8 @@ input:focus {
 }
 
 .sidebar-company-domain {
-  font-size: 11px;
-  color: var(--sidebar-fg);
-  opacity: 0.6;
+  font-size: 10px;
+  color: #8295a7;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -424,7 +454,7 @@ input:focus {
 
 .sidebar-company-chevron {
   flex-shrink: 0;
-  opacity: 0.5;
+  color: #8295a7;
 }
 
 /* One company can run several bots with different contexts/skills (separate
@@ -582,7 +612,9 @@ input:focus {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  /* Reference's own SidebarGroup carries 7px top+bottom padding — 14px
+     between two adjacent groups' content, matched here as a flat gap. */
+  gap: 14px;
   flex: 1;
   /* min-height:0 is the actual fix, not overflow-y alone — a flex child
      defaults to min-height:auto (never shrinks below its own content), so
@@ -603,29 +635,37 @@ input:focus {
   gap: 2px;
 }
 
+/* Checked live on the reference's own [data-sidebar=group-label]: a
+   specific dim color (#71869b), not our old --sidebar-fg-at-55%-opacity —
+   the two only coincidentally look similar at a glance. */
 .sidebar-nav-group-label {
-  font-size: 10.5px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--sidebar-fg);
-  opacity: 0.55;
-  padding: 0 12px 6px;
+  color: #71869b;
+  padding: 0 11px 7px;
 }
 
+/* Checked live on the reference's own [data-sidebar=menu-button]: fixed
+   min-height (not vertical padding) + a dimmer default text color
+   (#aebdca) that brightens to solid white only on hover — our old
+   --sidebar-fg default was too bright/high-contrast even at rest. */
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 40px;
   text-align: left;
   border: none;
   background: transparent;
-  color: var(--sidebar-fg);
+  color: #aebdca;
   text-decoration: none;
-  border-radius: 9px;
-  padding: 9px 12px;
+  border-radius: 10px;
+  padding: 0 11px;
   font-size: 14px;
   cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease;
 }
 
 .nav-item span:first-of-type {
@@ -643,6 +683,7 @@ input:focus {
 }
 
 .nav-item:hover {
+  color: #fff;
   background: var(--sidebar-hover);
 }
 
@@ -665,8 +706,8 @@ input:focus {
 .nav-badge {
   display: inline-block;
   background: transparent;
-  color: var(--muted);
-  font-size: 12px;
+  color: #8295a7;
+  font-size: 10px;
   font-weight: 500;
   margin-left: 4px;
 }
@@ -676,8 +717,8 @@ input:focus {
   align-items: center;
   gap: 10px;
   margin: 8px 0 0;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 10px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--sidebar-border);
   color: var(--sidebar-fg);
@@ -725,16 +766,22 @@ input:focus {
   gap: 6px;
 }
 
+/* Checked live on the reference's own .sidebar-user card (same treatment as
+   .company-switch above it): persistent translucent-white fill + hairline
+   border, not transparent-until-hover. Split from the settings gear here
+   into two real, distinct actions (open the account menu vs jump straight
+   to Настройки) instead of the reference's single fake demo click — the
+   card look is kept, the interaction isn't force-merged into one control. */
 .account-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   flex: 1;
   min-width: 0;
-  border: none;
-  background: transparent;
-  border-radius: 10px;
-  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.045);
+  border-radius: 12px;
+  padding: 9px;
   cursor: pointer;
   text-align: left;
 }
@@ -764,10 +811,10 @@ input:focus {
 }
 
 .account-avatar {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 9px;
   /* Checked live on the reference's own account avatar ("О") — navy, not
      lime; same token as .sidebar-company-avatar above. */
   background: var(--avatar-bg);
