@@ -1073,10 +1073,20 @@ export class CabinetService {
    * previous). No new tables: buckets the same Dialog rows getAnalytics
    * already reads (isPreview: false), by calendar day of createdAt.
    * "В открытие чата" = dialogs with a real visitor message / all dialogs
-   * shown that day; "В заявку" = dialogs that got a Lead / dialogs opened —
-   * same two ratios (and the same bases) as the "Конверсия в диалог" /
-   * "Конверсия в регистрацию" labels already shown on the metric cards
-   * above, just split per day instead of summed over the whole period.
+   * shown that day; "В заявку" = leads confirmed that day / dialogs opened
+   * that day — same two ratios (and the same bases) as the "Конверсия в
+   * диалог" / "Конверсия в регистрацию" labels already shown on the metric
+   * cards above, just split per day instead of summed over the whole
+   * period.
+   *
+   * Leads are bucketed by the Lead's OWN createdAt, queried separately from
+   * dialogs — matching getAnalytics' leadsCur/leadsPrev above, which also
+   * filter by Lead.createdAt, never its dialog's. A dialog can open on one
+   * day and only confirm a lead (a later message supplying contact info)
+   * days after — attributing that lead to the dialog's OPEN day (or
+   * dropping it if the dialog itself falls outside the window even though
+   * the lead was confirmed inside it) would silently disagree with what the
+   * metric cards above show for the very same period.
    */
   async getConversionChart(companyId: string, botId?: string, days = 7) {
     const bot = await this.findOwnedBot(companyId, botId);
@@ -1084,14 +1094,19 @@ export class CabinetService {
     since.setHours(0, 0, 0, 0);
     since.setDate(since.getDate() - (days - 1));
 
-    const dialogs = await this.prisma.dialog.findMany({
-      where: { botId: bot.id, isPreview: false, createdAt: { gte: since } },
-      select: {
-        createdAt: true,
-        messages: { where: { role: 'visitor' }, take: 1, select: { id: true } },
-        lead: { select: { id: true } },
-      },
-    });
+    const [dialogs, leads] = await Promise.all([
+      this.prisma.dialog.findMany({
+        where: { botId: bot.id, isPreview: false, createdAt: { gte: since } },
+        select: {
+          createdAt: true,
+          messages: { where: { role: 'visitor' }, take: 1, select: { id: true } },
+        },
+      }),
+      this.prisma.lead.findMany({
+        where: { dialog: { botId: bot.id, isPreview: false }, createdAt: { gte: since } },
+        select: { createdAt: true },
+      }),
+    ]);
 
     const buckets = new Map<string, { shown: number; opened: number; leads: number }>();
     for (let i = 0; i < days; i++) {
@@ -1100,12 +1115,14 @@ export class CabinetService {
       buckets.set(localDateKey(d), { shown: 0, opened: 0, leads: 0 });
     }
     for (const dialog of dialogs) {
-      const key = localDateKey(dialog.createdAt);
-      const bucket = buckets.get(key);
+      const bucket = buckets.get(localDateKey(dialog.createdAt));
       if (!bucket) continue; // outside the requested window after rounding — ignore
       bucket.shown += 1;
       if (dialog.messages.length > 0) bucket.opened += 1;
-      if (dialog.lead) bucket.leads += 1;
+    }
+    for (const lead of leads) {
+      const bucket = buckets.get(localDateKey(lead.createdAt));
+      if (bucket) bucket.leads += 1; // outside the requested window after rounding — ignore
     }
 
     return {

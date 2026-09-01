@@ -193,7 +193,7 @@ export class CabinetController {
   @UseGuards(AuthGuard)
   getConversionChart(@Req() req: AuthedRequest, @Query('botId') botId?: string, @Query('days') days?: string) {
     const parsedDays = Number(days);
-    const n = Number.isFinite(parsedDays) && parsedDays > 0 && parsedDays <= 31 ? parsedDays : 7;
+    const n = Number.isInteger(parsedDays) && parsedDays > 0 && parsedDays <= 31 ? parsedDays : 7;
     return this.cabinet.getConversionChart(req.companyId, botId, n);
   }
 
