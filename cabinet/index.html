@@ -14,7 +14,7 @@
      this file indefinitely regardless of the server's own Cache-Control
      headers, since those work by re-serving whatever they already fetched
      for this exact URL. A new query string is a new URL to them. -->
-<link rel="stylesheet" href="style.css?v=20260831b" />
+<link rel="stylesheet" href="style.css?v=20260901a" />
 </head>
 <body class="cabinet-body">
   <div id="impersonationBanner" hidden>
@@ -31,17 +31,22 @@
         </svg>
         Умный<em>Чат</em>
       </a>
-      <div class="sidebar-company" title="Вы сейчас в кабинете этой компании">
-        <span class="sidebar-company-avatar" id="sidebarCompanyAvatar"></span>
-        <span class="sidebar-company-text">
-          <span class="sidebar-company-name" id="sidebarCompanyName"></span>
-          <span class="sidebar-company-domain" id="sidebarCompanyDomain"></span>
-        </span>
-        <!-- Same down-chevron glyph as .bot-switcher-current-arrow above —
-             purely visual here (this card isn't itself a control; bot/company
-             switching already lives in the topbar widget), matches the
-             reference design's identity-card look. -->
-        <svg class="sidebar-company-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+      <!-- The name/domain shown here already track the CURRENTLY SELECTED
+           bot (see renderSidebarCompanyCard's own comment) — so the chevron
+           is a real bot-switcher trigger, not decoration: same bot list/
+           logic as the topbar's own bot-switcher-widget, just a second entry
+           point (convenient when a company has more than one bot and the
+           sidebar is what's in view). -->
+      <div class="sidebar-company-wrap" id="sidebarCompanyWrap">
+        <button type="button" class="sidebar-company" id="sidebarCompanyBtn" title="Переключить бота">
+          <span class="sidebar-company-avatar" id="sidebarCompanyAvatar"></span>
+          <span class="sidebar-company-text">
+            <span class="sidebar-company-name" id="sidebarCompanyName"></span>
+            <span class="sidebar-company-domain" id="sidebarCompanyDomain"></span>
+          </span>
+          <svg class="sidebar-company-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="bot-switcher-menu sidebar-company-menu" id="sidebarCompanyMenu" hidden></div>
       </div>
       <nav class="sidebar-nav">
         <div class="sidebar-nav-group">
@@ -736,7 +741,7 @@
         <div class="training-toolbar">
           <span class="training-toolbar-label">Остальное обучение бота — здесь:</span>
           <button type="button" class="training-toolbar-link" data-goto-view="knowledge">База знаний</button>
-          <button type="button" class="training-toolbar-link" data-goto-view="settings">Настройки чата</button>
+          <button type="button" class="training-toolbar-link" data-goto-view="settings">Виджет и приветствие</button>
           <button type="button" class="training-toolbar-link" data-goto-view="telegram">Интеграции</button>
           <button type="button" class="training-help-btn" id="trainingHelpBtn" title="Как это работает">?</button>
         </div>
@@ -787,7 +792,7 @@
             <li><strong>Чат с ботом</strong> — это тот же бот, что видят ваши клиенты, в тех же условиях.</li>
             <li><strong>👎 у ответа</strong> — если конкретный ответ оказался неудачным, отметьте его и укажите, как было правильно. Бот учтёт это в похожих ситуациях в будущем.</li>
             <li><strong>База знаний</strong> — добавляйте сюда, если бот чего-то не знал вообще (цены, сроки, условия, инструкции, которые должны действовать всегда).</li>
-            <li><strong>Настройки чата</strong> — имя и пол бота, цвет виджета, название компании, варианты приветствия, цель бота.</li>
+            <li><strong>Виджет и приветствие</strong> — имя и пол бота, цвет виджета, название компании, варианты приветствия, цель бота.</li>
             <li><strong>Интеграции</strong> — куда приходят вопросы, на которые бот не смог ответить сам, и настройки подключения мессенджеров.</li>
             <li>Если бот стабильно ведёт себя странно не по теме вашего бизнеса (повторяется, путается, придумывает) — это не чинится через кабинет, напишите в поддержку.</li>
           </ul>
@@ -1129,19 +1134,6 @@
         </article>
       </section>
 
-      <section class="view" id="view-leads" hidden>
-        <div class="panel">
-          <h2>Заявки</h2>
-          <div class="table-scroll">
-            <table id="leadsTable" style="display:none">
-              <thead><tr><th>Имя</th><th>Телефон</th><th>Email</th><th>Интерес</th><th>Когда</th><th id="leadsPaidHeader">Оплата</th></tr></thead>
-              <tbody id="leadsRows"></tbody>
-            </table>
-          </div>
-          <p class="empty" id="leadsEmpty">Заявок пока нет.</p>
-        </div>
-      </section>
-
       <!-- Reachable both from the "Аккаунт" nav group (id=tariffsNavItem)
            and the trial banner's "Выбрать тариф" (see goToTariffs) — both
            paths call loadTariffs(). Real plans/prices come from
@@ -1156,9 +1148,10 @@
         <div class="panel billing-status-panel" id="billingStatusPanel"></div>
 
         <div class="panel">
-          <h2>Три модели оплаты</h2>
+          <div class="funnel-eyebrow">Три модели оплаты</div>
+          <h2>Платите так, как устроен ваш бизнес</h2>
           <p class="sub" style="margin-bottom:16px;">
-            Функции одинаковы на всех тарифах — меняется только единица расчёта.
+            Функции одинаковы на всех тарифах. Меняется только единица расчёта.
           </p>
           <div class="pricing-grid" id="pricingGrid"></div>
           <p class="empty" id="tariffEmpty" hidden>Тарифы пока не настроены — обратитесь в поддержку.</p>
@@ -1173,9 +1166,10 @@
             </span>
             <input type="checkbox" id="autoPayToggle" />
           </label>
-          <button type="button" class="btn-secondary btn-inline" id="requestInvoiceBtn" style="margin-top:10px;">
-            Запросить счёт для юрлица
-          </button>
+          <div class="install-testlink-actions" style="margin-top:10px;">
+            <button type="button" class="btn-secondary btn-inline" id="manualTopupBtn">Пополнить вручную</button>
+            <button type="button" class="btn-secondary btn-inline" id="requestInvoiceBtn">Запросить счёт для юрлица</button>
+          </div>
           <p class="sub" id="requestInvoiceStatus" hidden style="margin-top:8px;"></p>
         </div>
 
@@ -1482,7 +1476,7 @@
     }
 
     // bot.label is the owner's own name for the bot record (set in
-    // Настройки чата → "Название бота") — separate from bot.name, the chat
+    // Виджет и приветствие → "Название бота") — separate from bot.name, the chat
     // PERSONA'S name visitors see (e.g. "Алина"), and from sourceWebsite,
     // since one bot can be installed on several sites and neither the
     // persona nor any single site is a stable identifier for "which bot is
@@ -1492,14 +1486,11 @@
       return b.label || b.name;
     }
 
-    // Populates the sidebar's bot switcher from allBots — a single-bot
-    // company still sees the current-bot button (just an empty-looking menu
-    // under it beyond "+ Добавить бота"), same as before with the select.
-    function renderBotSwitcher() {
-      var current = allBots.filter(function (b) { return b.id === currentBotId; })[0];
-      document.getElementById('botSwitcherCurrentName').textContent = current ? botSwitcherLabel(current) : '…';
-
-      var menu = document.getElementById('botSwitcherMenu');
+    // Shared by both bot-switcher entry points (topbar widget + sidebar
+    // company card, see renderBotSwitcher below) — same bot list, same
+    // switch/add-bot behavior, just filling in whichever menu element is
+    // passed (each trigger's own click handler closes the OTHER one).
+    function fillBotSwitcherMenu(menu) {
       menu.innerHTML = '';
       allBots.forEach(function (b) {
         var row = document.createElement('button');
@@ -1510,7 +1501,7 @@
         nameSpan.textContent = botSwitcherLabel(b);
         row.appendChild(nameSpan);
         row.addEventListener('click', function () {
-          document.getElementById('botSwitcherMenu').hidden = true;
+          menu.hidden = true;
           if (b.id === currentBotId) return;
           currentBotId = b.id;
           localStorage.setItem(CURRENT_BOT_STORAGE_KEY, currentBotId);
@@ -1525,21 +1516,42 @@
       addRow.className = 'bot-switcher-menu-item bot-switcher-menu-add';
       addRow.textContent = '+ Добавить бота';
       addRow.addEventListener('click', function () {
-        document.getElementById('botSwitcherMenu').hidden = true;
+        menu.hidden = true;
         addNewBot();
       });
       menu.appendChild(addRow);
+    }
+
+    // Populates BOTH bot switchers from allBots — the topbar widget and the
+    // sidebar company card's dropdown (same real data, two entry points) — a
+    // single-bot company still sees the current-bot button (just an
+    // empty-looking menu under it beyond "+ Добавить бота"), same as before
+    // with the select.
+    function renderBotSwitcher() {
+      var current = allBots.filter(function (b) { return b.id === currentBotId; })[0];
+      document.getElementById('botSwitcherCurrentName').textContent = current ? botSwitcherLabel(current) : '…';
+
+      fillBotSwitcherMenu(document.getElementById('botSwitcherMenu'));
+      fillBotSwitcherMenu(document.getElementById('sidebarCompanyMenu'));
 
       updateSidebarBotSite();
     }
 
     document.getElementById('botSwitcherCurrentBtn').addEventListener('click', function () {
       var menu = document.getElementById('botSwitcherMenu');
+      document.getElementById('sidebarCompanyMenu').hidden = true;
+      menu.hidden = !menu.hidden;
+    });
+    document.getElementById('sidebarCompanyBtn').addEventListener('click', function () {
+      var menu = document.getElementById('sidebarCompanyMenu');
+      document.getElementById('botSwitcherMenu').hidden = true;
       menu.hidden = !menu.hidden;
     });
     document.addEventListener('click', function (e) {
       var widget = document.getElementById('botSwitcherWidget');
       if (widget && !widget.contains(e.target)) document.getElementById('botSwitcherMenu').hidden = true;
+      var sidebarWrap = document.getElementById('sidebarCompanyWrap');
+      if (sidebarWrap && !sidebarWrap.contains(e.target)) document.getElementById('sidebarCompanyMenu').hidden = true;
     });
 
     // Same site shown in the switcher's own option text above, surfaced here
@@ -1641,9 +1653,8 @@
       knowledge: 'База знаний',
       install: 'Установка',
       telegram: 'Интеграции',
-      leads: 'Заявки',
       support: 'Поддержка',
-      settings: 'Настройки',
+      settings: 'Виджет и приветствие',
       team: 'Команда',
       tariffs: 'Тариф и оплата',
       tests: 'Автотесты',
@@ -2084,7 +2095,12 @@
       document.getElementById('chartAvgOpen').textContent = avg('openRate');
     }
 
+    // Cached so the notification bell panel (renderNotifPanel) can reuse the
+    // real escalations already fetched here instead of firing a second
+    // request just to know their timestamps/reasons.
+    var lastAnalyticsData = null;
     function renderAnalytics(data) {
+      lastAnalyticsData = data;
       document.getElementById('statLeadsLabel').textContent = data.leadsLabel || 'Заявок получено';
 
       document.getElementById('statShown').textContent = data.shown.count;
@@ -2296,39 +2312,6 @@
       renderProcessedList(processedItems);
 
       renderRecentEvents(data.escalations);
-
-      // Leads view
-      document.getElementById('leadsPaidHeader').style.display = data.tracksPayments ? '' : 'none';
-      if (data.leadsList && data.leadsList.length > 0) {
-        document.getElementById('leadsTable').style.display = 'table';
-        document.getElementById('leadsEmpty').style.display = 'none';
-        var leadRows = document.getElementById('leadsRows');
-        leadRows.innerHTML = '';
-        data.leadsList.forEach(function (l) {
-          var tr = document.createElement('tr');
-          tr.innerHTML =
-            '<td>' + (l.name || '—') + '</td>' + '<td>' + (l.phone || '—') + '</td>' +
-            '<td>' + (l.email || '—') + '</td>' + '<td>' + (l.interest || '—') + '</td>' +
-            '<td>' + fmtDate(l.createdAt) + '</td>';
-          if (data.tracksPayments) {
-            var payCell = document.createElement('td');
-            if (l.paidAt) {
-              payCell.innerHTML = '<span class="badge ready">Оплачено</span>';
-            } else {
-              var payBtn = document.createElement('button');
-              payBtn.className = 'copy-btn';
-              payBtn.type = 'button';
-              payBtn.textContent = 'Отметить оплаченным';
-              payBtn.addEventListener('click', function () {
-                fetch('/api/cabinet/leads/' + l.id + '/mark-paid', { method: 'POST' }).then(loadAnalytics);
-              });
-              payCell.appendChild(payBtn);
-            }
-            tr.appendChild(payCell);
-          }
-          leadRows.appendChild(tr);
-        });
-      }
     }
 
     // Info popovers — same toggle/outside-click-closes pattern as the status
@@ -4020,6 +4003,15 @@
         .finally(function () { btn.disabled = false; });
     });
 
+    // "Пополнить вручную" — real manual top-up already exists as the token
+    // pricing card's pack-selector + «Оплатить» above (see renderPricingCard);
+    // no separate fixed-amount checkout endpoint exists, so this just gets
+    // the owner straight there instead of inventing a second purchase flow.
+    document.getElementById('manualTopupBtn').addEventListener('click', function () {
+      var tokenCard = document.querySelector('#pricingGrid .price-card');
+      if (tokenCard) tokenCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
     function loadPaymentsHistory() {
       var list = document.getElementById('paymentsHistoryList');
       var empty = document.getElementById('paymentsHistoryEmpty');
@@ -4117,31 +4109,84 @@
         });
     }
 
+    var NOTIF_ICON_ALERT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+    var NOTIF_ICON_CLOCK = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14.5"/></svg>';
+    var NOTIF_ICON_BOOK = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
+    var NOTIF_ICON_ARROW = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>';
+
+    // Matches the reference design's own NotificationCenter sheet (title +
+    // description, one card per notice with icon/tone + title + detail +
+    // time, closing "не всё сюда попадает" rule) — real notices instead of
+    // its 3 fixed demo ones: pending/needs-verification escalations already
+    // fetched for the "Требует внимания" badge (see lastAnalyticsData), plus
+    // a fresh read of the knowledge base's own moderation-pending count.
     function renderNotifPanel() {
       var panel = document.getElementById('notifPanel');
-      var attentionCount = parseInt(document.getElementById('attentionBadge').textContent, 10) || 0;
       panel.hidden = false;
       panel.innerHTML = '<div class="notif-panel-empty">Загрузка…</div>';
       fetch(withBotId('/api/cabinet/knowledge'))
         .then(function (res) { return res.json(); })
-        .then(function (data) {
-          var pendingCount = data.filter(function (e) { return e.moderationStatus === 'pending'; }).length;
+        .then(function (kbData) {
           var items = [];
-          if (attentionCount > 0) items.push({ text: 'Требует внимания: ' + attentionCount, view: 'attention' });
-          if (pendingCount > 0) items.push({ text: 'В базе знаний на модерации: ' + pendingCount, view: 'knowledge' });
-          panel.innerHTML = '';
+          var esc = (lastAnalyticsData && lastAnalyticsData.escalations) || {};
+          var pending = esc.pending || [];
+          var needsVerification = esc.needsVerification || [];
+          if (pending.length > 0) {
+            var latestPending = pending[0];
+            items.push({
+              icon: NOTIF_ICON_ALERT, tone: 'orange',
+              title: 'Бот не смог ответить',
+              text: pending.length === 1 ? (latestPending.visitorQuestion || latestPending.question || 'Новый вопрос без ответа') : pending.length + ' вопрос(ов) без ответа',
+              time: latestPending.createdAt ? fmtDate(latestPending.createdAt) : '',
+              view: 'attention',
+            });
+          }
+          if (needsVerification.length > 0) {
+            var latestVerify = needsVerification[0];
+            items.push({
+              icon: NOTIF_ICON_CLOCK, tone: 'blue',
+              title: 'Ответ ждёт проверки',
+              text: needsVerification.length === 1 ? (latestVerify.question || 'Проверьте ответ в тестовом чате') : needsVerification.length + ' ответ(ов) ждут проверки',
+              time: latestVerify.createdAt ? fmtDate(latestVerify.createdAt) : '',
+              view: 'attention',
+            });
+          }
+          var pendingKb = kbData.filter(function (e) { return e.moderationStatus === 'pending'; });
+          if (pendingKb.length > 0) {
+            items.push({
+              icon: NOTIF_ICON_BOOK, tone: 'violet',
+              title: 'База знаний ждёт проверки',
+              text: pendingKb.length === 1 ? (pendingKb[0].question || pendingKb[0].title || 'Новая запись на модерации') : pendingKb.length + ' записей на модерации',
+              time: '',
+              view: 'knowledge',
+            });
+          }
+
+          panel.innerHTML =
+            '<div class="notif-panel-head"><b>Требует внимания</b><small>Только события, для которых нужно ваше действие.</small></div>' +
+            '<div class="notif-panel-list" id="notifPanelList"></div>' +
+            '<div class="notif-panel-rule">' + NOTIF_ICON_ALERT.replace('width="15" height="15"', 'width="16" height="16"') +
+              '<p><b>Обычные диалоги сюда не попадают</b><small>Колокольчик показывает только заявки, ошибки и то, что ждёт вашей проверки.</small></p>' +
+            '</div>';
+          var list = document.getElementById('notifPanelList');
           if (!items.length) {
-            panel.innerHTML = '<div class="notif-panel-empty">Новых уведомлений нет</div>';
+            list.innerHTML = '<div class="notif-panel-empty">Новых уведомлений нет</div>';
             return;
           }
           items.forEach(function (it) {
             var row = document.createElement('button');
             row.type = 'button';
             row.className = 'notif-panel-item';
-            row.textContent = it.text;
+            row.innerHTML =
+              '<span class="notif-panel-item-icon notif-panel-item-icon-' + it.tone + '">' + it.icon + '</span>' +
+              '<span class="notif-panel-item-body"><b>' + it.title + '</b><small>' + it.text + '</small></span>' +
+              '<time>' + it.time + '</time>' + NOTIF_ICON_ARROW;
             row.addEventListener('click', function () { panel.hidden = true; goToView(it.view); });
-            panel.appendChild(row);
+            list.appendChild(row);
           });
+        })
+        .catch(function () {
+          panel.innerHTML = '<div class="notif-panel-empty">Не получилось загрузить уведомления.</div>';
         });
     }
 
@@ -4174,10 +4219,8 @@
     // headings/settings labels a person might actually remember and search
     // for (e.g. "Автопополнение"), one entry per distinct <h2>/<h3> across
     // the app (skipping ones that just repeat their own section's nav
-    // label, and view-leads — unreachable, no nav item points at it any
-    // more since CRM replaced it). A static list, not a live DOM scan: kept
-    // in sync by hand when a heading changes, same trade-off as
-    // VIEW_TITLES/VIEW_SUBTITLES above.
+    // label). A static list, not a live DOM scan: kept in sync by hand when
+    // a heading changes, same trade-off as VIEW_TITLES/VIEW_SUBTITLES above.
     var CMDK_STATIC_INDEX = [
       { label: 'Цель бота', view: 'dashboard' },
       { label: 'A/B/C/D-тест приветствия', view: 'dashboard' },
@@ -4200,8 +4243,9 @@
       { label: 'Настройки платежей', view: 'tariffs' },
       { label: 'Автопополнение', view: 'tariffs' },
       { label: 'История операций', view: 'tariffs' },
-      { label: 'Настройки чата', view: 'settings' },
-      { label: 'Варианты приветствия', view: 'settings' },
+      { label: 'Личность бота', view: 'settings' },
+      { label: 'Внешний вид', view: 'settings' },
+      { label: 'Приветствия', view: 'settings' },
     ];
     CMDK_TARGETS = CMDK_TARGETS.concat(CMDK_STATIC_INDEX);
 
@@ -4423,7 +4467,7 @@
     // to just this one after it became clear two separate chats for one
     // underlying "make the bot better" task was confusing more than it
     // helped, and every menu action the training chat offered already had
-    // (or now has, see "Настройки чата") its own proper page anyway. A real
+    // (or now has, see "Виджет и приветствие") its own proper page anyway. A real
     // embedded widget.js instance (data-preview=true) — same launcher
     // button + teaser bubble + click-to-open a real site visitor gets,
     // confined to this pane's own iframe box (position:fixed inside an

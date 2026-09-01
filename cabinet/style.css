@@ -355,20 +355,32 @@ input:focus {
 }
 
 /* Always visible regardless of which view is open — the one place that
-   answers "which of my companies' cabinets am I in right now?" no matter
-   where in the app you navigate. Avatar + name + domain + chevron matches
-   the reference design's identity card; the chevron is decorative (see its
-   own comment in index.html) — actual bot/company switching lives in the
-   topbar widget, not here. */
+   answers "which bot am I in right now?" no matter where in the app you
+   navigate (domain tracks the CURRENTLY SELECTED bot's site — see
+   renderSidebarCompanyCard). Avatar + name + domain + chevron matches the
+   reference design's identity card; unlike the reference (a static card),
+   the chevron here is real — a second entry point to the same bot-switcher
+   as the topbar widget, convenient when a company has more than one bot. */
+.sidebar-company-wrap {
+  position: relative;
+  margin: 0 10px 8px;
+}
 .sidebar-company {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 10px 8px;
+  width: 100%;
   padding: 6px 8px;
   background: var(--sidebar-hover);
+  border: none;
   border-radius: 8px;
   color: var(--sidebar-fg);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-company:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .sidebar-company-avatar {
@@ -931,31 +943,79 @@ input:focus {
   position: absolute;
   top: 54px;
   right: 32px;
-  width: 280px;
+  width: min(380px, 92vw);
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   box-shadow: 0 10px 32px rgba(15, 23, 42, 0.12);
-  padding: 6px;
+  padding: 16px;
   z-index: 30;
 }
 
-.notif-panel-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  padding: 10px;
-  font-size: 13px;
-  color: var(--ink);
-  cursor: pointer;
+.notif-panel-head {
+  margin-bottom: 14px;
+}
+.notif-panel-head b { display: block; font-size: 14px; }
+.notif-panel-head small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+
+.notif-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.notif-panel-item:hover {
-  background: var(--secondary);
+.notif-panel-item {
+  display: grid;
+  grid-template-columns: 34px 1fr auto 14px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
 }
+.notif-panel-item:hover { border-color: var(--blue); background: var(--secondary); }
+.notif-panel-item-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.notif-panel-item-icon-orange { background: #fff0df; color: #a45513; }
+.notif-panel-item-icon-violet { background: #f0e9ff; color: #7856ba; }
+.notif-panel-item-icon-blue { background: #e9edff; color: #5368d1; }
+.notif-panel-item-body { display: flex; min-width: 0; flex-direction: column; }
+.notif-panel-item-body b { font-size: 12.5px; }
+.notif-panel-item-body small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notif-panel-item time { color: #9ba5ac; font-size: 10px; white-space: nowrap; }
+.notif-panel-item > svg { color: #88949c; flex-shrink: 0; }
+
+.notif-panel-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 13px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #4357b6;
+}
+.notif-panel-rule svg { flex-shrink: 0; margin-top: 1px; }
+.notif-panel-rule b { display: block; font-size: 12px; }
+.notif-panel-rule small { display: block; margin-top: 3px; color: #6c7aa7; font-size: 11px; line-height: 1.45; }
 
 .notif-panel-empty {
   padding: 14px 10px;
