@@ -2710,6 +2710,13 @@ input:focus {
     box-shadow: 8px 0 32px rgba(15, 23, 42, 0.18);
   }
   .sidebar.mobile-open { transform: translateX(0); }
+  /* Measured directly against the reference's own MOBILE sidebar (its Sheet
+     variant, not the desktop one) — items shrink to 28px tall here (not
+     40px like desktop), and the gap under the logo shrinks to 7px (not
+     12px); everything else (font-size, item-to-item gaps, group-boundary
+     gap) already measured the same on both, so only these two change. */
+  .nav-item { min-height: 28px; }
+  .sidebar-company-wrap { margin-top: -5px; }
   .content { height: auto; overflow-y: visible; }
   .stat-grid { grid-template-columns: 1fr; }
   .dash-row { grid-template-columns: 1fr; }
