@@ -443,7 +443,9 @@ input:focus {
 }
 
 .bot-switcher-current {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   text-align: left;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -454,6 +456,22 @@ input:focus {
 
 .bot-switcher-current:hover {
   border-color: var(--blue);
+}
+
+.bot-switcher-current-dot {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #5065c7;
+}
+
+.bot-switcher-current-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .bot-switcher-current-label {
@@ -2582,9 +2600,38 @@ input:focus {
      390px-wide screen and weren't wrapping internally. */
   .date-range-picker { flex-wrap: wrap; }
   .date-range-picker input[type="date"] { max-width: 40vw; }
-  .app-topbar { flex-wrap: wrap; }
-  .app-topbar-search { order: 3; max-width: none; flex-basis: 100%; }
-  .app-topbar-search-kbd { display: none; }
+  /* Checked live against the reference's own mobile topbar (760px rule):
+     it collapses its bot-select to icon-only (hides the text span + arrow)
+     and drops the search field entirely — our real ⌘K search stays reachable
+     (dropping it would be a functionality loss, not a restyle) but collapses
+     to the same icon-only footprint instead of wrapping into its own full
+     width row, which was eating a whole extra line on every single page. */
+  .app-topbar { flex-wrap: nowrap; }
+  .bot-switcher-current-text { display: none; }
+  .bot-switcher-current { padding: 7px; }
+  .app-topbar-search {
+    flex: none;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 9px;
+    background: #fff;
+  }
+  .app-topbar-search-kbd,
+  .app-topbar-search-label { display: none; }
+  .sidebar-bot-site { display: none; }
+  /* Reference's own trial-bar mobile rule: progress track hidden, text
+     stacks instead of sitting inline — same space-saving idea. */
+  .trial-banner:not([hidden]) { padding: 8px 14px; flex-wrap: wrap; }
+  .trial-banner-track { display: none; }
+  .trial-banner-text { flex-basis: 100%; }
+  /* Reference's own dashboard funnel mobile rule: stacks to one full-width
+     stage per row (each keeping its own label/value/bar) instead of 3
+     narrow flex columns fighting for space, and drops the between-stage
+     conversion-rate labels entirely rather than squeezing them in. */
+  .funnel-stages { flex-direction: column; align-items: stretch; gap: 16px; }
+  .funnel-arrow { display: none; }
   /* Found live testing on a real phone-width viewport (390px) — no mobile
      override existed here at all, so the grid tried to fit BOTH
      minmax(0,1.45fr) AND the issues column's hard 280px minimum side by
