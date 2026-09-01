@@ -12,6 +12,23 @@ button, input, select, textarea {
   font-family: inherit;
 }
 
+/* Found from a real tap on a phone, not visible in any headless screenshot:
+   with no outline reset at all, an active .nav-item (color: lime) gets a
+   native browser focus ring that inherits that lime as its own color on
+   tap/focus — a plain, uncontrolled default, browser-dependent, and not
+   what the reference shows (its own components reset the native outline
+   and substitute a neutral, deliberate focus-visible ring via Tailwind's
+   preflight — see :focus-visible{outline:2px solid transparent} in its
+   compiled CSS). Same idea here: kill the raw default, keep a real
+   (neutral, not-lime) indicator for keyboard/accessibility use. */
+button, a, input, select, textarea {
+  outline: none;
+}
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid rgba(130, 152, 255, 0.6);
+  outline-offset: 1px;
+}
+
 /* Design tokens — lifted from the new cabinet reference design (colors read
    straight out of its compiled CSS, not eyeballed from screenshots) so the
    whole app shares one palette instead of each component hardcoding its own
@@ -413,7 +430,9 @@ input:focus {
    as the topbar widget, convenient when a company has more than one bot. */
 .sidebar-company-wrap {
   position: relative;
-  margin: 0 0 8px;
+  /* Measured against the reference's own gap below .company-switch: 15px,
+     not 8. */
+  margin: 0 0 15px;
 }
 /* Checked live on the reference's own .company-switch/.sidebar-user (same
    card styling for both): a persistent translucent-white fill + hairline
@@ -635,9 +654,10 @@ input:focus {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  /* Reference's own SidebarGroup carries 7px top+bottom padding — 14px
-     between two adjacent groups' content, matched here as a flat gap. */
-  gap: 14px;
+  /* Measured directly against the reference (getBoundingClientRect diffs
+     between consecutive nav items, not derived from its padding values —
+     that math didn't add up to the real number). */
+  gap: 31px;
   flex: 1;
   /* min-height:0 is the actual fix, not overflow-y alone — a flex child
      defaults to min-height:auto (never shrinks below its own content), so
@@ -655,7 +675,15 @@ input:focus {
 .sidebar-nav-group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  /* Measured against the reference: 3.5px between items within a group. */
+  gap: 3.5px;
+}
+/* The reference measures ZERO gap between a group's label and its first
+   item (the label's own bottom padding already reads as the only space) —
+   cancels this container's 3.5px gap for that one pair specifically,
+   without touching the 3.5px between items lower in the same group. */
+.sidebar-nav-group-label + .nav-item {
+  margin-top: -3.5px;
 }
 
 /* Checked live on the reference's own [data-sidebar=group-label]: a
@@ -686,7 +714,10 @@ input:focus {
   text-decoration: none;
   border-radius: 10px;
   padding: 0 11px;
-  font-size: 14px;
+  /* Measured, not assumed: real computed size is 12.25px (Tailwind's
+     text-sm, 0.875rem, resolved against this app's own 14px root) — 14px
+     was a plausible-looking guess, not the actual number. */
+  font-size: 12.25px;
   cursor: pointer;
   transition: color 0.18s ease, background 0.18s ease;
 }
@@ -949,22 +980,31 @@ input:focus {
 .content {
   flex: 1;
   min-width: 0;
-  padding: 22px 32px 60px;
+  /* Measured directly against the reference's own .workspace: a single
+     clamp(26px,3vw,44px) applied to all four sides (43.2px at a normal
+     1440px desktop width), not our old fixed, asymmetric 22/32/60 — real,
+     visible extra breathing room the reference has that ours didn't.
+     Bottom padding kept a bit taller than the clamp on purpose (scroll
+     comfort past the last panel), same trade-off as before. */
+  padding: clamp(26px, 3vw, 44px);
+  padding-bottom: 60px;
   height: 100%;
   overflow-y: auto;
 }
 
 /* New header bar — holds the bot switcher (moved here from the sidebar,
-   see .bot-switcher-widget's own comment) plus a search field and a
-   notification bell. The search field and bell are visual chrome for now,
-   matching the reference design's layout, not wired to real search/
-   notifications yet — that's real new functionality, not a restyle. */
+   see .bot-switcher-widget's own comment), a real working ⌘K search (see
+   wireCmdk) and a real notification bell (see renderNotifPanel) — both
+   fully wired to real data, not placeholder chrome. Bleeds to the full
+   width of .content via a negative margin equal to .content's own
+   padding — kept as a matching clamp() so the bleed still cancels out
+   exactly at any viewport width, not just the one this was measured at. */
 .app-topbar {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin: -22px -32px 20px;
-  padding: 14px 32px;
+  margin: calc(-1 * clamp(26px, 3vw, 44px)) calc(-1 * clamp(26px, 3vw, 44px)) 20px;
+  padding: 14px clamp(26px, 3vw, 44px);
   border-bottom: 1px solid var(--line);
   background: #fff;
 }
@@ -1248,34 +1288,42 @@ input:focus {
   text-decoration: underline;
 }
 
+/* Measured directly against the reference's own .page-header: gap 24px,
+   margin-bottom 26px (was 16/16 — the whole block sat noticeably closer
+   to the toolbar below it than the reference). */
 .content-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 24px;
+  margin-bottom: 26px;
 }
 
 .breadcrumb {
-  font-size: 12.5px;
+  /* Measured directly against the reference's own .crumb (getBoundingClientRect
+     diff, not a guess): font-size 11px, margin-bottom 11px — ours was 12.5px/6px. */
+  font-size: 11px;
   color: var(--muted);
-  margin-bottom: 6px;
+  margin-bottom: 11px;
 }
 
 .content-header h1 {
   /* No font-size override here on purpose — checked the reference's own
      page-header h1 live: computed font-size is 40px at a normal desktop
      width (the base h1 rule's clamp(28px,3vw,40px) resolves to its max,
-     not a smaller fixed size like this used to assume). Only margin is
-     this context's own; size/line-height/letter-spacing/weight all come
-     from the base h1 rule. */
-  margin: 0 0 4px;
+     not a smaller fixed size like this used to assume). Size/line-height/
+     letter-spacing/weight all come from the base h1 rule; no margin here
+     either — measured live, the gap below the title is entirely the
+     subtitle's own margin-top (9px), not the h1's margin-bottom. */
+  margin: 0;
 }
 
 .page-subtitle:not([hidden]) {
   color: var(--muted);
   font-size: 14px;
-  margin: 0;
+  /* Measured directly against the reference's own .page-header p: 9px
+     margin-top, not 0 — that's the entire h1-to-subtitle gap there. */
+  margin: 9px 0 0;
 }
 
 /* :not([hidden]), not a bare .back-to-training-link{display:block} — a class
@@ -1588,7 +1636,8 @@ input:focus {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
-  margin-bottom: 20px;
+  /* Measured against the reference's own .metrics-grid: 14px, not 20px. */
+  margin-bottom: 14px;
 }
 
 .stat-grid-4col {
