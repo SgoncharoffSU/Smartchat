@@ -1093,19 +1093,38 @@ export class CabinetService {
     const since = new Date();
     since.setHours(0, 0, 0, 0);
     since.setDate(since.getDate() - (days - 1));
+    // Same floor getAnalytics applies to every one of its own queries — without
+    // it, a "Сбросить статистику" click cleans the metric cards above but old
+    // test/dev dialogs from before the reset keep reappearing in this chart
+    // for up to `days` more. Bucket generation below still spans the full
+    // requested window (dates before the reset just come back at 0, which is
+    // the intended "hidden" look, not a shrunk window).
+    const sinceFilter = this.withResetFloor({ gte: since }, bot.analyticsResetAt);
 
-    const [dialogs, leads] = await Promise.all([
+    const [dialogs, leadDates] = await Promise.all([
       this.prisma.dialog.findMany({
-        where: { botId: bot.id, isPreview: false, createdAt: { gte: since } },
+        where: { botId: bot.id, isPreview: false, createdAt: sinceFilter },
         select: {
           createdAt: true,
           messages: { where: { role: 'visitor' }, take: 1, select: { id: true } },
         },
       }),
-      this.prisma.lead.findMany({
-        where: { dialog: { botId: bot.id, isPreview: false }, createdAt: { gte: since } },
-        select: { createdAt: true },
-      }),
+      // Same enablesProvisioning gap as getAnalytics (see its own comment,
+      // countProvisionedRegistrations): Алина-type bots never create Lead
+      // rows, so counting Lead here would flatline "В заявку" at 0% while the
+      // metric cards above show a real, non-zero registration rate for the
+      // very same period.
+      bot.enablesProvisioning
+        ? this.provisionedCompanyIds(bot.id).then((companyIds) =>
+            companyIds.length === 0
+              ? []
+              : this.prisma.company
+                  .findMany({ where: { id: { in: companyIds }, registeredAt: sinceFilter }, select: { registeredAt: true } })
+                  .then((rows) => rows.map((r) => r.registeredAt as Date)),
+          )
+        : this.prisma.lead
+            .findMany({ where: { dialog: { botId: bot.id, isPreview: false }, createdAt: sinceFilter }, select: { createdAt: true } })
+            .then((rows) => rows.map((r) => r.createdAt)),
     ]);
 
     const buckets = new Map<string, { shown: number; opened: number; leads: number }>();
@@ -1120,8 +1139,8 @@ export class CabinetService {
       bucket.shown += 1;
       if (dialog.messages.length > 0) bucket.opened += 1;
     }
-    for (const lead of leads) {
-      const bucket = buckets.get(localDateKey(lead.createdAt));
+    for (const leadDate of leadDates) {
+      const bucket = buckets.get(localDateKey(leadDate));
       if (bucket) bucket.leads += 1; // outside the requested window after rounding — ignore
     }
 
