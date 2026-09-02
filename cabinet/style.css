@@ -1632,16 +1632,35 @@ input:focus {
   font-size: 11px;
 }
 
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  /* Measured against the reference's own .metrics-grid: 14px, not 20px. */
-  margin-bottom: 14px;
+/* The Обзор stat cards now use the reference's OWN classes verbatim —
+   .metrics-grid/.metric-card/.metric-icon(.color)/.metric-top/strong/small,
+   all already defined in proto.css (see index.html's <link>) — instead of
+   our old .stat-grid/.stat-card. Only two things below are genuinely ours:
+   a variable card count (3 real metrics, or 4 when paid-lead billing is on
+   — the reference's static demo never needed this) and the live tab bar,
+   which the reference drives with Radix state we don't have. */
+.metrics-grid-3col {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.stat-grid-4col {
-  grid-template-columns: repeat(4, 1fr);
+/* .dashboard-toolbar/[role=tablist]/[role=tab] box model (radius, height,
+   padding, font-size) already come from proto.css; it never had to style
+   ours/inactive-vs-active text color and background because the live
+   reference gets those from Radix's own data-state/aria-selected utility
+   classes, which we don't emit. Kept the existing .period-btn/.active
+   class-toggle JS untouched (see boot wiring) — role="tab" is added purely
+   for the box model, .active still drives the actual state. */
+.dashboard-toolbar [role="tab"] {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.dashboard-toolbar [role="tab"].active {
+  background: var(--canvas);
+  color: var(--ink);
 }
 
 .stat-card {
@@ -2726,7 +2745,7 @@ input:focus {
   .nav-item { min-height: 28px; }
   .sidebar-company-wrap { margin-top: -5px; }
   .content { height: auto; overflow-y: visible; }
-  .stat-grid { grid-template-columns: 1fr; }
+  .metrics-grid { grid-template-columns: 1fr; }
   .dash-row { grid-template-columns: 1fr; }
   /* Pre-existing overflow, found while checking this same mobile view —
      the two native date inputs plus separator plus button don't fit a
