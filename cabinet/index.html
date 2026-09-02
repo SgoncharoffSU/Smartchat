@@ -46,7 +46,7 @@
      this file indefinitely regardless of the server's own Cache-Control
      headers, since those work by re-serving whatever they already fetched
      for this exact URL. A new query string is a new URL to them. -->
-<link rel="stylesheet" href="style.css?v=20260902b" />
+<link rel="stylesheet" href="style.css?v=20260902c" />
 </head>
 <body class="cabinet-body">
   <div id="impersonationBanner" hidden>
@@ -55,12 +55,21 @@
   </div>
   <div class="mobile-scrim" id="mobileScrim"></div>
   <div class="app-shell" id="appShell" style="display:none">
-    <aside class="sidebar" id="sidebar">
+    <!-- data-sidebar="header/content/group/group-label/menu-button/menu-badge/
+         footer" + data-active mirror the reference's OWN real sidebar
+         primitive attributes (checked against its live DOM, not guessed) —
+         kept ALONGSIDE our existing classes/IDs (unchanged CSS/JS) rather
+         than replacing them, since our own values were already measured
+         exact against the same compiled CSS (.app-sidebar [data-sidebar=…]
+         rules) earlier this session; this closes the remaining structural
+         gap (real attributes, not just matching numbers) without touching
+         working data-binding/click-handler logic. -->
+    <aside class="sidebar app-sidebar" id="sidebar">
       <!-- Rebuilt to match the reference's own .brand-icon exactly (checked
            its compiled CSS directly): a rotated lime square containing two
            literal rotated bars forming a sparkle, not an SVG path — same
            technique, not React-specific, so reproducible verbatim. -->
-      <a class="logo" href="/">
+      <a class="logo brand" href="/" data-sidebar="header">
         <span class="brand-icon"><i></i><i></i><i></i></span>
         Умный<em>Чат</em>
       </a>
@@ -71,7 +80,7 @@
            point (convenient when a company has more than one bot and the
            sidebar is what's in view). -->
       <div class="sidebar-company-wrap" id="sidebarCompanyWrap">
-        <button type="button" class="sidebar-company" id="sidebarCompanyBtn" title="Переключить бота">
+        <button type="button" class="sidebar-company company-switch" id="sidebarCompanyBtn" title="Переключить бота">
           <span class="sidebar-company-avatar" id="sidebarCompanyAvatar"></span>
           <span class="sidebar-company-text">
             <span class="sidebar-company-name" id="sidebarCompanyName"></span>
@@ -81,23 +90,23 @@
         </button>
         <div class="bot-switcher-menu sidebar-company-menu" id="sidebarCompanyMenu" hidden></div>
       </div>
-      <nav class="sidebar-nav">
-        <div class="sidebar-nav-group">
-          <div class="sidebar-nav-group-label">Работа</div>
-          <button class="nav-item active" data-view="dashboard" type="button">
+      <nav class="sidebar-nav" data-sidebar="content">
+        <div class="sidebar-nav-group" data-sidebar="group">
+          <div class="sidebar-nav-group-label" data-sidebar="group-label">Работа</div>
+          <button class="nav-item active" data-view="dashboard" data-sidebar="menu-button" data-active="true" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
             <span>Обзор</span>
           </button>
-          <button class="nav-item" data-view="attention" type="button">
+          <button class="nav-item" data-view="attention" data-sidebar="menu-button" data-active="false" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
             <span>Требует внимания</span>
-            <span class="nav-badge nav-badge-ok" id="attentionBadge">0</span>
+            <span class="nav-badge nav-badge-ok" id="attentionBadge" data-sidebar="menu-badge">0</span>
           </button>
-          <button class="nav-item" data-view="dialogs" type="button">
+          <button class="nav-item" data-view="dialogs" data-sidebar="menu-button" data-active="false" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/><path d="M7 11h10"/><path d="M7 15h6"/><path d="M7 7h8"/></svg>
             <span>Диалоги</span>
           </button>
-          <button class="nav-item" data-view="training" type="button">
+          <button class="nav-item" data-view="training" data-sidebar="menu-button" data-active="false" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
             <span>Обучение бота</span>
           </button>
@@ -105,50 +114,50 @@
                (see loadAutoTestsDemo's own comment). Badge says "ДЕМО", not a
                fabricated score, so this reads honestly next to real badges
                like "Требует внимания"/"Готовность бота" above. -->
-          <button class="nav-item" data-view="tests" type="button">
+          <button class="nav-item" data-view="tests" data-sidebar="menu-button" data-active="false" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7 6.82 21.18a2.83 2.83 0 0 1-3.99-.01a2.83 2.83 0 0 1 0-4L17 3"/><path d="m16 2 6 6"/><path d="M12 16H4"/></svg>
             <span>Автотесты</span>
-            <span class="nav-badge">демо</span>
+            <span class="nav-badge" data-sidebar="menu-badge">демо</span>
           </button>
-          <button class="nav-item" data-view="knowledge" type="button">
+          <button class="nav-item" data-view="knowledge" data-sidebar="menu-button" data-active="false" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v16"/><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"/></svg>
             <span>База знаний</span>
           </button>
         </div>
-        <div class="sidebar-nav-group">
-          <div class="sidebar-nav-group-label">Настройка</div>
-          <button class="nav-item" data-view="readiness" type="button">
+        <div class="sidebar-nav-group" data-sidebar="group">
+          <div class="sidebar-nav-group-label" data-sidebar="group-label">Настройка</div>
+          <button class="nav-item" data-view="readiness" data-sidebar="menu-button" data-active="false" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></svg>
             <span>Статус внедрения</span>
-            <span class="nav-badge nav-badge-readiness" id="readinessNavBadge">…</span>
+            <span class="nav-badge nav-badge-readiness" id="readinessNavBadge" data-sidebar="menu-badge">…</span>
           </button>
           <!-- Same view-settings the gear icon by the account row already
                opens (goToView('settings') — see settingsGearBtn's own
                listener) — just also promoted to a first-class sidebar entry
                here, matching the reference design's IA, instead of being
                reachable only via that gear icon. -->
-          <button class="nav-item" data-view="settings" type="button">
+          <button class="nav-item" data-view="settings" data-sidebar="menu-button" data-active="false" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg>
             <span>Виджет и приветствие</span>
           </button>
-          <button class="nav-item" data-view="install" type="button">
+          <button class="nav-item" data-view="install" data-sidebar="menu-button" data-active="false" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
             <span>Установка</span>
           </button>
-          <button class="nav-item" data-view="telegram" type="button">
+          <button class="nav-item" data-view="telegram" data-sidebar="menu-button" data-active="false" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg>
             <span>Интеграции</span>
           </button>
         </div>
-        <div class="sidebar-nav-group">
-          <div class="sidebar-nav-group-label">Продажи</div>
-          <!-- Restored — the reference has its own separate "Лиды" item
-               (Inbox icon) above CRM; it was dropped earlier this session as
-               presumed-dead after the old leads table was deleted, but the
-               real data (same leads, same mark-paid flow) already lives in
-               the mini-CRM kanban below, so this points there for now rather
-               than duplicating a second, disconnected list view. -->
-          <a class="nav-item" href="crm.html">
+        <div class="sidebar-nav-group" data-sidebar="group">
+          <div class="sidebar-nav-group-label" data-sidebar="group-label">Продажи</div>
+          <!-- Both point at the mini-CRM kanban (crm.html), matching the
+               reference's own real behavior: a chat-captured lead becomes a
+               deal there (see DealsService), and moving a deal to a "won"
+               stage is what now sets Lead.paidAt (see deals.service.ts's own
+               comment) — the old separate "Заявки" table is gone for good,
+               per the account owner ("это теперь Лиды или СРМ"), not a gap. -->
+          <a class="nav-item" href="crm.html" data-sidebar="menu-button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
             <span>Лиды</span>
           </a>
@@ -156,26 +165,26 @@
                separate standalone page (crm.html) so a teammate with no other
                cabinet access can be sent straight there (see cabinet.service.ts's
                inviteTeammate) without ever touching bot/billing views. -->
-          <a class="nav-item" href="crm.html">
+          <a class="nav-item" href="crm.html" data-sidebar="menu-button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
             <span>CRM</span>
           </a>
         </div>
-        <div class="sidebar-nav-group">
-          <div class="sidebar-nav-group-label">Аккаунт</div>
+        <div class="sidebar-nav-group" data-sidebar="group">
+          <div class="sidebar-nav-group-label" data-sidebar="group-label">Аккаунт</div>
           <!-- Promoted from "reachable only via the trial banner" to a real
                nav entry, matching the reference design's IA — see
                goToTariffs/loadTariffs below (unchanged data flow, just a
                second way in). -->
-          <button class="nav-item" data-view="tariffs" type="button" id="tariffsNavItem">
+          <button class="nav-item" data-view="tariffs" data-sidebar="menu-button" data-active="false" type="button" id="tariffsNavItem">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
             <span>Тариф и оплата</span>
           </button>
-          <button class="nav-item" data-view="team" type="button" id="teamNavItem" hidden>
+          <button class="nav-item" data-view="team" data-sidebar="menu-button" data-active="false" type="button" id="teamNavItem" hidden>
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg>
             <span>Команда</span>
           </button>
-          <button class="nav-item" data-view="support" type="button">
+          <button class="nav-item" data-view="support" data-sidebar="menu-button" data-active="false" type="button">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></svg>
             <span>Поддержка</span>
           </button>
@@ -187,7 +196,7 @@
            sets both). "Работает" vs "Настраивается" reflects whether it's
            cleared for real traffic yet (readiness >= some real-traffic bar),
            not just decorative — see updateBotStatusCard. -->
-      <div class="bot-status-card" id="botStatusCard">
+      <div class="bot-status-card sidebar-help" id="botStatusCard" data-sidebar="footer">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z"/></svg>
         <span class="bot-status-text">
           <span class="bot-status-title" id="botStatusTitle">Бот настраивается</span>
@@ -200,7 +209,7 @@
           <button class="account-menu-item" id="logoutBtn" type="button">↩ Выйти</button>
         </div>
         <div class="account-bar">
-          <button class="account-row" id="accountRow" type="button">
+          <button class="account-row sidebar-user" id="accountRow" type="button">
             <span class="account-avatar" id="accountAvatar">?</span>
             <span class="account-info">
               <span class="account-name" id="accountName">…</span>
@@ -1780,9 +1789,13 @@
       document.getElementById('mobileScrim').classList.remove('active');
     }
     function goToView(viewName) {
-      document.querySelectorAll('.nav-item').forEach(function (b) { b.classList.remove('active'); });
+      // data-active mirrors .active — the reference's own compiled CSS keys
+      // the active nav item off data-active="true" (its Radix sidebar
+      // primitive's real state attribute), not a custom class; kept both so
+      // .active-based JS/CSS elsewhere in this file didn't need touching.
+      document.querySelectorAll('.nav-item').forEach(function (b) { b.classList.remove('active'); b.removeAttribute('data-active'); });
       var navBtn = document.querySelector('.nav-item[data-view="' + viewName + '"]');
-      if (navBtn) navBtn.classList.add('active');
+      if (navBtn) { navBtn.classList.add('active'); navBtn.setAttribute('data-active', 'true'); }
       document.querySelectorAll('.view').forEach(function (v) { v.hidden = true; });
       document.getElementById('view-' + viewName).hidden = false;
       var title = VIEW_TITLES[viewName] || '';
