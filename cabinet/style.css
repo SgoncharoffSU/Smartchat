@@ -2156,15 +2156,15 @@ input:focus {
   font-size: 11px;
   cursor: pointer;
 }
-.messages { padding: 24px clamp(16px, 4vw, 50px); background: #f8f9f8; overflow-y: auto; }
+.messages { padding: 30px clamp(20px, 5vw, 70px); background: #f8f9f8; overflow-y: auto; }
 .message {
   position: relative;
   width: max-content;
-  max-width: min(520px, 80%);
+  max-width: min(520px, 78%);
   padding: 12px 15px;
   border-radius: 13px;
-  margin: 0 0 14px;
-  font-size: 12.5px;
+  margin: 0 0 15px;
+  font-size: 11px;
   line-height: 1.55;
 }
 .message small { display: block; margin-top: 5px; font-size: 10px; color: #84909a; }
