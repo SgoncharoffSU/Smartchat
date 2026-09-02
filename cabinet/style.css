@@ -2203,7 +2203,7 @@ input:focus {
 @media (max-width: 900px) {
   .attention-layout { grid-template-columns: 1fr; }
 }
-.empty-quality { text-align: center; padding: 50px 8%; }
+.empty-quality { text-align: center; padding: 60px 12%; }
 .empty-orbit {
   display: grid;
   place-items: center;
