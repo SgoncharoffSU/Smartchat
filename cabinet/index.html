@@ -123,13 +123,20 @@
         </div>
         <div class="sidebar-nav-group">
           <div class="sidebar-nav-group-label">Продажи</div>
+          <!-- Restored — the reference has its own separate "Лиды" item
+               (Inbox icon) above CRM; it was dropped earlier this session as
+               presumed-dead after the old leads table was deleted, but the
+               real data (same leads, same mark-paid flow) already lives in
+               the mini-CRM kanban below, so this points there for now rather
+               than duplicating a second, disconnected list view. -->
+          <a class="nav-item" href="crm.html">
+            <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            <span>Лиды</span>
+          </a>
           <!-- Not a view switch like the rest of this list — the mini-CRM is a
                separate standalone page (crm.html) so a teammate with no other
                cabinet access can be sent straight there (see cabinet.service.ts's
-               inviteTeammate) without ever touching bot/billing views. Also
-               covers what the reference design calls a separate "Лиды" list —
-               the kanban already shows every lead, stage included, so a second
-               flat list would just be the same data twice. -->
+               inviteTeammate) without ever touching bot/billing views. -->
           <a class="nav-item" href="crm.html">
             <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
             <span>CRM</span>
