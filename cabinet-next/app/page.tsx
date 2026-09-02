@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity, AlertCircle, ArrowRight, Bell, BookOpen, Bot, Check,
   Banknote, BrainCircuit, Building2, ChevronDown, CircleHelp, ClipboardCheck, Clock3, Copy, CreditCard, Database, Download, ExternalLink,
@@ -30,6 +30,51 @@ import {
 } from "@/components/ui/dialog";
 
 type View = "dashboard" | "readiness" | "attention" | "dialogs" | "training" | "tests" | "knowledge" | "widget" | "install" | "integrations" | "leads" | "crm" | "billing" | "team" | "support";
+
+// Real data from our existing NestJS API (same origin as this app, so the
+// browser's own smartchat_cabinet_session cookie is sent automatically — no
+// separate auth wiring needed here). Both endpoints already existed before
+// this app did; nothing added on the backend for these two. Typed loosely
+// (not the full response shape) — only the fields this page actually reads.
+type CabinetMe = {
+  companyName: string;
+  bot: { id: string; name: string; label: string; sourceWebsite: string | null } | null;
+  userName: string;
+  companyRole: string;
+} | null;
+
+type CabinetAnalytics = {
+  shown: { count: number; deltaPct: number | null };
+  opened: { count: number; conversionRate: number; openedToDialogRate: number; deltaPct: number | null };
+  dialogs: { count: number; conversionRate: number; deltaPct: number | null };
+  leads: { count: number; conversionRate: number; deltaPct: number | null };
+  problems: { count: number; resolved: number };
+} | null;
+
+function useCabinetData() {
+  const [me, setMe] = useState<CabinetMe>(null);
+  const [analytics, setAnalytics] = useState<CabinetAnalytics>(null);
+  useEffect(() => {
+    fetch("/api/cabinet/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setMe)
+      .catch(() => setMe(null));
+    fetch("/api/cabinet/analytics?period=week")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setAnalytics)
+      .catch(() => setAnalytics(null));
+  }, []);
+  return { me, analytics };
+}
+
+// Real getAnalytics numbers are integers; ru-RU grouping matches the
+// reference's own hardcoded "2 480"-style formatting instead of "2,480".
+function fmtNum(n: number | undefined): string {
+  return n === undefined ? "…" : n.toLocaleString("ru-RU");
+}
+function fmtPct(n: number | undefined): string {
+  return n === undefined ? "…" : `${Math.round(n * 10) / 10}%`.replace(".", ",");
+}
 
 const nav = [
   { label: "Работа", items: [
@@ -76,17 +121,17 @@ const titles: Record<View, { title: string; desc: string }> = {
 };
 
 function Brand() {
-  return <div className="brand"><span className="brand-icon"><i /><i /><i /></span><span className="brand-text"><b>ГлавИнструмент</b><small>Умный чат</small></span></div>;
+  return <div className="brand"><span className="brand-icon"><i /><i /><i /></span><span className="brand-text"><b>Умный Чат</b><small>Личный кабинет</small></span></div>;
 }
 
 function StatusPill({ tone = "green", children }: { tone?: "green" | "blue" | "orange" | "gray"; children: React.ReactNode }) {
   return <span className={`status-pill ${tone}`}>{children}</span>;
 }
 
-function PageHeader({ view, onPrimary }: { view: View; onPrimary?: (label: string) => void }) {
+function PageHeader({ view, onPrimary, companyName }: { view: View; onPrimary?: (label: string) => void; companyName: string }) {
   const actions: Partial<Record<View, string>> = { knowledge: "Добавить знания", dialogs: "Экспорт", integrations: "Добавить интеграцию", crm: "Новая сделка", team: "Пригласить", support: "Новое обращение" };
   const action = actions[view];
-  return <div className="page-header"><div><div className="crumb">Бани Викинг <span>/</span> {titles[view].title}</div><h1>{titles[view].title}</h1><p>{titles[view].desc}</p></div>{action && <Button className="primary-action" data-live onClick={() => onPrimary?.(action)}><Plus />{action}</Button>}</div>;
+  return <div className="page-header"><div><div className="crumb">{companyName} <span>/</span> {titles[view].title}</div><h1>{titles[view].title}</h1><p>{titles[view].desc}</p></div>{action && <Button className="primary-action" data-live onClick={() => onPrimary?.(action)}><Plus />{action}</Button>}</div>;
 }
 
 function NotificationCenter() {
@@ -99,8 +144,8 @@ function NotificationCenter() {
   return <Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><button className="icon-button" data-live aria-label="Уведомления"><Bell /><i /></button></SheetTrigger><SheetContent className="notification-sheet"><SheetHeader><SheetTitle>Требует внимания</SheetTitle><SheetDescription>Только события, для которых нужно ваше действие.</SheetDescription></SheetHeader><div className="notification-list">{notices.map(({icon:Icon,tone,title,text:copy,time}) => <button key={title} onClick={() => setOpen(false)}><span className={`event-icon ${tone}`}><Icon /></span><p><b>{title}</b><small>{copy}</small></p><time>{time}</time><ArrowRight /></button>)}</div><div className="notification-rule"><Info/><p><b>Обычные диалоги сюда не попадают</b><small>Колокольчик показывает только лиды, ошибки, лимиты и проблемы интеграций.</small></p></div></SheetContent></Sheet>;
 }
 
-function Topbar({ onAction }: { onAction: (label: string) => void }) {
-  return <header className="topbar"><div className="topbar-left"><SidebarTrigger /><button className="bot-select" data-live onClick={() => onAction("Выбор бота")}><span className="bot-dot"><Bot /></span><span><small>Ваш бот</small><b>Бани — ИИ-консультант</b></span><ChevronDown /></button></div><div className="topbar-right"><NotificationCenter/><button className="profile" data-live onClick={() => onAction("Профиль и настройки аккаунта")}><span>О</span><div><b>Олег</b><small>Владелец</small></div><ChevronDown /></button></div></header>;
+function Topbar({ onAction, botLabel, userName, userInitial, roleLabel }: { onAction: (label: string) => void; botLabel: string; userName: string; userInitial: string; roleLabel: string }) {
+  return <header className="topbar"><div className="topbar-left"><SidebarTrigger /><button className="bot-select" data-live onClick={() => onAction("Выбор бота")}><span className="bot-dot"><Bot /></span><span><small>Ваш бот</small><b>{botLabel}</b></span><ChevronDown /></button></div><div className="topbar-right"><NotificationCenter/><button className="profile" data-live onClick={() => onAction("Профиль и настройки аккаунта")}><span>{userInitial}</span><div><b>{userName}</b><small>{roleLabel}</small></div><ChevronDown /></button></div></header>;
 }
 
 function TrialBar({ onBilling }: { onBilling: () => void }) {
@@ -115,12 +160,20 @@ function ConversionChart() {
   return <article className="panel chart-panel"><div className="panel-head"><div><span className="section-label">Динамика</span><h2>Конверсия по дням</h2></div><StatusPill tone="blue">+1,8 п.п.</StatusPill></div><div className="chart-legend"><span><i className="line-main"/>В заявку</span><span><i className="line-open"/>В открытие чата</span></div><div className="line-chart" role="img" aria-label="График конверсии в открытие чата и заявку за семь дней"><svg viewBox="0 0 620 220" preserveAspectRatio="none"><g className="grid-lines"><line x1="28" y1="35" x2="610" y2="35"/><line x1="28" y1="92" x2="610" y2="92"/><line x1="28" y1="149" x2="610" y2="149"/><line x1="28" y1="205" x2="610" y2="205"/></g><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#6579e8" stopOpacity=".22"/><stop offset="1" stopColor="#6579e8" stopOpacity="0"/></linearGradient></defs><path className="chart-area" d="M28,158 L124,144 L221,151 L318,122 L415,111 L512,92 L610,79 L610,205 L28,205 Z"/><polyline className="chart-open-line" points="28,86 124,78 221,94 318,65 415,70 512,50 610,42"/><polyline className="chart-main-line" points="28,158 124,144 221,151 318,122 415,111 512,92 610,79"/><g className="chart-dots"><circle cx="28" cy="158" r="4"/><circle cx="124" cy="144" r="4"/><circle cx="221" cy="151" r="4"/><circle cx="318" cy="122" r="4"/><circle cx="415" cy="111" r="4"/><circle cx="512" cy="92" r="4"/><circle cx="610" cy="79" r="5"/></g></svg><div className="chart-axis"><span>21 авг</span><span>22</span><span>23</span><span>24</span><span>25</span><span>26</span><span>27 авг</span></div></div><div className="chart-summary"><div><small>В заявку</small><b>4,8%</b><span>+1,1 п.п.</span></div><div><small>В открытие</small><b>29,9%</b><span>+1,8 п.п.</span></div></div></article>;
 }
 
-function Dashboard({ setView, onAction }: { setView: (v: View) => void; onAction: (label: string) => void }) {
+function Dashboard({ setView, onAction, analytics }: { setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics }) {
+  const shown = analytics?.shown.count;
+  const opened = analytics?.opened.count;
+  const dialogs = analytics?.dialogs.count;
+  const leads = analytics?.leads.count;
+  // Bar widths in the funnel below are relative to the first (largest)
+  // stage — same visual idea as the reference's own hardcoded 100/82/65/46,
+  // just computed from real counts instead.
+  const pct = (n: number | undefined) => (shown && n !== undefined && shown > 0 ? Math.max(4, Math.round((n / shown) * 100)) : 0);
   return <>
-    <div className="dashboard-toolbar"><Tabs defaultValue="week"><TabsList><TabsTrigger value="day">Вчера</TabsTrigger><TabsTrigger value="week">Неделя</TabsTrigger><TabsTrigger value="month">Месяц</TabsTrigger><TabsTrigger value="all">Всё время</TabsTrigger></TabsList></Tabs><button className="date-filter"><ListFilter /> 21–27 августа</button><span className="demo-label">Демо-данные</span></div>
-    <section className="metrics-grid"><Metric label="Посетители" value="2 480" note="На страницах с виджетом" tone="violet" icon={Activity} /><Metric label="Открыли чат" value="742" note="29,9% посетителей" tone="cyan" icon={MousePointerClick} /><Metric label="Диалоги" value="496" note="66,8% начали разговор" tone="green" icon={MessageSquareText} /><Metric label="Заявки" value="119" note="24% оставили контакт" tone="lime" icon={Target} /></section>
+    <div className="dashboard-toolbar"><Tabs defaultValue="week"><TabsList><TabsTrigger value="day">Вчера</TabsTrigger><TabsTrigger value="week">Неделя</TabsTrigger><TabsTrigger value="month">Месяц</TabsTrigger><TabsTrigger value="all">Всё время</TabsTrigger></TabsList></Tabs><button className="date-filter"><ListFilter /> Последние 7 дней</button></div>
+    <section className="metrics-grid"><Metric label="Посетители" value={fmtNum(shown)} note="На страницах с виджетом" tone="violet" icon={Activity} /><Metric label="Открыли чат" value={fmtNum(opened)} note={`${fmtPct(analytics?.opened.conversionRate)} посетителей`} tone="cyan" icon={MousePointerClick} /><Metric label="Диалоги" value={fmtNum(dialogs)} note={`${fmtPct(analytics?.dialogs.conversionRate)} посетителей начали разговор`} tone="green" icon={MessageSquareText} /><Metric label="Заявки" value={fmtNum(leads)} note={`${fmtPct(analytics?.leads.conversionRate)} диалогов оставили контакт`} tone="lime" icon={Target} /></section>
     <section className="dashboard-grid">
-      <article className="panel funnel-panel"><div className="panel-head"><div><span className="section-label">Воронка</span><h2>Путь посетителя к заявке</h2></div><button className="ghost-action" data-live onClick={() => onAction("Как считается воронка")}>Как считается <ArrowRight /></button></div><div className="funnel"><div className="funnel-stage"><span>Посетитель</span><b>2 480</b><i style={{ width: "100%" }} /></div><div className="funnel-arrow"><span>29,9%</span><ArrowRight /></div><div className="funnel-stage"><span>Открыл чат</span><b>742</b><i style={{ width: "82%" }} /></div><div className="funnel-arrow"><span>66,8%</span><ArrowRight /></div><div className="funnel-stage"><span>Диалог</span><b>496</b><i style={{ width: "65%" }} /></div><div className="funnel-arrow"><span>24%</span><ArrowRight /></div><div className="funnel-stage"><span>Заявка</span><b>119</b><i style={{ width: "46%" }} /></div></div><div className="insight"><Info /><div><b>Показатели собираются автоматически</b><span>Виджет фиксирует посещения, открытия чата, начатые диалоги и полученные контакты.</span></div><button data-live onClick={() => onAction("События аналитики")}>Подробнее</button></div></article>
+      <article className="panel funnel-panel"><div className="panel-head"><div><span className="section-label">Воронка</span><h2>Путь посетителя к заявке</h2></div><button className="ghost-action" data-live onClick={() => onAction("Как считается воронка")}>Как считается <ArrowRight /></button></div><div className="funnel"><div className="funnel-stage"><span>Посетитель</span><b>{fmtNum(shown)}</b><i style={{ width: `${pct(shown)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.opened.conversionRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Открыл чат</span><b>{fmtNum(opened)}</b><i style={{ width: `${pct(opened)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.opened.openedToDialogRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Диалог</span><b>{fmtNum(dialogs)}</b><i style={{ width: `${pct(dialogs)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.leads.conversionRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Заявка</span><b>{fmtNum(leads)}</b><i style={{ width: `${pct(leads)}%` }} /></div></div><div className="insight"><Info /><div><b>Показатели собираются автоматически</b><span>Виджет фиксирует посещения, открытия чата, начатые диалоги и полученные контакты.</span></div><button data-live onClick={() => onAction("События аналитики")}>Подробнее</button></div></article>
       <ConversionChart/>
       <article className="panel readiness-card"><div className="readiness-ring"><svg viewBox="0 0 88 88"><circle cx="44" cy="44" r="37" /><circle className="ready manager-progress" cx="44" cy="44" r="37" /></svg><strong>75%</strong></div><div><span className="section-label">Внедрение с менеджером</span><h2>Подготовка к запуску</h2><p>Менеджер настраивает сценарий, знания и подключения. Здесь виден общий статус.</p><button className="inline-action" data-live onClick={() => setView("readiness")}>Открыть план <ArrowRight /></button></div></article>
       <article className="panel quality-panel"><div className="panel-head"><div><span className="section-label">Качество</span><h2>Ответы под контролем</h2></div><StatusPill>Всё хорошо</StatusPill></div><div className="quality-stats"><div><b>0</b><span>требуют внимания</span></div><div><b>34</b><span>проверено</span></div><div><b>8</b><span>улучшено</span></div></div><button className="wide-ghost" data-live onClick={() => setView("attention")}>Открыть центр качества</button></article>
@@ -264,16 +317,31 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
   return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isBot ? <div className="prototype-options"><button className="active"><span className="bot-dot"><Bot/></span><p><b>Бани — ИИ-консультант</b><small>Работает · i-viking.ru</small></p><Check/></button><button><span className="bot-dot"><Bot/></span><p><b>Квадро Хаус</b><small>Черновик · не установлен</small></p><ArrowRight/></button><button><Plus/><p><b>Создать нового бота</b><small>Отдельная база знаний и аналитика</small></p><ArrowRight/></button></div> : isProfile ? <div className="prototype-form"><label><span>Имя</span><input defaultValue="Олег"/></label><label><span>Email</span><input defaultValue="oleg@example.ru"/></label><div className="switch-row"><div><Bell/><span><b>Еженедельный отчёт</b><small>По понедельникам на почту</small></span></div><Switch defaultChecked/></div></div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : isConnection ? <div className="prototype-form"><div className="prototype-steps"><span className="done"><Check/></span><p><b>Выберите сервис</b><small>Telegram, Bitrix24 или amoCRM</small></p><span>2</span><p><b>Разрешите доступ</b><small>Только к заявкам и нужным полям</small></p><span>3</span><p><b>Проверьте тестовую передачу</b><small>Покажем результат до включения</small></p></div></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && !isBot && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
 }
 
-function AppContent({ view, setView, onAction }: { view: View; setView: (v: View) => void; onAction: (label: string) => void }) {
+function AppContent({ view, setView, onAction, analytics, companyName }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} />, readiness: <Readiness setView={setView} />, attention: <Attention />, dialogs: <Dialogs />, training: <Training />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM />, billing: <Billing/>, team: <Team />, support: <Support />,
-  }), [setView, onAction]);
-  return <><PageHeader view={view} onPrimary={onAction}/>{pages[view]}</>;
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} />, readiness: <Readiness setView={setView} />, attention: <Attention />, dialogs: <Dialogs />, training: <Training />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM />, billing: <Billing/>, team: <Team />, support: <Support />,
+  }), [setView, onAction, analytics]);
+  return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
+
+// First letter of up to 2 words — "Умный Чат" -> "УЧ", "Айна" -> "А". Same
+// avatar-initial convention the reference itself uses ("БВ" for "Бани
+// Викинг"), just computed from the real name instead of hardcoded.
+function initials(name: string): string {
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
+}
+
+const COMPANY_ROLE_LABELS: Record<string, string> = { owner: "Владелец", admin: "Администратор", manager: "Менеджер", employee: "Сотрудник" };
 
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
   const [action, setAction] = useState<string | null>(null);
+  const { me, analytics } = useCabinetData();
+  const companyName = me?.companyName || "…";
+  const botLabel = me?.bot?.label || me?.bot?.name || "Бот";
+  const botDomain = me?.bot?.sourceWebsite || "";
+  const userName = me?.userName || "…";
+  const roleLabel = (me && COMPANY_ROLE_LABELS[me.companyRole]) || "Сотрудник";
   const handleFallback = (event: React.MouseEvent<HTMLDivElement>) => {
     const button = (event.target as HTMLElement).closest("button");
     if (!button || button.dataset.live !== undefined || button.disabled) return;
@@ -282,5 +350,5 @@ export default function Home() {
     if (["Сохранить изменения","Сохранить как новую версию","Запустить 48 тестов","Скопировать","Скопировано"].some(x => label.startsWith(x))) return;
     if (label && label.length < 90) setAction(label);
   };
-  return <div className="prototype-root" onClickCapture={handleFallback}><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>БВ</span><div><b>Бани Викинг</b><small>i-viking.ru</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <SidebarMenuItem key={item.id}><SidebarMenuButton tooltip={item.label} isActive={view === item.id} onClick={() => setView(item.id)}><item.icon /><span>{item.label}</span></SidebarMenuButton>{item.badge && <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>}</SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>О</span><div><b>Олег</b><small>Владелец</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction}/></main></SidebarInset></SidebarProvider></TooltipProvider><PrototypeActionDialog action={action} onClose={() => setAction(null)}/></div>;
+  return <div className="prototype-root" onClickCapture={handleFallback}><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <SidebarMenuItem key={item.id}><SidebarMenuButton tooltip={item.label} isActive={view === item.id} onClick={() => setView(item.id)}><item.icon /><span>{item.label}</span></SidebarMenuButton>{item.badge && <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>}</SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName}/></main></SidebarInset></SidebarProvider></TooltipProvider><PrototypeActionDialog action={action} onClose={() => setAction(null)}/></div>;
 }
