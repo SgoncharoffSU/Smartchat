@@ -4219,6 +4219,14 @@ th {
      was actually below the fold — they were beside it). Same root cause
      already hit .dash-row three times earlier this session. */
   min-width: 0;
+  /* proto.css (loaded in its own @layer, see index.html) has its own
+     unrelated ".readiness-card{display:flex;...}" — a different component,
+     different shape, that just happens to share our class name. Cascade
+     layers make our unlayered rules win on any property we DO declare, but
+     a property we never touch still falls through to the layered one, so
+     display must be pinned explicitly or this card silently becomes a flex
+     row and its children get squeezed into one line. */
+  display: block;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 14px;

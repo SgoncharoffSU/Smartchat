@@ -12,13 +12,22 @@
      true variable font can render; a static 400/500/600/700 set would
      just snap those to the nearest loaded weight instead of interpolating. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Manrope:wght@200..800&display=swap" rel="stylesheet" />
+<!-- proto.css — the prototype's own compiled Tailwind CSS, copied byte-for-byte
+     (see HANDOFF_RU.md: use the reference directly, not a reproduction). Loaded
+     BEFORE style.css on purpose: its preflight resets element selectors
+     (html, button, h1-h6, ...) at equal specificity to our own rules below, so
+     source order alone decides — style.css's tuned values keep winning for
+     anything we've already hand-matched, while new markup using the
+     prototype's exact utility classes (untouched by style.css) gets styled
+     straight from here. Do not move this below style.css. -->
+<link rel="stylesheet" href="proto.css?v=20260902a" />
 <!-- ?v= bumped on every deploy that touches style.css — without it, some
      browsers/data-saving proxies (Yandex Browser's Турбо, Chrome's Lite
      mode, some mobile carriers) will keep serving an old compressed copy of
      this file indefinitely regardless of the server's own Cache-Control
      headers, since those work by re-serving whatever they already fetched
      for this exact URL. A new query string is a new URL to them. -->
-<link rel="stylesheet" href="style.css?v=20260901a" />
+<link rel="stylesheet" href="style.css?v=20260902a" />
 </head>
 <body class="cabinet-body">
   <div id="impersonationBanner" hidden>
