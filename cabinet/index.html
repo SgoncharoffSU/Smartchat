@@ -13,13 +13,32 @@
      just snap those to the nearest loaded weight instead of interpolating. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Manrope:wght@200..800&display=swap" rel="stylesheet" />
 <!-- proto.css — the prototype's own compiled Tailwind CSS, copied byte-for-byte
-     (see HANDOFF_RU.md: use the reference directly, not a reproduction). Loaded
-     BEFORE style.css on purpose: its preflight resets element selectors
-     (html, button, h1-h6, ...) at equal specificity to our own rules below, so
-     source order alone decides — style.css's tuned values keep winning for
-     anything we've already hand-matched, while new markup using the
-     prototype's exact utility classes (untouched by style.css) gets styled
-     straight from here. Do not move this below style.css. -->
+     (see HANDOFF_RU.md: use the reference directly, not a reproduction).
+     Its ENTIRE content is wrapped in "@layer prototype {...}" (see the top
+     of proto.css itself). That — not <link> order — is what keeps it safe:
+     per the CSS Cascade Layers spec, ANY unlayered rule in style.css beats
+     ANY rule in a named layer for a given property, regardless of
+     specificity or which file appears first in the document. style.css
+     stays unlayered on purpose so it always wins outright.
+     What layers do NOT fix: our own class names can still coincidentally
+     match one of the prototype's own component classes (found 69 exact
+     name collisions so far, e.g. .readiness-card, .dialog-list,
+     .settings-form) — a completely different, unrelated component in the
+     prototype's design. For any property OUR rule never declares on that
+     selector, the layered value still applies uncontested (confirmed live:
+     .readiness-card's display, .dialog-list's display on mobile, and
+     .settings-form label/input's margin-top/background/focus-ring all
+     leaked through silently before being pinned explicitly). Whenever a
+     class name here also appears in proto.css, double-check every property
+     the prototype's rule sets is either matched or deliberately pinned —
+     don't assume "we didn't write a conflicting rule" means "nothing
+     changed". -->
+<!-- Link order still matters for one thing: this file registers the
+     "prototype" layer's position the first time it's parsed, and unlayered
+     style.css must be able to see/override it, so keep proto.css before
+     style.css for source-order sanity even though it's not what makes the
+     override guarantee itself work. -->
+<!-- Do not move this below style.css. -->
 <link rel="stylesheet" href="proto.css?v=20260902a" />
 <!-- ?v= bumped on every deploy that touches style.css — without it, some
      browsers/data-saving proxies (Yandex Browser's Турбо, Chrome's Lite

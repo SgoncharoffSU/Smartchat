@@ -2052,6 +2052,14 @@ input:focus {
   .conversation { border-top: 1px solid var(--line); min-height: 520px; }
 }
 .dialog-list {
+  /* Found live: proto.css (own @layer, see index.html) hides ITS OWN
+     .dialog-list at width<=760px as part of a different mobile flow (its
+     Диалоги page swaps to a full-screen conversation view there). We reuse
+     the class name but keep both panels visible at every width instead —
+     since we never declare display here, that layered display:none fell
+     through unopposed and made the whole list invisible on mobile with no
+     visible error. Pinned explicitly so it can't happen again. */
+  display: block;
   border-right: 1px solid var(--line);
   padding: 14px;
   overflow-y: auto;
@@ -2789,6 +2797,14 @@ input:focus {
 }
 
 .appearance-field label {
+  /* proto.css (own @layer, see index.html) has an unrelated
+     ".settings-form label{margin-top:12px;...}" — same wrapper class name
+     (.settings-form), different component. Layers make display:block here
+     win over its display:flex, but margin-top isn't declared on either side
+     until now, so its value fell through unopposed and stacked on top of
+     our own margin-bottom below. Pinned to neutralize it explicitly rather
+     than leaving a property this rule never used to need. */
+  margin-top: 0;
   display: block;
   font-size: 13px;
   font-weight: 600;
@@ -2803,7 +2819,18 @@ input:focus {
 }
 
 .appearance-field input[type="text"] {
+  /* Same leak as the label above, via proto.css's ".settings-form input" —
+     background/focus ring were never declared here (or on the shared base
+     input[type="text"] rule), so its #fafbfa background and blue focus ring
+     applied uncontested. Restored to what this field looked like before
+     proto.css existed. */
+  background: #fff;
   margin-bottom: 0;
+}
+
+.appearance-field input[type="text"]:focus {
+  border-color: var(--line);
+  box-shadow: none;
 }
 
 .appearance-toggle-group {
