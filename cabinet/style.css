@@ -1734,6 +1734,11 @@ input:focus {
 }
 
 .chart-summary > div {
+  /* proto.css's own .chart-summary>div turns this into a 2-col grid
+     (label|value side by side) — display/grid-template-columns/gap weren't
+     declared here, so that leaked through onto our stacked small-over-b
+     layout. Pinned to keep our own vertical stack. */
+  display: block;
   padding: 10px;
   border-radius: 10px;
   background: var(--secondary);
@@ -1795,6 +1800,11 @@ input:focus {
 }
 
 .funnel-arrow {
+  /* proto.css has its OWN unrelated .funnel-arrow (a column-flex percentage
+     label with an arrow icon, used in its 4-stage layout) — display wasn't
+     declared here, so its display:flex/flex-direction:column leaked
+     through onto ours (a plain one-line percentage, no icon child). */
+  display: block;
   flex-shrink: 0;
   font-size: 12px;
   font-weight: 700;
@@ -2037,6 +2047,11 @@ input:focus {
 }
 
 .status-pill {
+  /* proto.css's own .status-pill declares display:inline-flex (plus
+     align-items/gap/white-space/width:max-content, for an icon+text pill
+     layout it has and ours doesn't) — pinned to inline-block so it can't
+     silently reflow ours. */
+  display: inline-block;
   flex-shrink: 0;
   font-size: 12px;
   font-weight: 700;
@@ -2616,17 +2631,23 @@ input:focus {
 }
 
 .event-icon {
+  /* proto.css's own .event-icon sets display:grid;place-items:center (it
+     always has an svg glyph child) — ours never did since this used to be
+     a plain colored dot with no glyph. Pinned explicitly now that it has
+     one too, and switched to the reference's own squircle/size/colors
+     instead of our old plain circle. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  margin-top: 2px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   background: var(--accent);
 }
 
-.event-icon-check {
-  background: #dcfce7;
-}
+.event-icon.green { color: #21774f; background: #e6f5eb; }
+.event-icon.blue { color: #5368d1; background: #e9edff; }
 
 .event-body {
   flex: 1;

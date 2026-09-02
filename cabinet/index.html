@@ -354,17 +354,26 @@
           </article>
         </section>
 
-        <div class="dash-row">
-          <!-- Same three numbers already in the stat-grid above (shown/
-               dialogs/leads + their conversion rates come from the same
-               /api/cabinet/analytics response — see renderAnalytics) laid
-               out as a funnel instead of separate cards, matching the
-               reference design. -->
-          <div class="panel dash-row-main">
-            <div class="funnel-eyebrow">ВОРОНКА</div>
-            <div class="panel-head-row">
-              <h2 style="margin:0;">Путь посетителя к заявке</h2>
-              <button type="button" class="panel-link-btn" id="funnelDetailsBtn">Подробнее →</button>
+        <!-- .dashboard-grid/.panel-head/.section-label/.ghost-action/
+             .inline-action/.quality-stats/.wide-ghost/.timeline/.event-icon
+             are the reference's own classes (proto.css), adopted directly —
+             replaces the old two .dash-row pairs + standalone chart panel
+             with the reference's real single asymmetric grid (auto-placed:
+             funnel|chart, then readiness|quality, then activity full-width
+             — verified against the live page's own layout, not guessed).
+             .funnel-stages/.funnel-tip/.ready-mini-* keep their OWN names —
+             see style.css's comment by .metrics-grid-3col for why
+             .readiness-card specifically was never adopted (it's a THIRD,
+             differently-shaped reference component sharing that exact name
+             with our checklist page's own card). -->
+        <section class="dashboard-grid">
+          <article class="panel funnel-panel">
+            <div class="panel-head">
+              <div>
+                <span class="section-label">Воронка</span>
+                <h2 style="margin:0;">Путь посетителя к заявке</h2>
+              </div>
+              <button type="button" class="ghost-action" id="funnelDetailsBtn">Подробнее →</button>
             </div>
             <div class="funnel-stages">
               <div class="funnel-stage">
@@ -393,14 +402,42 @@
               </span>
               <button type="button" class="panel-cta-btn" id="funnelTipBtn">Настроить</button>
             </div>
-          </div>
+          </article>
+
+          <!-- Real per-day rates (see cabinet.service.ts's getConversionChart) —
+               same two ratios as the funnel above (открытие/заявка), split by
+               calendar day over the selected window instead of summed. No
+               status-pill delta in the header — unlike the reference's
+               static "+1,8 п.п.", we don't compute a period-over-period
+               delta for this chart's own averages, so showing one would be
+               invented. -->
+          <article class="panel chart-panel" id="conversionChartPanel">
+            <div class="panel-head">
+              <div>
+                <span class="section-label">Динамика</span>
+                <h2 style="margin:0;">Конверсия по дням</h2>
+              </div>
+            </div>
+            <div class="chart-legend">
+              <span><i class="chart-legend-dot chart-legend-lead"></i>В заявку</span>
+              <span><i class="chart-legend-dot chart-legend-open"></i>В открытие чата</span>
+            </div>
+            <div class="chart-wrap">
+              <svg id="conversionChartSvg" viewBox="0 0 620 220" preserveAspectRatio="none"></svg>
+              <div class="chart-axis" id="conversionChartAxis"></div>
+            </div>
+            <div class="chart-summary">
+              <div><small>В заявку, среднее</small><b id="chartAvgLead">–</b></div>
+              <div><small>В открытие, среднее</small><b id="chartAvgOpen">–</b></div>
+            </div>
+          </article>
 
           <!-- Same readiness % already computed for the sidebar nav badge and
                the bot-status card (loadReadiness/renderReadinessNavBadge) —
                just previewed here too, with a link to the real Готовность
                бота view for the rest of the checklist. -->
-          <div class="panel dash-row-side">
-            <div class="funnel-eyebrow">ГОТОВНОСТЬ</div>
+          <article class="panel">
+            <span class="section-label">Готовность</span>
             <div class="ready-mini-body">
               <div class="ready-donut" id="readyMiniDonut" style="--pct:0">
                 <div class="ready-donut-hole"><span id="readyMiniPct">–</span></div>
@@ -410,36 +447,10 @@
                 <p class="ready-mini-desc" id="readyMiniDesc"></p>
               </div>
             </div>
-            <button type="button" class="panel-link-btn" id="readyMiniLink">Последний шаг →</button>
-          </div>
-        </div>
+            <button type="button" class="inline-action" id="readyMiniLink">Последний шаг →</button>
+          </article>
 
-        <!-- Real per-day rates (see cabinet.service.ts's getConversionChart) —
-             same two ratios as the funnel above (открытие/заявка), split by
-             calendar day over the selected window instead of summed. -->
-        <div class="panel" id="conversionChartPanel">
-          <div class="panel-head-row">
-            <div>
-              <div class="funnel-eyebrow">ДИНАМИКА</div>
-              <h2 style="margin:0;">Конверсия по дням</h2>
-            </div>
-          </div>
-          <div class="chart-legend">
-            <span><i class="chart-legend-dot chart-legend-lead"></i>В заявку</span>
-            <span><i class="chart-legend-dot chart-legend-open"></i>В открытие чата</span>
-          </div>
-          <div class="chart-wrap">
-            <svg id="conversionChartSvg" viewBox="0 0 620 220" preserveAspectRatio="none"></svg>
-            <div class="chart-axis" id="conversionChartAxis"></div>
-          </div>
-          <div class="chart-summary">
-            <div><small>В заявку, среднее</small><b id="chartAvgLead">–</b></div>
-            <div><small>В открытие, среднее</small><b id="chartAvgOpen">–</b></div>
-          </div>
-        </div>
-
-        <div class="dash-row">
-          <div class="panel dash-row-main">
+          <article class="panel quality-panel">
             <div class="info-widget">
               <button class="info-btn" id="problemsInfoBtn" type="button" aria-label="Что считается проблемой">?</button>
               <div class="info-popup" id="problemsInfoPopup" hidden>
@@ -451,43 +462,41 @@
                 </p>
               </div>
             </div>
-            <div class="panel-head-row">
-              <h2 style="margin:0;">Ответы под контролем</h2>
+            <div class="panel-head">
+              <div>
+                <span class="section-label">Качество</span>
+                <h2 style="margin:0;">Ответы под контролем</h2>
+              </div>
               <span class="status-pill" id="qualityStatusPill">Всё хорошо</span>
             </div>
-            <div class="problems-row">
-              <div class="problems-stat">
-                <div class="problems-num" id="problemsOutstanding">0</div>
-                <div class="problems-lbl">требуют внимания</div>
-              </div>
-              <div class="problems-stat">
-                <div class="problems-num" id="problemsTotal">0</div>
-                <div class="problems-lbl">проблемных ответов за период</div>
-              </div>
-              <div class="problems-stat">
-                <div class="problems-num problems-ok" id="problemsResolved">0</div>
-                <div class="problems-lbl">уже решено и проверено</div>
-              </div>
+            <div class="quality-stats">
+              <div><b class="problems-num" id="problemsOutstanding">0</b><span>требуют внимания</span></div>
+              <div><b class="problems-num" id="problemsTotal">0</b><span>проблемных ответов за период</span></div>
+              <div><b class="problems-num problems-ok" id="problemsResolved">0</b><span>уже решено и проверено</span></div>
             </div>
-            <button type="button" class="panel-cta-btn panel-cta-btn-block" id="openQualityCenterBtn">Открыть центр качества</button>
-          </div>
+            <button type="button" class="wide-ghost" id="openQualityCenterBtn">Открыть центр качества</button>
+          </article>
 
           <!-- Real events, not a mock feed: merges "ответ проверен/улучшен"
                (already returned by /api/cabinet/analytics as data.escalations.
                recentVerified) with база-знаний additions/edits (fetched fresh
                from the same endpoint the База знаний view itself uses — see
-               renderRecentEvents) into one timeline sorted by real timestamp. -->
-          <div class="panel dash-row-side">
-            <div class="panel-head-row">
+               renderRecentEvents) into one timeline sorted by real timestamp.
+               .timeline/.event-icon here are the reference's own classes —
+               .activity-panel .timeline turns them into the reference's
+               3-per-row bordered-box grid instead of its own default
+               vertical divider list, reused as-is. -->
+          <article class="panel activity-panel">
+            <div class="panel-head">
               <div>
-                <div class="funnel-eyebrow">СЕГОДНЯ</div>
+                <span class="section-label">Сегодня</span>
                 <h2 style="margin:0;">Последние события</h2>
               </div>
               <button type="button" class="stat-menu-btn" aria-label="Ещё"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
             </div>
-            <div class="events-feed" id="eventsFeed"><div class="events-feed-empty">Загрузка…</div></div>
-          </div>
-        </div>
+            <div class="timeline" id="eventsFeed"><div class="events-feed-empty">Загрузка…</div></div>
+          </article>
+        </section>
 
         <div class="panel">
           <div class="info-widget">
@@ -3906,28 +3915,33 @@
             return;
           }
           feed.innerHTML = '';
+          // .event-icon(.color)/p>b+small/time here are the reference's own
+          // .timeline row shape (see index.html's comment by #eventsFeed) —
+          // icon color/glyph keyed by event type: 'check' (verified/improved
+          // answer) green, 'book' (knowledge base change) blue.
+          var EVENT_ICON = {
+            check: { color: 'green', svg: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' },
+            book: { color: 'blue', svg: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v16"/><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"/></svg>' },
+          };
           all.forEach(function (ev) {
             var row = document.createElement('div');
-            row.className = 'event-row';
+            var meta = EVENT_ICON[ev.icon] || EVENT_ICON.book;
             var icon = document.createElement('span');
-            icon.className = 'event-icon event-icon-' + ev.icon;
-            var body = document.createElement('span');
-            body.className = 'event-body';
-            var title = document.createElement('span');
-            title.className = 'event-title';
+            icon.className = 'event-icon ' + meta.color;
+            icon.innerHTML = meta.svg;
+            var p = document.createElement('p');
+            var title = document.createElement('b');
             title.textContent = ev.title;
-            body.appendChild(title);
+            p.appendChild(title);
             if (ev.detail) {
-              var detail = document.createElement('span');
-              detail.className = 'event-detail';
+              var detail = document.createElement('small');
               detail.textContent = ev.detail;
-              body.appendChild(detail);
+              p.appendChild(detail);
             }
-            var time = document.createElement('span');
-            time.className = 'event-time';
+            var time = document.createElement('time');
             time.textContent = fmtDate(ev.at);
             row.appendChild(icon);
-            row.appendChild(body);
+            row.appendChild(p);
             row.appendChild(time);
             feed.appendChild(row);
           });
