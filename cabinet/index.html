@@ -281,10 +281,10 @@
              is untouched — role="tab" only changes the box model. -->
         <div class="dashboard-toolbar">
           <div role="tablist" class="dash-period-tabs">
-            <button class="period-btn" role="tab" data-period="yesterday" type="button">Вчера</button>
-            <button class="period-btn" role="tab" data-period="week" type="button">Неделя</button>
-            <button class="period-btn" role="tab" data-period="month" type="button">Месяц</button>
-            <button class="period-btn" role="tab" data-period="all" type="button">Всё время</button>
+            <button class="period-btn" role="tab" aria-selected="false" data-period="yesterday" type="button">Вчера</button>
+            <button class="period-btn" role="tab" aria-selected="true" data-period="week" type="button">Неделя</button>
+            <button class="period-btn" role="tab" aria-selected="false" data-period="month" type="button">Месяц</button>
+            <button class="period-btn" role="tab" aria-selected="false" data-period="all" type="button">Всё время</button>
           </div>
           <button type="button" class="date-filter" id="dateRangeToggleBtn" aria-expanded="false">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/></svg>
@@ -2060,8 +2060,17 @@
       btn.addEventListener('click', function () {
         currentPeriod = btn.dataset.period;
         customRange = null;
-        document.querySelectorAll('.dash-period-tabs > .period-btn').forEach(function (b) { b.classList.remove('active'); });
+        document.querySelectorAll('.dash-period-tabs > .period-btn').forEach(function (b) {
+          b.classList.remove('active');
+          b.setAttribute('aria-selected', 'false');
+        });
         btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
+        // Picking a preset while the custom-range picker is open used to
+        // leave it open (and the toggle stuck aria-expanded="true") even
+        // though the preset now overrides it — found in review.
+        document.getElementById('dateRangePicker').hidden = true;
+        document.getElementById('dateRangeToggleBtn').setAttribute('aria-expanded', 'false');
         loadAnalytics();
       });
     });
@@ -2072,7 +2081,10 @@
       if (!from || !to) return;
       currentPeriod = 'custom';
       customRange = { from: from, to: to };
-      document.querySelectorAll('.dash-period-tabs > .period-btn').forEach(function (b) { b.classList.remove('active'); });
+      document.querySelectorAll('.dash-period-tabs > .period-btn').forEach(function (b) {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
       document.getElementById('dateRangePicker').hidden = true;
       document.getElementById('dateRangeToggleBtn').setAttribute('aria-expanded', 'false');
       loadAnalytics();

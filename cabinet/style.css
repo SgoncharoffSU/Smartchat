@@ -1353,14 +1353,6 @@ input:focus {
   margin: 0;
 }
 
-.period-selector {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 18px;
-}
-
 .date-range-picker {
   display: flex;
   align-items: center;
@@ -1663,18 +1655,6 @@ input:focus {
   color: var(--ink);
 }
 
-.stat-card {
-  /* Preventive — same grid min-width:auto footgun as .readiness-card above
-     (see its comment); this card's content is normally short, but nothing
-     here stops a longer label/delta text from forcing the same overflow. */
-  min-width: 0;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 18px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-
 .funnel-eyebrow {
   font-size: 11px;
   font-weight: 700;
@@ -1953,48 +1933,6 @@ input:focus {
 .payment-row-item:first-child { border-top: none; }
 .payment-row-item span:nth-child(2) { color: var(--muted); font-size: 11px; }
 
-.dash-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 20px;
-  align-items: stretch;
-}
-
-.dash-row .panel {
-  /* Without this, a grid item's default min-width:auto sizes the TRACK by
-     its content's min-content width instead of the declared 2fr/1fr ratio
-     — the events feed's long, nowrap .event-detail text has a bigger
-     min-content width than the quality panel's short stat labels, so
-     without this the side column was winning MORE space than the main one,
-     visually reversing the 2:1 split. Same root cause already hit three
-     times on the landing page this session. */
-  min-width: 0;
-  margin-bottom: 0;
-}
-
-.panel-head-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.panel-link-btn {
-  border: none;
-  background: none;
-  color: var(--blue);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 0;
-  white-space: nowrap;
-}
-
-.panel-link-btn:hover {
-  text-decoration: underline;
-}
-
 .panel-cta-btn {
   flex-shrink: 0;
   border: 1px solid var(--line);
@@ -2009,12 +1947,6 @@ input:focus {
 
 .panel-cta-btn:hover {
   background: var(--secondary);
-}
-
-.panel-cta-btn-block {
-  width: 100%;
-  margin-top: 16px;
-  text-align: center;
 }
 
 .funnel-tip {
@@ -2545,28 +2477,6 @@ input:focus {
   margin: 0;
 }
 
-.stat-card-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.stat-icon {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stat-icon-blue { background: #e0e7ff; color: #4f46e5; }
-.stat-icon-teal { background: #cffafe; color: #0e7490; }
-.stat-icon-green { background: #dcfce7; color: #16a34a; }
-.stat-icon-amber { background: #fef3c7; color: #b45309; }
-
 .stat-menu-btn {
   margin-left: auto;
   display: inline-flex;
@@ -2580,23 +2490,6 @@ input:focus {
   padding: 2px 4px;
 }
 
-.stat-lbl {
-  font-size: 12.5px;
-  color: var(--muted);
-}
-
-.stat-val {
-  font-size: 26px;
-  font-weight: 800;
-  color: var(--ink);
-  margin-top: 4px;
-}
-
-.stat-delta {
-  font-size: 12px;
-  margin-top: 4px;
-}
-
 .delta-up { color: #166534; }
 .delta-down { color: var(--destructive); }
 .delta-flat { color: var(--muted); }
@@ -2606,28 +2499,10 @@ input:focus {
   font-weight: 600;
 }
 
-.problems-row {
-  display: flex;
-  gap: 32px;
-}
-
 .events-feed-empty {
   padding: 8px 0;
   font-size: 13px;
   color: var(--muted);
-}
-
-.event-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.event-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
 }
 
 .event-icon {
@@ -2649,37 +2524,6 @@ input:focus {
 .event-icon.green { color: #21774f; background: #e6f5eb; }
 .event-icon.blue { color: #5368d1; background: #e9edff; }
 
-.event-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.event-title {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.event-detail {
-  font-size: 12.5px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.event-time {
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.problems-stat {
-  text-align: center;
-}
-
 .problems-num {
   font-size: 28px;
   font-weight: 800;
@@ -2688,12 +2532,6 @@ input:focus {
 
 .problems-num.problems-ok {
   color: #166534;
-}
-
-.problems-lbl {
-  font-size: 12.5px;
-  color: var(--muted);
-  margin-top: 2px;
 }
 
 /* The hamburger button that opens .sidebar as an off-canvas drawer on a
@@ -2767,7 +2605,6 @@ input:focus {
   .sidebar-company-wrap { margin-top: -5px; }
   .content { height: auto; overflow-y: visible; }
   .metrics-grid { grid-template-columns: 1fr; }
-  .dash-row { grid-template-columns: 1fr; }
   /* Pre-existing overflow, found while checking this same mobile view —
      the two native date inputs plus separator plus button don't fit a
      390px-wide screen and weren't wrapping internally. */
