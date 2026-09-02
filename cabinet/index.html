@@ -46,7 +46,7 @@
      this file indefinitely regardless of the server's own Cache-Control
      headers, since those work by re-serving whatever they already fetched
      for this exact URL. A new query string is a new URL to them. -->
-<link rel="stylesheet" href="style.css?v=20260902a" />
+<link rel="stylesheet" href="style.css?v=20260902b" />
 </head>
 <body class="cabinet-body">
   <div id="impersonationBanner" hidden>
@@ -307,11 +307,15 @@
         <!-- .metrics-grid/.metric-card/.metric-icon(.color)/.metric-top/
              strong/small are the reference's own classes (proto.css),
              reused as-is — see style.css's comment above .metrics-grid-3col.
-             Labels stay OURS, not the reference's ("Показов"/"Диалогов"/
-             "Заявок получено"/"Заявок оплачено", not "Посетители"/"Открыли
-             чат"/"Диалоги"/"Заявки"): the reference's 4 cards track a
-             4-stage funnel (visitor → opened chat → dialog → lead) we don't
-             have a distinct "opened chat" event for — relabeling to match
+             Card 1 now says "Посетители", matching the reference's own
+             label: cabinet.service.ts's getAnalytics counts this the same
+             way — every dialog row created (the teaser fired at all, isInit)
+             — which IS a visit where the widget appeared, just named
+             "shown"/"Показов" internally. Cards 2-4 stay OURS ("Диалогов"/
+             "Заявок получено"/"Заявок оплачено", not "Открыли чат"/
+             "Диалоги"/"Заявки"): the reference's demo funnel has a 4th,
+             intermediate "opened chat" stage between visitor and dialog that
+             we don't track as a separate event — relabeling those to match
              would imply data we don't actually collect. Colors follow the
              reference's left-to-right sequence (violet/cyan/green/lime)
              purely as decoration, decoupled from the label underneath. -->
@@ -319,7 +323,7 @@
           <article class="metric-card">
             <div class="metric-icon violet"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg></div>
             <div class="metric-top">
-              <span>Показов</span>
+              <span>Посетители</span>
               <button type="button" class="stat-menu-btn" aria-label="Ещё"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
             </div>
             <strong id="statShown">–</strong>

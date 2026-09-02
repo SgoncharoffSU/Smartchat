@@ -38,6 +38,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 :root {
   --ink: #081522;
   --canvas: #f2f4f2;
+  --paper: #fff;
   --line: #dfe5e7;
   --blue: #8298ff;
   --lime: #c8ff4d;
@@ -2658,13 +2659,16 @@ input:focus {
 }
 
 .panel {
+  /* Exact values from the reference's own globals.css .panel rule (border
+     color/radius/shadow were our own earlier approximation, not measured —
+     border-radius alone was 12.8px vs the real 16px on every card site-wide). */
   position: relative;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  background: var(--paper);
+  border: 1px solid rgba(8, 21, 34, 0.075);
+  border-radius: 16px;
   padding: 22px;
   margin-bottom: 20px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+  box-shadow: 0 5px 16px rgba(13, 30, 48, 0.035);
 }
 
 .appearance-row {
