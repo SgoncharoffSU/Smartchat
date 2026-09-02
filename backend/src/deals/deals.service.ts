@@ -191,6 +191,21 @@ export class DealsService {
       await this.prisma.dealActivity.create({
         data: { dealId, authorUserId: userId, kind: 'stage_change', text: `Стадия изменена на «${updated.stage.name}»` },
       });
+      // The old "Заявки" table's "Отметить оплаченным" button set Lead.paidAt
+      // directly — deleted along with that whole page when the cabinet moved
+      // to this Лиды/CRM kanban (per the owner: "это теперь Лиды или СРМ").
+      // A chat-captured deal reaching a "won" stage IS that same real-world
+      // event now, so it drives the same field instead of leaving it
+      // permanently frozen (found by code review: getAnalytics' paidCur/
+      // dashboard "Заявок оплачено" reads only Lead.paidAt, and nothing else
+      // in the rewritten UI can set it any more). Only set, never clear, on
+      // moving back out of "won" — a lead that already got paid stays paid.
+      if (updated.stage.isWon && updated.leadId) {
+        await this.prisma.lead.updateMany({
+          where: { id: updated.leadId, paidAt: null },
+          data: { paidAt: new Date() },
+        });
+      }
       if (updated.bot) {
         this.crmIntegration
           .pushDeal(

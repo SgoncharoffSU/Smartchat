@@ -70,10 +70,13 @@ model Company {
   // Null for a 'token' plan (that one is governed by tokenBalanceRub instead,
   // never expires on its own).
   planExpiresAt      DateTime?   @map("plan_expires_at")
-  // Prepaid balance in RUB for a 'token' plan — debited after every
-  // completion call by the real, measured token count from that call times
-  // TariffPlan.tokenRubPer1k (see BillingService.chargeTokenUsage). Unrelated
-  // to (and not reset by) an 'unlimited' plan.
+  // Prepaid balance in RUB, shared by BOTH 'token' and 'lead' plans (despite
+  // the name — it predates 'lead'): for 'token' it's debited after every
+  // completion call by the real, measured token count times
+  // TariffPlan.tokenRubPer1k (see BillingService.chargeTokenUsage); for
+  // 'lead' it's debited a flat TariffPlan.leadRubPerLead per confirmed lead
+  // (see BillingService.chargeConfirmedLead). Unrelated to (and not reset
+  // by) an 'unlimited' plan.
   tokenBalanceRub    Decimal     @default(0) @db.Decimal(10, 2) @map("token_balance_rub")
   // Toggle only, in this pass — see BillingService.setAutoPay. Real
   // auto-charging needs a saved YooKassa payment method (a separate,

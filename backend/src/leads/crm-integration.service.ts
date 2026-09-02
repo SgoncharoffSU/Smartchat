@@ -113,7 +113,7 @@ export class CrmIntegrationService implements OnModuleInit {
    * Mirrors a chat-captured Lead into the mini-CRM board, right alongside the
    * v1 pushLead call above — see widget.service.ts. Idempotent (upsert on
    * Deal.leadId, which is @unique) since the same dialog can re-trigger
-   * leadCaptured across turns as leads.upsert keeps refining the same Lead
+   * leadCaptured across turns as leads.upsertAndCheckNew keeps refining the same Lead
    * row. Deliberately does NOT push to Bitrix24/amoCRM itself — that only
    * happens once a stage with a real CRM mapping is entered (see
    * DealsService.updateDeal), so a brand-new deal in the default "Новая"

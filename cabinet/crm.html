@@ -31,7 +31,14 @@
      reference equivalent at all (its own CRM() is static demo cards) and is
      kept exactly as built. */
   .crm-board-wrap { padding: 20px 24px; overflow-x: auto; flex: 1; }
-  .crm-board { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 14px; align-items: start; min-height: 60vh; }
+  /* grid-auto-flow:column + grid-auto-columns (not a fixed repeat(4, ...))
+     — the pipeline's stage count is user-configurable (pipeline/stages CRUD
+     in index.html), so a fixed 4 either left a dead empty column with 3
+     stages or wrapped a 5th stage onto a second row instead of scrolling
+     (found by code review). This always renders exactly as many columns as
+     there are stages, growing sideways into .crm-board-wrap's own
+     overflow-x:auto for any count. */
+  .crm-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 14px; align-items: start; min-height: 60vh; }
   .crm-column {
     background: #e9eceb; border-radius: 14px; padding: 10px;
     display: flex; flex-direction: column; max-height: calc(100vh - 140px);

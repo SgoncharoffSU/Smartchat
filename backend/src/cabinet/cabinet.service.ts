@@ -889,7 +889,7 @@ export class CabinetService {
       // For a self-sell provisioning bot (Алина — enablesProvisioning),
       // "registration" doesn't work like a normal lead: the visitor's
       // email/password are entered on a separate page (register.html), not
-      // collected in the chat, so leadCaptured/leads.upsert never fires for
+      // collected in the chat, so leadCaptured/leads.upsertAndCheckNew never fires for
       // it (see widget.service.ts) — Lead.count was silently 0 forever
       // here, for EVERY real signup this bot ever produced. Confirmed live:
       // 6 real, completed registrations, 0 Lead rows. The real signal is

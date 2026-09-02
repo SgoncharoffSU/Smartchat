@@ -2100,17 +2100,9 @@ input:focus {
   text-overflow: ellipsis;
 }
 .dialog-row time { align-self: start; color: #98a3aa; font-size: 10px; flex-shrink: 0; }
-.dialog-row-escalation-badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: #fef3c7;
-  color: #92400e;
-  font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
-}
+/* .dialog-row-escalation-badge lives further down (line ~4328) — this was a
+   dead duplicate with different values that the cascade always ignored
+   (same selector/specificity, later rule wins); found by code review. */
 
 .conversation { display: grid; grid-template-rows: auto auto 1fr; min-width: 0; }
 .conversation-head {

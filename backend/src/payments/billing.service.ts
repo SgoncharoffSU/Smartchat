@@ -2,8 +2,11 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { PrismaService } from '../prisma.service';
 import { YookassaService } from './yookassa.service';
 import { LlmProviderService } from '../llm-provider/llm-provider.service';
+import { Prisma } from '@prisma/client';
 
 const RETURN_URL = 'https://chat.glavinstrument.com/cabinet/?paid=1';
+
+type CompanyWithPlan = Prisma.CompanyGetPayload<{ include: { tariffPlan: true } }>;
 
 @Injectable()
 export class BillingService {
@@ -14,6 +17,23 @@ export class BillingService {
     private readonly yookassa: YookassaService,
     private readonly llmProviders: LlmProviderService,
   ) {}
+
+  /**
+   * Shared fetch for isBlocked/chargeTokenUsage/chargeConfirmedLead — all
+   * three used to run this same company+tariffPlan query independently, and
+   * WidgetService.sendMessage calls all three in one turn (isBlocked up
+   * front, the other two fire-and-forget near the end), so every message
+   * that captures a lead did it 3 times over (found by code review). Each
+   * method still accepts an optional pre-fetched `company` so a caller that
+   * already has one (sendMessage's own isBlocked check) can pass it through
+   * to the later calls instead of re-fetching; tariffPlan.kind/rates don't
+   * change mid-conversation, so reusing a snapshot from earlier in the same
+   * turn is safe — the actual balance decrements below are still atomic
+   * Prisma {decrement} updates, never computed from this snapshot's value.
+   */
+  getCompanyWithPlan(companyId: string): Promise<CompanyWithPlan | null> {
+    return this.prisma.company.findUnique({ where: { id: companyId }, include: { tariffPlan: true } });
+  }
 
   /**
    * The real, live input/output rates a 'token'-plan company is charged per
@@ -142,7 +162,8 @@ export class BillingService {
           data: { tariffPlanId: plan.id, planExpiresAt: expiresAt },
         });
       } else {
-        // 'token' — top up the prepaid RUB balance, never overwrite it.
+        // 'token' or 'lead' — both share tokenBalanceRub (see its own schema
+        // comment); top up the prepaid RUB balance, never overwrite it.
         await tx.company.update({
           where: { id: payment.companyId },
           data: { tariffPlanId: plan.id, tokenBalanceRub: { increment: payment.amountRub } },
@@ -163,9 +184,9 @@ export class BillingService {
    * mid-reply-cutting a conversation — see isBlocked below for where that
    * actually gets enforced, on the NEXT message instead.
    */
-  async chargeTokenUsage(companyId: string, promptTokens: number, completionTokens: number) {
+  async chargeTokenUsage(companyId: string, promptTokens: number, completionTokens: number, company?: CompanyWithPlan | null) {
     if (promptTokens <= 0 && completionTokens <= 0) return;
-    const company = await this.prisma.company.findUnique({ where: { id: companyId }, include: { tariffPlan: true } });
+    company ??= await this.getCompanyWithPlan(companyId);
     if (!company?.tariffPlan || company.tariffPlan.kind !== 'token') return;
     const rates = this.effectiveRates(company.tariffPlan);
     if (!rates) return;
@@ -186,8 +207,8 @@ export class BillingService {
    * no-op for any other plan kind (or no plan yet) — mirrors
    * chargeTokenUsage's own shape/guards.
    */
-  async chargeConfirmedLead(companyId: string) {
-    const company = await this.prisma.company.findUnique({ where: { id: companyId }, include: { tariffPlan: true } });
+  async chargeConfirmedLead(companyId: string, company?: CompanyWithPlan | null) {
+    company ??= await this.getCompanyWithPlan(companyId);
     if (!company?.tariffPlan || company.tariffPlan.kind !== 'lead') return;
     const rate = company.tariffPlan.leadRubPerLead?.toNumber();
     if (!rate) return;
@@ -228,13 +249,14 @@ export class BillingService {
    * True when the bot should stop answering — real billing state only,
    * doesn't touch the older trialEndsAt/subscriptionActive flow (that still
    * governs the "free trial" window on its own, checked separately by
-   * whatever already reads those two fields). A 'token' company with a
-   * depleted balance is blocked; an 'unlimited' company past planExpiresAt
-   * is blocked; anyone else (no tariffPlan chosen) is NOT blocked here —
-   * they're still just on the trial.
+   * whatever already reads those two fields). A 'token' or 'lead' company
+   * with a depleted tokenBalanceRub is blocked (same field, see its own
+   * schema comment); an 'unlimited' company past planExpiresAt is blocked;
+   * anyone else (no tariffPlan chosen) is NOT blocked here — they're still
+   * just on the trial.
    */
-  async isBlocked(companyId: string): Promise<boolean> {
-    const company = await this.prisma.company.findUnique({ where: { id: companyId }, include: { tariffPlan: true } });
+  async isBlocked(companyId: string, company?: CompanyWithPlan | null): Promise<boolean> {
+    company ??= await this.getCompanyWithPlan(companyId);
     if (!company?.tariffPlan) return false;
     if (company.tariffPlan.kind === 'unlimited') {
       return !company.planExpiresAt || company.planExpiresAt < new Date();

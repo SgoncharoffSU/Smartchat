@@ -347,12 +347,18 @@ export class WidgetService {
     visitorIp?: string,
     signal?: AbortSignal,
   ) {
+    // Fetched once and threaded through isBlocked/chargeConfirmedLead/
+    // chargeTokenUsage below — all three used to run this same company+
+    // tariffPlan query independently, 3 times over on any turn that captures
+    // a lead (found by code review). tariffPlan.kind/rates don't change
+    // mid-conversation, so this one snapshot is safe to reuse for all three.
+    const billingCompany = await this.billing.getCompanyWithPlan(bot.companyId);
     // A 'token'-plan company with a depleted balance, or an 'unlimited'-plan
     // one past its paid period — checked before touching the LLM at all
     // (never mid-generation: cutting a reply off partway would read as the
     // bot itself malfunctioning). No-op for anyone still just on the free
     // trial or with no tariffPlan chosen yet (see BillingService.isBlocked).
-    if (await this.billing.isBlocked(bot.companyId)) {
+    if (await this.billing.isBlocked(bot.companyId, billingCompany)) {
       const blockedReply = 'Сервис временно приостановлен — оплата не подтверждена или закончился баланс. Свяжитесь с администратором аккаунта.';
       const saved = await this.messages.append(dialog.id, MessageRole.assistant, blockedReply, []);
       return {
@@ -1225,7 +1231,7 @@ export class WidgetService {
     // Code-level gate, not the model's word alone — same reasoning as
     // siteChecked/leadData above. Once given, consent is a fact for the rest
     // of the dialog (surfaced in the known-facts block below so later stages
-    // never ask again); leads.upsert at the bottom of this method refuses to
+    // never ask again); leads.upsertAndCheckNew at the bottom of this method refuses to
     // persist any PII unless this is true, regardless of leadCaptured.
     if (structuredReply.pdConsentGiven && !visitorMeta.pdConsent) {
       visitorMeta = { ...visitorMeta, pdConsent: true };
@@ -1377,7 +1383,7 @@ export class WidgetService {
     // purpose.
     if (structuredReply.unansweredQuestion && !dto.isPreview) {
       // Only ever hand over contact once consent is code-verified — same
-      // gate as leads.upsert below, not just the model's say-so.
+      // gate as leads.upsertAndCheckNew below, not just the model's say-so.
       const escalationConsentGiven = visitorMeta.pdConsent === true;
       this.telegram
         .escalate({
@@ -1487,7 +1493,7 @@ export class WidgetService {
       // sometimes reaches this exit condition with reply text that already
       // claims contact info was captured (often the exact "готово, свяжемся!"
       // wording) without code-verified consent — never let that false
-      // confirmation reach the visitor, and leads.upsert below already
+      // confirmation reach the visitor, and leads.upsertAndCheckNew below already
       // refuses to persist without this same check, so nothing would actually
       // be saved regardless of what the reply says.
       this.logger.warn(`Dialog ${dialog.id}: reached handoff without code-verified consent, requesting consent instead`);
@@ -1553,7 +1559,7 @@ export class WidgetService {
       // debit real RUB from a 'lead'-plan company's balance for a fake test
       // lead (found by code review, never observed live).
       if (savedLead.isNew && !dto.isPreview) {
-        this.billing.chargeConfirmedLead(bot.companyId).catch((error) => {
+        this.billing.chargeConfirmedLead(bot.companyId, billingCompany).catch((error) => {
           this.logger.error(`Confirmed-lead charge failed for company ${bot.companyId}: ${String(error)}`);
         });
       }
@@ -1601,7 +1607,7 @@ export class WidgetService {
     // notifications above: never worth delaying or failing the visitor's
     // actual reply over a billing-ledger write.
     this.billing
-      .chargeTokenUsage(bot.companyId, structuredReply.tokensUsedPrompt ?? 0, structuredReply.tokensUsedCompletion ?? 0)
+      .chargeTokenUsage(bot.companyId, structuredReply.tokensUsedPrompt ?? 0, structuredReply.tokensUsedCompletion ?? 0, billingCompany)
       .catch((error) => {
         this.logger.error(`Token usage charge failed for company ${bot.companyId}: ${String(error)}`);
       });
