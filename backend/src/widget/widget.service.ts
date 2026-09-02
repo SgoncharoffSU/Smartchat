@@ -1536,7 +1536,10 @@ export class WidgetService {
     // above from structuredReply.pdConsentGiven, or already true from an
     // earlier turn) — leadCaptured alone is the model's opinion, not a legal
     // basis to store PII (152-FZ, and rule 17 of the sales-onboarding spec:
-    // "не сохранять данные без необходимого согласия").
+    // "не сохранять данные без необходимого согласия"). Preview dialogs DO
+    // still go through this (long-standing, pre-dates this branch — main
+    // never gated leads.upsert on isPreview either) so the owner sees their
+    // own test lead in "Заявки" while testing in "Обучение бота".
     if (structuredReply.leadCaptured && hasRealLeadData && visitorMeta.pdConsent === true) {
       // isNew comes back from the SAME atomic upsert (see leads.service.ts's
       // own comment) so a 'lead'-plan company is charged exactly once per
@@ -1544,7 +1547,12 @@ export class WidgetService {
       // fields on the same Lead row, and not twice for one lead if two turns
       // land close together.
       const savedLead = await this.leads.upsertAndCheckNew(dialog.id, effectiveLeadData);
-      if (savedLead.isNew) {
+      // Real billing only for a real visitor — !dto.isPreview, same as the
+      // escalation blocks above. chargeConfirmedLead is new on this branch;
+      // without this gate, testing the bot in "Обучение бота" would actually
+      // debit real RUB from a 'lead'-plan company's balance for a fake test
+      // lead (found by code review, never observed live).
+      if (savedLead.isNew && !dto.isPreview) {
         this.billing.chargeConfirmedLead(bot.companyId).catch((error) => {
           this.logger.error(`Confirmed-lead charge failed for company ${bot.companyId}: ${String(error)}`);
         });
