@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, AlertCircle, ArrowRight, Bell, BookOpen, Bot, Check,
   Banknote, BrainCircuit, Building2, ChevronDown, CircleHelp, ClipboardCheck, Clock3, Copy, CreditCard, Database, Download, ExternalLink,
@@ -53,7 +53,7 @@ type CabinetAnalytics = {
     pending: Array<{ id: string; reason: string; question: string; botReply: string | null; createdAt: string; visitorQuestion?: string }>;
     needsVerification: Array<{ id: string; question: string; answer: string; answeredAt: string }>;
     verifiedCount: number;
-    processedCount: number;
+    reviewedCount: number;
   };
 } | null;
 
@@ -225,9 +225,15 @@ function Dashboard({ setView, onAction, analytics }: { setView: (v: View) => voi
         // queue right next to it.
         const esc = analytics?.escalations;
         const needsAttention = esc ? esc.pending.length + esc.needsVerification.length : undefined;
-        const reviewed = esc ? esc.processedCount + esc.verifiedCount : undefined;
+        const reviewed = esc?.reviewedCount;
         const improved = esc?.verifiedCount;
-        return <article className="panel quality-panel"><div className="panel-head"><div><span className="section-label">Качество</span><h2>Ответы под контролем</h2></div><StatusPill tone={needsAttention ? "orange" : "green"}>{needsAttention ? "Есть что проверить" : "Всё хорошо"}</StatusPill></div><div className="quality-stats"><div><b>{fmtNum(needsAttention)}</b><span>требуют внимания</span></div><div><b>{fmtNum(reviewed)}</b><span>проверено</span></div><div><b>{fmtNum(improved)}</b><span>улучшено</span></div></div><button className="wide-ghost" data-live onClick={() => setView("attention")}>Открыть центр качества</button></article>;
+        // Loading (esc undefined) is its own tone/label, not folded into the
+        // "0 issues" case — both left needsAttention falsy, so before analytics
+        // resolves this briefly claimed a reassuring "Всё хорошо" with no data
+        // loaded yet, unlike the numbers themselves which correctly show "…".
+        const pillTone = !esc ? "gray" : needsAttention ? "orange" : "green";
+        const pillLabel = !esc ? "Загружаю…" : needsAttention ? "Есть что проверить" : "Всё хорошо";
+        return <article className="panel quality-panel"><div className="panel-head"><div><span className="section-label">Качество</span><h2>Ответы под контролем</h2></div><StatusPill tone={pillTone}>{pillLabel}</StatusPill></div><div className="quality-stats"><div><b>{fmtNum(needsAttention)}</b><span>требуют внимания</span></div><div><b>{fmtNum(reviewed)}</b><span>проверено</span></div><div><b>{fmtNum(improved)}</b><span>улучшено</span></div></div><button className="wide-ghost" data-live onClick={() => setView("attention")}>Открыть центр качества</button></article>;
       })()}
       <article className="panel activity-panel"><div className="panel-head"><div><span className="section-label">История изменений</span><h2>Что происходило с ботом</h2></div><button className="ghost-action" data-live onClick={() => onAction("Вся история активности")}>Показать все <ArrowRight/></button></div><div className="timeline"><div><span className="event-icon green"><Check /></span><p><b>Менеджер обновил базу знаний</b><small>Добавлено 16 записей с сайта</small></p><time>12:40</time></div><div><span className="event-icon blue"><TestTube2 /></span><p><b>Завершена проверка ответов</b><small>44 из 48 сценариев пройдены</small></p><time>11:18</time></div><div><span className="event-icon violet"><Rocket /></span><p><b>Обновлён этап внедрения</b><small>Следующий шаг — тестирование на сайте</small></p><time>вчера</time></div></div></article>
     </section>
@@ -332,6 +338,12 @@ function PendingEscalationRow({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  // Bumped on every requestPreview call and read back when its fetch settles,
+  // so a cancelled/superseded request can never overwrite state a later one
+  // (or "Отмена") already moved on from — without this, clicking "Отмена"
+  // then reopening with a fresh draft while the first request is still in
+  // flight let its late response clobber the reopened form with stale text.
+  const previewRequestId = useRef(0);
 
   // sourceText omitted -> use the owner's own draft (or "" for a from-scratch
   // suggestion if the draft is empty too). Passed explicitly when refining an
@@ -341,6 +353,7 @@ function PendingEscalationRow({
   // this, I already fixed part of it" actually work instead of silently
   // re-running the original draft/suggestion and discarding the edit.
   const requestPreview = async (sourceText?: string) => {
+    const requestId = ++previewRequestId.current;
     setPreviewLoading(true);
     setPreview(null);
     try {
@@ -351,11 +364,13 @@ function PendingEscalationRow({
         body: JSON.stringify(text ? { text } : {}),
       });
       const data = r.ok ? await r.json() : null;
+      if (previewRequestId.current !== requestId) return; // superseded — ignore
       setPreview(data?.text || "Не получилось подготовить ответ, попробуйте ещё раз.");
     } catch {
+      if (previewRequestId.current !== requestId) return;
       setPreview("Не получилось подготовить ответ, попробуйте ещё раз.");
     } finally {
-      setPreviewLoading(false);
+      if (previewRequestId.current === requestId) setPreviewLoading(false);
     }
   };
 
@@ -437,7 +452,7 @@ function PendingEscalationRow({
               />
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <Button disabled={confirming || previewLoading || !preview?.trim()} onClick={confirmAnswer}>{confirming ? "Отправляю…" : "Подтвердить и отправить"}</Button>
-                <Button variant="outline" disabled={previewLoading} onClick={() => requestPreview(preview ?? undefined)}>
+                <Button variant="outline" disabled={previewLoading || !preview?.trim()} onClick={() => requestPreview(preview ?? undefined)}>
                   Улучшить с учётом правок
                 </Button>
                 <Button variant="ghost" disabled={previewLoading} onClick={() => requestPreview("")}>
