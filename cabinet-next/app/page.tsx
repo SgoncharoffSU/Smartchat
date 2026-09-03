@@ -78,12 +78,27 @@ async function fetchJsonWithRetry<T>(url: string, attempts = 5): Promise<T | nul
   return null;
 }
 
+type AnalyticsPeriod = "yesterday" | "week" | "month" | "all";
+
 function useCabinetData() {
   const [me, setMe] = useState<CabinetMe>(null);
   const [analytics, setAnalytics] = useState<CabinetAnalytics>(null);
   const [signedOut, setSignedOut] = useState(false);
-  const refetchAnalytics = () => {
-    fetchJsonWithRetry<CabinetAnalytics>("/api/cabinet/analytics?period=week").then(setAnalytics);
+  // "Вчера"/"Неделя"/"Месяц"/"Всё время" tabs used to be pure decoration —
+  // uncontrolled <Tabs>, so clicking one only changed which tab LOOKED
+  // active, nothing ever re-fetched analytics with a different period (found
+  // live: switching to "Месяц" left every number exactly as it was for
+  // "Неделя"). period is real state now; refetchAnalytics defaults to
+  // whatever period is currently selected (so escalation actions elsewhere
+  // that just call refetchAnalytics() keep refreshing the SAME period the
+  // owner is looking at), changePeriod is the one that actually switches it.
+  const [period, setPeriod] = useState<AnalyticsPeriod>("week");
+  const refetchAnalytics = (p: AnalyticsPeriod = period) => {
+    fetchJsonWithRetry<CabinetAnalytics>(`/api/cabinet/analytics?period=${p}`).then(setAnalytics);
+  };
+  const changePeriod = (p: AnalyticsPeriod) => {
+    setPeriod(p);
+    refetchAnalytics(p);
   };
   useEffect(() => {
     // No session cookie (a real logout, an expired session, or — confirmed
@@ -105,7 +120,7 @@ function useCabinetData() {
     }).then((data) => { if (data) setMe(data); });
     refetchAnalytics();
   }, []);
-  return { me, analytics, refetchAnalytics, signedOut };
+  return { me, analytics, refetchAnalytics, signedOut, period, changePeriod };
 }
 
 // Real getAnalytics numbers are integers; ru-RU grouping matches the
@@ -201,7 +216,14 @@ function ConversionChart() {
   return <article className="panel chart-panel"><div className="panel-head"><div><span className="section-label">Динамика</span><h2>Конверсия по дням</h2></div><StatusPill tone="blue">+1,8 п.п.</StatusPill></div><div className="chart-legend"><span><i className="line-main"/>В заявку</span><span><i className="line-open"/>В открытие чата</span></div><div className="line-chart" role="img" aria-label="График конверсии в открытие чата и заявку за семь дней"><svg viewBox="0 0 620 220" preserveAspectRatio="none"><g className="grid-lines"><line x1="28" y1="35" x2="610" y2="35"/><line x1="28" y1="92" x2="610" y2="92"/><line x1="28" y1="149" x2="610" y2="149"/><line x1="28" y1="205" x2="610" y2="205"/></g><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#6579e8" stopOpacity=".22"/><stop offset="1" stopColor="#6579e8" stopOpacity="0"/></linearGradient></defs><path className="chart-area" d="M28,158 L124,144 L221,151 L318,122 L415,111 L512,92 L610,79 L610,205 L28,205 Z"/><polyline className="chart-open-line" points="28,86 124,78 221,94 318,65 415,70 512,50 610,42"/><polyline className="chart-main-line" points="28,158 124,144 221,151 318,122 415,111 512,92 610,79"/><g className="chart-dots"><circle cx="28" cy="158" r="4"/><circle cx="124" cy="144" r="4"/><circle cx="221" cy="151" r="4"/><circle cx="318" cy="122" r="4"/><circle cx="415" cy="111" r="4"/><circle cx="512" cy="92" r="4"/><circle cx="610" cy="79" r="5"/></g></svg><div className="chart-axis"><span>21 авг</span><span>22</span><span>23</span><span>24</span><span>25</span><span>26</span><span>27 авг</span></div></div><div className="chart-summary"><div><small>В заявку</small><b>4,8%</b><span>+1,1 п.п.</span></div><div><small>В открытие</small><b>29,9%</b><span>+1,8 п.п.</span></div></div></article>;
 }
 
-function Dashboard({ setView, onAction, analytics }: { setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics }) {
+// Dashboard's own tab labels ("Вчера") don't match the backend's period
+// values ("yesterday") one-for-one — this is the one place that mapping
+// happens, so Tabs' value stays the human label the reference already used.
+const PERIOD_TAB_TO_BACKEND: Record<string, AnalyticsPeriod> = { day: "yesterday", week: "week", month: "month", all: "all" };
+const PERIOD_RANGE_LABEL: Record<AnalyticsPeriod, string> = { yesterday: "За вчера", week: "Последние 7 дней", month: "Последние 30 дней", all: "За всё время" };
+
+function Dashboard({ setView, onAction, analytics, period, onPeriodChange }: { setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; period: AnalyticsPeriod; onPeriodChange: (p: AnalyticsPeriod) => void }) {
+  const periodTab = Object.entries(PERIOD_TAB_TO_BACKEND).find(([, backend]) => backend === period)?.[0] ?? "week";
   const shown = analytics?.shown.count;
   const opened = analytics?.opened.count;
   const dialogs = analytics?.dialogs.count;
@@ -211,7 +233,7 @@ function Dashboard({ setView, onAction, analytics }: { setView: (v: View) => voi
   // just computed from real counts instead.
   const pct = (n: number | undefined) => (shown && n !== undefined && shown > 0 ? Math.max(4, Math.round((n / shown) * 100)) : 0);
   return <>
-    <div className="dashboard-toolbar"><Tabs defaultValue="week"><TabsList><TabsTrigger value="day">Вчера</TabsTrigger><TabsTrigger value="week">Неделя</TabsTrigger><TabsTrigger value="month">Месяц</TabsTrigger><TabsTrigger value="all">Всё время</TabsTrigger></TabsList></Tabs><button className="date-filter"><ListFilter /> Последние 7 дней</button></div>
+    <div className="dashboard-toolbar"><Tabs value={periodTab} onValueChange={(v) => onPeriodChange(PERIOD_TAB_TO_BACKEND[v] ?? "week")}><TabsList><TabsTrigger value="day">Вчера</TabsTrigger><TabsTrigger value="week">Неделя</TabsTrigger><TabsTrigger value="month">Месяц</TabsTrigger><TabsTrigger value="all">Всё время</TabsTrigger></TabsList></Tabs><button className="date-filter"><ListFilter /> {PERIOD_RANGE_LABEL[period]}</button></div>
     <section className="metrics-grid"><Metric label="Посетители" value={fmtNum(shown)} note="На страницах с виджетом" tone="violet" icon={Activity} /><Metric label="Открыли чат" value={fmtNum(opened)} note={`${fmtPct(analytics?.opened.conversionRate)} посетителей`} tone="cyan" icon={MousePointerClick} /><Metric label="Диалоги" value={fmtNum(dialogs)} note={`${fmtPct(analytics?.dialogs.conversionRate)} посетителей начали разговор`} tone="green" icon={MessageSquareText} /><Metric label="Заявки" value={fmtNum(leads)} note={`${fmtPct(analytics?.leads.conversionRate)} диалогов оставили контакт`} tone="lime" icon={Target} /></section>
     <section className="dashboard-grid">
       <article className="panel funnel-panel"><div className="panel-head"><div><span className="section-label">Воронка</span><h2>Путь посетителя к заявке</h2></div><button className="ghost-action" data-live onClick={() => onAction("Как считается воронка")}>Как считается <ArrowRight /></button></div><div className="funnel"><div className="funnel-stage"><span>Посетитель</span><b>{fmtNum(shown)}</b><i style={{ width: `${pct(shown)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.opened.conversionRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Открыл чат</span><b>{fmtNum(opened)}</b><i style={{ width: `${pct(opened)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.opened.openedToDialogRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Диалог</span><b>{fmtNum(dialogs)}</b><i style={{ width: `${pct(dialogs)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.leads.conversionRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Заявка</span><b>{fmtNum(leads)}</b><i style={{ width: `${pct(leads)}%` }} /></div></div><div className="insight"><Info /><div><b>Показатели собираются автоматически</b><span>Виджет фиксирует посещения, открытия чата, начатые диалоги и полученные контакты.</span></div><button data-live onClick={() => onAction("События аналитики")}>Подробнее</button></div></article>
@@ -744,10 +766,10 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
   return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isBot ? <div className="prototype-options"><button className="active"><span className="bot-dot"><Bot/></span><p><b>Бани — ИИ-консультант</b><small>Работает · i-viking.ru</small></p><Check/></button><button><span className="bot-dot"><Bot/></span><p><b>Квадро Хаус</b><small>Черновик · не установлен</small></p><ArrowRight/></button><button><Plus/><p><b>Создать нового бота</b><small>Отдельная база знаний и аналитика</small></p><ArrowRight/></button></div> : isProfile ? <div className="prototype-form"><label><span>Имя</span><input defaultValue="Олег"/></label><label><span>Email</span><input defaultValue="oleg@example.ru"/></label><div className="switch-row"><div><Bell/><span><b>Еженедельный отчёт</b><small>По понедельникам на почту</small></span></div><Switch defaultChecked/></div></div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : isConnection ? <div className="prototype-form"><div className="prototype-steps"><span className="done"><Check/></span><p><b>Выберите сервис</b><small>Telegram, Bitrix24 или amoCRM</small></p><span>2</span><p><b>Разрешите доступ</b><small>Только к заявкам и нужным полям</small></p><span>3</span><p><b>Проверьте тестовую передачу</b><small>Покажем результат до включения</small></p></div></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && !isBot && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
 }
 
-function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe }) {
+function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, period, changePeriod }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs />, training: <Training me={me} />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM />, billing: <Billing/>, team: <Team />, support: <Support />,
-  }), [setView, onAction, analytics, refetchAnalytics, me]);
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs />, training: <Training me={me} />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM />, billing: <Billing/>, team: <Team />, support: <Support />,
+  }), [setView, onAction, analytics, refetchAnalytics, me, period, changePeriod]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
 
@@ -779,7 +801,7 @@ function NavMenuItem({ item, view, setView, badge }: { item: { id: View; label: 
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
   const [action, setAction] = useState<string | null>(null);
-  const { me, analytics, refetchAnalytics, signedOut } = useCabinetData();
+  const { me, analytics, refetchAnalytics, signedOut, period, changePeriod } = useCabinetData();
   if (signedOut) {
     return <div className="dialogs-empty-conv" style={{ padding: 40 }}>Сессия не найдена, перенаправляю на вход…</div>;
   }
@@ -798,5 +820,5 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} period={period} changePeriod={changePeriod}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
 }
