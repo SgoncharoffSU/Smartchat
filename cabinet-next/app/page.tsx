@@ -304,9 +304,11 @@ function Attention({ analytics, onProcessed }: { analytics: CabinetAnalytics; on
       {needsVerification.length > 0 && <article className="panel">
         <span className="section-label">Ответили — нужна проверка</span>
         <h2>Проверьте ответ в тестовом чате</h2>
-        {needsVerification.map((e) => <div key={e.id} className="escalation-row">
-          <span className="check-state"><Clock3 /></span>
-          <div className="escalation-text"><b>{e.question}</b><small>{e.answer}</small></div>
+        {needsVerification.map((e) => <div key={e.id} className="escalation-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="check-state"><Clock3 /></span>
+            <div className="escalation-text"><b>{e.question}</b><small>{e.answer}</small></div>
+          </div>
           <Button variant="outline" disabled={busyId === e.id} onClick={() => markVerified(e.id)}>Отметить проверенным</Button>
         </div>)}
       </article>}
@@ -400,13 +402,13 @@ function PendingEscalationRow({
           <b>{ESCALATION_REASON_LABELS[e.reason] || "Нет ответа"}</b>
           <small>{e.visitorQuestion || e.question}{e.botReply ? ` — ответ бота: ${e.botReply}` : ""}</small>
         </div>
-        {!answering && !confirmed && (
-          <div style={{ display: "flex", gap: 8, flex: "0 0 auto" }}>
-            <Button variant="outline" onClick={() => setAnswering(true)}>Ответить</Button>
-            <Button variant="outline" disabled={busy} onClick={onProcess}>Обработано</Button>
-          </div>
-        )}
       </div>
+      {!answering && !confirmed && (
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <Button variant="outline" style={{ flex: 1 }} onClick={() => setAnswering(true)}>Ответить</Button>
+          <Button variant="outline" style={{ flex: 1 }} disabled={busy} onClick={onProcess}>Обработано</Button>
+        </div>
+      )}
 
       {confirmed && (
         <p style={{ color: "#237a52", fontSize: 12, margin: 0, paddingLeft: 34 }}>
