@@ -514,6 +514,13 @@ function Dialogs() {
   const [search, setSearch] = useState("");
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  // Bumped whenever the active dialog changes (invalidating any in-flight
+  // conversation/summary fetch for the dialog just left) and on every
+  // loadSummary call — without this, switching dialogs (or re-requesting a
+  // summary) while a fetch for the PREVIOUS dialog is still in flight let its
+  // late response silently overwrite what's now shown for a different
+  // dialog. Same pattern as PendingEscalationRow's previewRequestId.
+  const dialogRequestId = useRef(0);
 
   useEffect(() => {
     fetchJsonWithRetry<{ dialogs: DialogListItem[] }>("/api/cabinet/dialogs?page=1").then((data) => {
@@ -524,22 +531,24 @@ function Dialogs() {
   }, []);
 
   useEffect(() => {
+    const requestId = ++dialogRequestId.current;
     if (!activeId) { setConversation(null); return; }
     setConversation(null);
     setSummary(null);
     fetchJsonWithRetry<DialogDetail>(`/api/cabinet/dialogs/${activeId}`)
-      .then(setConversation)
-      .catch(() => setConversation(null));
+      .then((data) => { if (dialogRequestId.current === requestId) setConversation(data); })
+      .catch(() => { if (dialogRequestId.current === requestId) setConversation(null); });
   }, [activeId]);
 
   const loadSummary = () => {
     if (!activeId) return;
+    const requestId = ++dialogRequestId.current;
     setSummaryLoading(true);
     fetch(`/api/cabinet/dialogs/${activeId}/summary`, { method: "POST" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setSummary(data?.summary || "Не получилось получить резюме."))
-      .catch(() => setSummary("Не получилось получить резюме."))
-      .finally(() => setSummaryLoading(false));
+      .then((data) => { if (dialogRequestId.current === requestId) setSummary(data?.summary || "Не получилось получить резюме."); })
+      .catch(() => { if (dialogRequestId.current === requestId) setSummary("Не получилось получить резюме."); })
+      .finally(() => { if (dialogRequestId.current === requestId) setSummaryLoading(false); });
   };
 
   const visible = (dialogs ?? []).filter((d) => {

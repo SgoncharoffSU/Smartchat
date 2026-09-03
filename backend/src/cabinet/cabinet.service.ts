@@ -7,6 +7,7 @@ import { KnowledgeService } from '../knowledge/knowledge.service';
 import { YandexGptService } from '../yandex-gpt/yandex-gpt.service';
 import { EmailService } from '../email/email.service';
 import { CrmIntegrationService } from '../leads/crm-integration.service';
+import { MessagesService } from '../messages/messages.service';
 import { FunnelStage } from '../yandex-gpt/yandex-gpt.types';
 import { DEFAULT_FUNNEL_TEMPLATE } from '../yandex-gpt/default-funnel-template';
 import { GENERAL_SALES_PERSONA_RULES } from '../yandex-gpt/persona-rules';
@@ -107,6 +108,7 @@ export class CabinetService {
     private readonly yandexGpt: YandexGptService,
     private readonly email: EmailService,
     private readonly crmIntegration: CrmIntegrationService,
+    private readonly messages: MessagesService,
   ) {}
 
   async getRegistrationInfo(token: string) {
@@ -1726,16 +1728,24 @@ export class CabinetService {
     // so the "already answered?" check and the write are one atomic statement — a
     // double-click or a client retry racing this same call only ever lets one of
     // them win, instead of both passing the earlier findFirst check and both
-    // appending a duplicate assistant message into the live dialog below.
+    // appending a duplicate assistant message into the live dialog below. Same
+    // WHERE shape as TelegramService.handleReplyAnswer's own confirm write, so
+    // an owner confirming in Telegram and in this cabinet UI at nearly the same
+    // moment for the same escalation also serialize against EACH OTHER through
+    // Postgres, not just against a second call to this same method.
     const { count } = await this.prisma.escalation.updateMany({
       where: { id: escalationId, answeredAt: null },
       data: { answer: text.trim(), answeredAt: new Date() },
     });
     if (count === 0) throw new BadRequestException('Escalation already answered');
     if (escalation.dialogId) {
-      await this.prisma.message.create({
-        data: { dialogId: escalation.dialogId, role: MessageRole.assistant, content: text.trim() },
-      });
+      // MessagesService.append, not a raw prisma.message.create — the same
+      // helper TelegramService.handleReplyAnswer's confirm branch already
+      // uses for this identical "deliver the confirmed answer into the live
+      // dialog" step, so both confirm paths stay behaviorally identical if
+      // append ever grows a side effect (e.g. bumping a dialog's
+      // lastMessageAt) instead of silently diverging.
+      await this.messages.append(escalation.dialogId, MessageRole.assistant, text.trim());
     }
     return { ok: true };
   }

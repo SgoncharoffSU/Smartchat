@@ -6,6 +6,7 @@ import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { YandexGptModule } from '../yandex-gpt/yandex-gpt.module';
 import { EmailModule } from '../email/email.module';
 import { LeadsModule } from '../leads/leads.module';
+import { MessagesModule } from '../messages/messages.module';
 import { CabinetController } from './cabinet.controller';
 import { CabinetService } from './cabinet.service';
 import { LoginThrottlerGuard } from './login-throttler.guard';
@@ -22,6 +23,11 @@ import { LoginThrottlerGuard } from './login-throttler.guard';
     // Just for CrmIntegrationService — register() pushes a completed
     // self-sell registration to CRM the same way a normal lead capture does.
     LeadsModule,
+    // MessagesService.append — confirmEscalationAnswer delivers the confirmed
+    // answer into the live dialog through the same helper every other write
+    // path (widget, Telegram) already uses, instead of its own raw
+    // prisma.message.create.
+    MessagesModule,
   ],
   controllers: [CabinetController],
   providers: [CabinetService, PrismaService, LoginThrottlerGuard],

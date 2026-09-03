@@ -309,10 +309,23 @@ export class TelegramService {
     }
 
     if (escalation.draftAnswer && CONFIRM_PATTERN.test(text.trim())) {
-      await this.prisma.escalation.update({
-        where: { id: escalation.id },
+      // answeredAt: null in the WHERE, not a separate read-then-write (the
+      // findFirst + escalation.answeredAt check above is just an early exit
+      // for the common case) — this is what actually makes the check-and-set
+      // atomic. Without it, this write and CabinetService.confirmEscalationAnswer's
+      // own atomic updateMany race the SAME row from two different code paths
+      // (owner confirms in Telegram and in the cabinet UI at nearly the same
+      // moment) and could both pass their own "not yet answered" check before
+      // either commits — WHERE answeredAt IS NULL on both sides is what makes
+      // Postgres itself serialize them, whichever writer loses this just no-ops.
+      const { count } = await this.prisma.escalation.updateMany({
+        where: { id: escalation.id, answeredAt: null },
         data: { answer: escalation.draftAnswer, answeredAt: new Date(), draftAnswer: null, draftMessageId: null },
       });
+      if (count === 0) {
+        await this.sendMessage(chatId, 'На этот вопрос уже ответили (например, из личного кабинета) — спасибо.');
+        return;
+      }
       // Delivered into the SAME chat session the visitor asked in (if it's
       // still on record — see Escalation.dialogId) on top of the existing
       // knowledge-base mirror (CabinetService.verifyEscalation) that only
