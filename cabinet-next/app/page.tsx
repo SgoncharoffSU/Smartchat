@@ -320,14 +320,22 @@ function PendingEscalationRow({
   const [confirming, setConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
-  const requestPreview = async () => {
+  // sourceText omitted -> use the owner's own draft (or "" for a from-scratch
+  // suggestion if the draft is empty too). Passed explicitly when refining an
+  // already-generated preview: the backend's previewEscalationAnswer polishes
+  // whatever text it's given rather than suggesting fresh, so sending the
+  // CURRENT (possibly hand-edited) preview back in is what makes "improve
+  // this, I already fixed part of it" actually work instead of silently
+  // re-running the original draft/suggestion and discarding the edit.
+  const requestPreview = async (sourceText?: string) => {
     setPreviewLoading(true);
     setPreview(null);
     try {
+      const text = (sourceText ?? draft).trim();
       const r = await fetch(`/api/cabinet/escalations/${e.id}/answer/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft.trim() ? { text: draft.trim() } : {}),
+        body: JSON.stringify(text ? { text } : {}),
       });
       const data = r.ok ? await r.json() : null;
       setPreview(data?.text || "Не получилось подготовить ответ, попробуйте ещё раз.");
@@ -388,7 +396,7 @@ function PendingEscalationRow({
             style={{ width: "100%", resize: "vertical", font: "inherit", padding: "8px 10px", borderRadius: 10, border: "1px solid var(--line)" }}
           />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Button variant="outline" disabled={previewLoading} onClick={requestPreview}>
+            <Button variant="outline" disabled={previewLoading} onClick={() => requestPreview()}>
               {previewLoading ? "Готовлю…" : draft.trim() ? "Проверить мой ответ" : "Сгенерировать ответ"}
             </Button>
             <Button variant="outline" onClick={() => { setAnswering(false); setPreview(null); setDraft(""); }}>
@@ -405,7 +413,12 @@ function PendingEscalationRow({
               />
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <Button disabled={confirming} onClick={confirmAnswer}>{confirming ? "Отправляю…" : "Подтвердить и отправить"}</Button>
-                <Button variant="outline" disabled={previewLoading} onClick={requestPreview}>Сгенерировать заново</Button>
+                <Button variant="outline" disabled={previewLoading} onClick={() => requestPreview(preview ?? undefined)}>
+                  Улучшить с учётом правок
+                </Button>
+                <Button variant="ghost" disabled={previewLoading} onClick={() => requestPreview("")}>
+                  Предложить с нуля
+                </Button>
               </div>
             </div>
           )}
