@@ -52,6 +52,8 @@ type CabinetAnalytics = {
   escalations: {
     pending: Array<{ id: string; reason: string; question: string; botReply: string | null; createdAt: string; visitorQuestion?: string }>;
     needsVerification: Array<{ id: string; question: string; answer: string; answeredAt: string }>;
+    verifiedCount: number;
+    processedCount: number;
   };
 } | null;
 
@@ -215,7 +217,18 @@ function Dashboard({ setView, onAction, analytics }: { setView: (v: View) => voi
       <article className="panel funnel-panel"><div className="panel-head"><div><span className="section-label">Воронка</span><h2>Путь посетителя к заявке</h2></div><button className="ghost-action" data-live onClick={() => onAction("Как считается воронка")}>Как считается <ArrowRight /></button></div><div className="funnel"><div className="funnel-stage"><span>Посетитель</span><b>{fmtNum(shown)}</b><i style={{ width: `${pct(shown)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.opened.conversionRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Открыл чат</span><b>{fmtNum(opened)}</b><i style={{ width: `${pct(opened)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.opened.openedToDialogRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Диалог</span><b>{fmtNum(dialogs)}</b><i style={{ width: `${pct(dialogs)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.leads.conversionRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Заявка</span><b>{fmtNum(leads)}</b><i style={{ width: `${pct(leads)}%` }} /></div></div><div className="insight"><Info /><div><b>Показатели собираются автоматически</b><span>Виджет фиксирует посещения, открытия чата, начатые диалоги и полученные контакты.</span></div><button data-live onClick={() => onAction("События аналитики")}>Подробнее</button></div></article>
       <ConversionChart/>
       <article className="panel readiness-card"><div className="readiness-ring"><svg viewBox="0 0 88 88"><circle cx="44" cy="44" r="37" /><circle className="ready manager-progress" cx="44" cy="44" r="37" /></svg><strong>75%</strong></div><div><span className="section-label">Внедрение с менеджером</span><h2>Подготовка к запуску</h2><p>Менеджер настраивает сценарий, знания и подключения. Здесь виден общий статус.</p><button className="inline-action" data-live onClick={() => setView("readiness")}>Открыть план <ArrowRight /></button></div></article>
-      <article className="panel quality-panel"><div className="panel-head"><div><span className="section-label">Качество</span><h2>Ответы под контролем</h2></div><StatusPill>Всё хорошо</StatusPill></div><div className="quality-stats"><div><b>0</b><span>требуют внимания</span></div><div><b>34</b><span>проверено</span></div><div><b>8</b><span>улучшено</span></div></div><button className="wide-ghost" data-live onClick={() => setView("attention")}>Открыть центр качества</button></article>
+      {(() => {
+        // This card was still showing the reference's static demo numbers
+        // (0/34/8) — real data existed on the Attention page itself
+        // (analytics.escalations.pending/needsVerification) but was never
+        // wired here, so this summary silently disagreed with the real
+        // queue right next to it.
+        const esc = analytics?.escalations;
+        const needsAttention = esc ? esc.pending.length + esc.needsVerification.length : undefined;
+        const reviewed = esc ? esc.processedCount + esc.verifiedCount : undefined;
+        const improved = esc?.verifiedCount;
+        return <article className="panel quality-panel"><div className="panel-head"><div><span className="section-label">Качество</span><h2>Ответы под контролем</h2></div><StatusPill tone={needsAttention ? "orange" : "green"}>{needsAttention ? "Есть что проверить" : "Всё хорошо"}</StatusPill></div><div className="quality-stats"><div><b>{fmtNum(needsAttention)}</b><span>требуют внимания</span></div><div><b>{fmtNum(reviewed)}</b><span>проверено</span></div><div><b>{fmtNum(improved)}</b><span>улучшено</span></div></div><button className="wide-ghost" data-live onClick={() => setView("attention")}>Открыть центр качества</button></article>;
+      })()}
       <article className="panel activity-panel"><div className="panel-head"><div><span className="section-label">История изменений</span><h2>Что происходило с ботом</h2></div><button className="ghost-action" data-live onClick={() => onAction("Вся история активности")}>Показать все <ArrowRight/></button></div><div className="timeline"><div><span className="event-icon green"><Check /></span><p><b>Менеджер обновил базу знаний</b><small>Добавлено 16 записей с сайта</small></p><time>12:40</time></div><div><span className="event-icon blue"><TestTube2 /></span><p><b>Завершена проверка ответов</b><small>44 из 48 сценариев пройдены</small></p><time>11:18</time></div><div><span className="event-icon violet"><Rocket /></span><p><b>Обновлён этап внедрения</b><small>Следующий шаг — тестирование на сайте</small></p><time>вчера</time></div></div></article>
     </section>
   </>;
@@ -287,7 +300,7 @@ function Attention({ analytics, onProcessed }: { analytics: CabinetAnalytics; on
         <h2>Проверьте ответ в тестовом чате</h2>
         {needsVerification.map((e) => <div key={e.id} className="escalation-row">
           <span className="check-state"><Clock3 /></span>
-          <div><b>{e.question}</b><small>{e.answer}</small></div>
+          <div className="escalation-text"><b>{e.question}</b><small>{e.answer}</small></div>
           <Button variant="outline" disabled={busyId === e.id} onClick={() => markVerified(e.id)}>Отметить проверенным</Button>
         </div>)}
       </article>}
@@ -366,9 +379,9 @@ function PendingEscalationRow({
 
   return (
     <div className="escalation-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
+      <div className="escalation-row-head" style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
         <span className="check-state"><AlertCircle /></span>
-        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+        <div className="escalation-text" style={{ minWidth: 0 }}>
           <b>{ESCALATION_REASON_LABELS[e.reason] || "Нет ответа"}</b>
           <small>{e.visitorQuestion || e.question}{e.botReply ? ` — ответ бота: ${e.botReply}` : ""}</small>
         </div>

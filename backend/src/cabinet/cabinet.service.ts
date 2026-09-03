@@ -864,6 +864,8 @@ export class CabinetService {
       unverifiedEscalations,
       recentVerified,
       processedEscalations,
+      verifiedCount,
+      processedCount,
     ] = await Promise.all([
       // "Показов" — the teaser/opening line was served at all (fires on
       // isInit, i.e. a dialog row exists) — visitor may never have engaged.
@@ -985,6 +987,16 @@ export class CabinetService {
         orderBy: { processedAt: 'desc' },
         take: 30,
       }),
+      // Real totals for the "Ответы под контролем" dashboard card — that card
+      // was still showing the reference's static demo numbers (0/34/8) even
+      // after the Attention page itself became real, because recentVerified/
+      // processedEscalations above are capped lists (10/30) meant for their
+      // own sections, not totals. verifiedAt-not-null and processedAt-not-null
+      // are mutually exclusive in practice (verifyEscalation never touches
+      // processedAt — see its own comment), so summing them is a real
+      // "handled somehow" total, not a double-count.
+      this.prisma.escalation.count({ where: { botId: bot.id, verifiedAt: { not: null } } }),
+      this.prisma.escalation.count({ where: { botId: bot.id, processedAt: { not: null } } }),
     ]);
 
     const stages = Array.isArray(bot.funnelConfig) ? (bot.funnelConfig as unknown as FunnelStage[]) : [];
@@ -1100,6 +1112,10 @@ export class CabinetService {
           answer: e.answer,
           processedAt: e.processedAt,
         })),
+        // Totals (not the capped 10/30-row lists above) for the dashboard's
+        // "Ответы под контролем" summary card.
+        verifiedCount,
+        processedCount,
       },
     };
   }
