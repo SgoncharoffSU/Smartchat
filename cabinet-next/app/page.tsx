@@ -326,6 +326,8 @@ function Dialogs() {
   const [conversation, setConversation] = useState<DialogDetail | null>(null);
   const [filter, setFilter] = useState<"all" | "lead" | "human">("all");
   const [search, setSearch] = useState("");
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   useEffect(() => {
     fetchJsonWithRetry<{ dialogs: DialogListItem[] }>("/api/cabinet/dialogs?page=1").then((data) => {
@@ -338,10 +340,21 @@ function Dialogs() {
   useEffect(() => {
     if (!activeId) { setConversation(null); return; }
     setConversation(null);
+    setSummary(null);
     fetchJsonWithRetry<DialogDetail>(`/api/cabinet/dialogs/${activeId}`)
       .then(setConversation)
       .catch(() => setConversation(null));
   }, [activeId]);
+
+  const loadSummary = () => {
+    if (!activeId) return;
+    setSummaryLoading(true);
+    fetch(`/api/cabinet/dialogs/${activeId}/summary`, { method: "POST" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setSummary(data?.summary || "Не получилось получить резюме."))
+      .catch(() => setSummary("Не получилось получить резюме."))
+      .finally(() => setSummaryLoading(false));
+  };
 
   const visible = (dialogs ?? []).filter((d) => {
     if (filter === "lead" && !d.lead) return false;
@@ -383,6 +396,12 @@ function Dialogs() {
               <p>{m.content}</p>
             </div>
           ))}
+        </div>
+        <div className="conversation-foot">
+          <div><ClipboardCheck /><span><b>AI-резюме</b>
+            {summary ? <small>{summary}</small> : <small>{summaryLoading ? "Готовлю резюме…" : "Что хотел посетитель и какой следующий шаг — по клику."}</small>}
+          </span></div>
+          {!summary && <Button variant="outline" disabled={summaryLoading || !conversation} onClick={loadSummary}>{summaryLoading ? "Готовлю…" : "Показать AI-резюме"}</Button>}
         </div>
       </>}
     </section>
