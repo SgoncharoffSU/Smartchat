@@ -57,20 +57,33 @@ type CabinetAnalytics = {
 
 const ESCALATION_REASON_LABELS: Record<string, string> = { dissatisfaction: "Недоволен ответом", disliked: "Дизлайк тестировщика" };
 
+// A single failed GET (a network blip, or the app server restarting mid-
+// deploy — a plain `pm2 restart` on this single-instance process is a real
+// few-hundred-ms gap) used to leave state null forever, no retry — the page
+// looked permanently empty until a manual reload. Retries with backoff;
+// 401 (genuinely logged out) returns immediately since retrying won't help.
+async function fetchJsonWithRetry<T>(url: string, attempts = 5): Promise<T | null> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(url);
+      if (r.ok) return (await r.json()) as T;
+      if (r.status === 401) return null;
+    } catch {
+      // network error — fall through to retry below
+    }
+    if (i < attempts - 1) await new Promise((resolve) => setTimeout(resolve, 500 * (i + 1)));
+  }
+  return null;
+}
+
 function useCabinetData() {
   const [me, setMe] = useState<CabinetMe>(null);
   const [analytics, setAnalytics] = useState<CabinetAnalytics>(null);
   const refetchAnalytics = () => {
-    fetch("/api/cabinet/analytics?period=week")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setAnalytics)
-      .catch(() => setAnalytics(null));
+    fetchJsonWithRetry<CabinetAnalytics>("/api/cabinet/analytics?period=week").then(setAnalytics);
   };
   useEffect(() => {
-    fetch("/api/cabinet/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setMe)
-      .catch(() => setMe(null));
+    fetchJsonWithRetry<CabinetMe>("/api/cabinet/me").then(setMe);
     refetchAnalytics();
   }, []);
   return { me, analytics, refetchAnalytics };
@@ -315,21 +328,17 @@ function Dialogs() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    fetch("/api/cabinet/dialogs?page=1")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        const list: DialogListItem[] = data?.dialogs ?? [];
-        setDialogs(list);
-        if (list.length > 0) setActiveId(list[0].id);
-      })
-      .catch(() => setDialogs([]));
+    fetchJsonWithRetry<{ dialogs: DialogListItem[] }>("/api/cabinet/dialogs?page=1").then((data) => {
+      const list: DialogListItem[] = data?.dialogs ?? [];
+      setDialogs(list);
+      if (list.length > 0) setActiveId(list[0].id);
+    });
   }, []);
 
   useEffect(() => {
     if (!activeId) { setConversation(null); return; }
     setConversation(null);
-    fetch(`/api/cabinet/dialogs/${activeId}`)
-      .then((r) => (r.ok ? r.json() : null))
+    fetchJsonWithRetry<DialogDetail>(`/api/cabinet/dialogs/${activeId}`)
       .then(setConversation)
       .catch(() => setConversation(null));
   }, [activeId]);
