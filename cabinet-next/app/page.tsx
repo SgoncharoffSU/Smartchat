@@ -403,16 +403,27 @@ function PendingEscalationRow({
               Отмена
             </Button>
           </div>
-          {preview && (
+          {(previewLoading || preview !== null) && (
+            // previewLoading is checked here too, not just preview !== null:
+            // requestPreview() clears preview to null the instant a refine/
+            // regenerate click fires, so gating on preview alone made this
+            // whole box (confirm button included) vanish mid-refine every
+            // time — and since the textarea below is controlled by preview,
+            // an owner who selected-all-and-deleted the text to retype it
+            // drove preview to "" (equally falsy), vanishing the box mid-edit
+            // for the exact same reason. Loading is now its own disabled
+            // state instead of an unmount.
             <div style={{ padding: 12, background: "var(--secondary)", borderRadius: 12, display: "flex", flexDirection: "column", gap: 8 }}>
               <textarea
-                value={preview}
+                value={previewLoading ? "" : preview ?? ""}
                 onChange={(ev) => setPreview(ev.target.value)}
+                placeholder={previewLoading ? "Готовлю…" : undefined}
+                disabled={previewLoading}
                 rows={3}
                 style={{ width: "100%", resize: "vertical", font: "inherit", padding: "8px 10px", borderRadius: 10, border: "1px solid var(--line)", background: "#fff" }}
               />
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Button disabled={confirming} onClick={confirmAnswer}>{confirming ? "Отправляю…" : "Подтвердить и отправить"}</Button>
+                <Button disabled={confirming || previewLoading || !preview?.trim()} onClick={confirmAnswer}>{confirming ? "Отправляю…" : "Подтвердить и отправить"}</Button>
                 <Button variant="outline" disabled={previewLoading} onClick={() => requestPreview(preview ?? undefined)}>
                   Улучшить с учётом правок
                 </Button>
