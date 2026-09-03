@@ -7,7 +7,7 @@ import {
   FileUp, Flame, Globe2, GraduationCap, Headphones, History, Inbox, Info, LayoutDashboard, LifeBuoy, Link2, ListFilter,
   MessageSquareText, MoreHorizontal, MousePointerClick, Plus, Rocket, Search, Send, Settings2,
   ShieldCheck, SlidersHorizontal, Sparkles, Target, TestTube2, Users, WandSparkles,
-  Wallet, Workflow, X, Zap,
+  ArrowLeft, Wallet, Workflow, X, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -536,6 +536,14 @@ function Dialogs() {
   const [search, setSearch] = useState("");
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  // On mobile .dialogs-shell drops to a single column and the list is hidden
+  // by default (see globals.css) — with the reference's markup that was
+  // PERMANENT, not just an initial state: the first dialog auto-selects on
+  // load and there was no way back to the list, ever, so a real account with
+  // hundreds of dialogs looked like it had exactly one (found live: "почему
+  // в диалоги только один диалог?"). This is which of the two panes mobile
+  // shows; desktop's CSS ignores it entirely (both panes always shown there).
+  const [mobileView, setMobileView] = useState<"list" | "conversation">("list");
   // Bumped whenever the active dialog changes (invalidating any in-flight
   // conversation/summary fetch for the dialog just left) and on every
   // loadSummary call — without this, switching dialogs (or re-requesting a
@@ -582,7 +590,7 @@ function Dialogs() {
   });
   const active = (dialogs ?? []).find((d) => d.id === activeId) ?? null;
 
-  return <div className="dialogs-shell">
+  return <div className="dialogs-shell" data-mobile-view={mobileView}>
     <aside className="dialog-list">
       <div className="dialog-tools"><div className="search-field"><Search /><input placeholder="Поиск по диалогам" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>
       <div className="filter-chips">
@@ -592,7 +600,7 @@ function Dialogs() {
       </div>
       {dialogs === null ? <div className="dialogs-empty-conv">Загружаю…</div> : visible.length === 0 ? <div className="dialogs-empty-conv">{dialogs.length === 0 ? "Диалогов пока нет." : "Ничего не нашлось."}</div> : visible.map((d) => {
         const title = d.lead?.name || d.botName || "Диалог";
-        return <button className={`dialog-row ${d.id === activeId ? "active" : ""}`} key={d.id} onClick={() => setActiveId(d.id)}>
+        return <button className={`dialog-row ${d.id === activeId ? "active" : ""}`} key={d.id} onClick={() => { setActiveId(d.id); setMobileView("conversation"); }}>
           <span className="dialog-avatar">{title.trim().slice(0, 1).toUpperCase()}</span>
           <span><b>{title}</b><small>{d.lastMessagePreview || "—"}{d.hasUnansweredEscalation && <span className="dialog-row-escalation-badge">ждёт ответа</span>}</small></span>
           <time>{fmtDialogDate(d.updatedAt)}</time>
@@ -602,7 +610,8 @@ function Dialogs() {
     <section className="conversation">
       {!active ? <div className="dialogs-empty-conv">Выберите диалог слева</div> : <>
         <div className="conversation-head">
-          <div><b>{active.lead?.name || active.botName || "Диалог"}</b><span><i /> {active.botName} · {fmtDialogDate(active.updatedAt)}</span></div>
+          <button className="conversation-back icon-button" onClick={() => setMobileView("list")}><ArrowLeft /></button>
+          <div className="conversation-title"><b>{active.lead?.name || active.botName || "Диалог"}</b><span><i /> {active.botName} · {fmtDialogDate(active.updatedAt)}</span></div>
           <div>{active.hasUnansweredEscalation ? <StatusPill tone="orange">Ждёт ответа</StatusPill> : active.lead ? <StatusPill>Заявка получена</StatusPill> : null}<button className="icon-button"><MoreHorizontal /></button></div>
         </div>
         {active.dealTitle && <div className="conversation-context"><span><Globe2 /></span><p><b>Сделка в CRM: {active.dealTitle}</b><small>{active.lead?.name || active.lead?.phone || active.lead?.email || ""}</small></p><button onClick={() => { window.location.href = "/crm.html"; }}>Открыть в CRM <ExternalLink /></button></div>}
