@@ -5236,12 +5236,32 @@
         row.className = 'dialog-row' + (d.id === dialogsActiveId ? ' active' : '');
         var initial = (d.lead && d.lead.name ? d.lead.name : d.botName || '?').trim().slice(0, 1).toUpperCase();
         var title = d.lead && d.lead.name ? d.lead.name : (d.botName || 'Диалог');
-        row.innerHTML =
-          '<span class="dialog-avatar">' + initial + '</span>' +
-          '<span><b>' + title + '</b><small>' + (d.lastMessagePreview || '—') +
-            (d.hasUnansweredEscalation ? '<span class="dialog-row-escalation-badge">ждёт ответа</span>' : '') +
-            '</small></span>' +
-          '<time>' + fmtDate(d.updatedAt) + '</time>';
+        // title/lastMessagePreview are visitor-controlled (lead name, first
+        // chat message) — built as real DOM nodes with textContent, not
+        // string-concatenated into innerHTML, so a visitor can't get script
+        // to run in the owner's authenticated cabinet session by typing
+        // markup as their name or message (found by code review).
+        var avatarSpan = document.createElement('span');
+        avatarSpan.className = 'dialog-avatar';
+        avatarSpan.textContent = initial;
+        var infoSpan = document.createElement('span');
+        var bEl = document.createElement('b');
+        bEl.textContent = title;
+        var smallEl = document.createElement('small');
+        smallEl.appendChild(document.createTextNode(d.lastMessagePreview || '—'));
+        if (d.hasUnansweredEscalation) {
+          var badge = document.createElement('span');
+          badge.className = 'dialog-row-escalation-badge';
+          badge.textContent = 'ждёт ответа';
+          smallEl.appendChild(badge);
+        }
+        infoSpan.appendChild(bEl);
+        infoSpan.appendChild(smallEl);
+        var timeEl = document.createElement('time');
+        timeEl.textContent = fmtDate(d.updatedAt);
+        row.appendChild(avatarSpan);
+        row.appendChild(infoSpan);
+        row.appendChild(timeEl);
         row.addEventListener('click', function () { openDialogInline(d); });
         list.appendChild(row);
       });
