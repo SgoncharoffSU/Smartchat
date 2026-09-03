@@ -49,23 +49,31 @@ type CabinetAnalytics = {
   dialogs: { count: number; conversionRate: number; deltaPct: number | null };
   leads: { count: number; conversionRate: number; deltaPct: number | null };
   problems: { count: number; resolved: number };
-  escalations: { pending: unknown[]; needsVerification: unknown[] };
+  escalations: {
+    pending: Array<{ id: string; reason: string; question: string; botReply: string | null; createdAt: string; visitorQuestion?: string }>;
+    needsVerification: Array<{ id: string; question: string; answer: string; answeredAt: string }>;
+  };
 } | null;
+
+const ESCALATION_REASON_LABELS: Record<string, string> = { dissatisfaction: "Недоволен ответом", disliked: "Дизлайк тестировщика" };
 
 function useCabinetData() {
   const [me, setMe] = useState<CabinetMe>(null);
   const [analytics, setAnalytics] = useState<CabinetAnalytics>(null);
+  const refetchAnalytics = () => {
+    fetch("/api/cabinet/analytics?period=week")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setAnalytics)
+      .catch(() => setAnalytics(null));
+  };
   useEffect(() => {
     fetch("/api/cabinet/me")
       .then((r) => (r.ok ? r.json() : null))
       .then(setMe)
       .catch(() => setMe(null));
-    fetch("/api/cabinet/analytics?period=week")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setAnalytics)
-      .catch(() => setAnalytics(null));
+    refetchAnalytics();
   }, []);
-  return { me, analytics };
+  return { me, analytics, refetchAnalytics };
 }
 
 // Real getAnalytics numbers are integers; ru-RU grouping matches the
@@ -196,8 +204,70 @@ function Readiness({ setView }: { setView: (v: View) => void }) {
   return <div className="readiness-layout"><article className="readiness-hero panel"><div><span className="section-label">Внедрение включено в любой тариф</span><h2>Менеджер готовит бот к запуску вместе с вами</h2><p>После заявки и получения демо-доступа менеджер связывается с клиентом, настраивает сценарий, помогает собрать знания, проверяет ответы и подключает продукт.</p><Button className="primary-action" data-live onClick={() => setView("support")}>Написать менеджеру <ArrowRight /></Button></div><div className="big-progress"><strong>75%</strong><Progress value={75} /><small>Следующий этап: проверка ответов</small></div></article><div className="checklist">{checklist.map(([name, desc, weight, done]) => <article className={`check-row ${done ? "done" : "next"}`} key={String(name)}><span className="check-state">{done ? <Check /> : <Clock3 />}</span><div><b>{name}</b><small>{desc}</small></div><StatusPill tone={done ? "green" : "orange"}>{done ? `Готово · ${weight}%` : `В работе · ${weight}%`}</StatusPill></article>)}</div><aside className="manager-card panel"><span className="manager-avatar">М</span><span className="section-label">Ваш менеджер внедрения</span><h2>Мария помогает с запуском</h2><p>Вопросы по настройке, базе знаний, тестам и установке можно передать одному человеку — без самостоятельного внедрения.</p><div className="manager-meta"><span><b>Следующий шаг</b><small>Проверить ответы и согласовать запуск</small></span><span><b>Связь</b><small>В рабочее время через кабинет</small></span></div><Button className="primary-action" data-live onClick={() => setView("support")}>Связаться с менеджером</Button><Button variant="outline" data-live onClick={() => setView("integrations")}>Посмотреть подключения</Button></aside></div>;
 }
 
-function Attention() {
-  return <div className="attention-layout"><article className="panel empty-quality"><div className="empty-orbit"><ShieldCheck /></div><h2>Сейчас всё под контролем</h2><p>Нет ответов, которые требуют проверки. Когда бот столкнётся со сложным вопросом или получит негативную оценку, он появится здесь.</p><div className="empty-actions"><Button variant="outline">Найти повторяющиеся вопросы</Button><Button className="primary-action">Проверить тестовый диалог</Button></div></article><aside className="panel how-panel"><span className="section-label">Как это работает</span><h3>Единый центр качества</h3><ul><li><span>1</span>Бот отмечает слабый ответ</li><li><span>2</span>Вы добавляете правильную информацию</li><li><span>3</span>Ответ сразу попадает в базу знаний</li></ul></aside></div>;
+// Real /api/cabinet/analytics escalations.pending/needsVerification — same
+// two queues the old cabinet showed, same real actions (mark processed /
+// mark verified), just laid out with this reference's own panel/article
+// vocabulary since its Attention view never had a real queue design of its
+// own (only this empty state). Omitted for now: the old cabinet's "Открыть
+// диалог" full-thread modal — the escalation's own question/reply already
+// show inline below without the extra fetch+modal.
+function Attention({ analytics, onProcessed }: { analytics: CabinetAnalytics; onProcessed: () => void }) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  if (!analytics) return <div className="attention-layout"><article className="panel empty-quality"><p>Загружаю…</p></article></div>;
+
+  const pending = analytics.escalations.pending;
+  const needsVerification = analytics.escalations.needsVerification;
+
+  const markProcessed = async (id: string) => {
+    setBusyId(id);
+    try {
+      await fetch(`/api/cabinet/escalations/${id}/process`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ processed: true }),
+      });
+      onProcessed();
+    } finally {
+      setBusyId(null);
+    }
+  };
+  const markVerified = async (id: string) => {
+    setBusyId(id);
+    try {
+      await fetch(`/api/cabinet/escalations/${id}/verify`, { method: "POST" });
+      onProcessed();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (pending.length === 0 && needsVerification.length === 0) {
+    return <div className="attention-layout"><article className="panel empty-quality"><div className="empty-orbit"><ShieldCheck /></div><h2>Сейчас всё под контролем</h2><p>Нет ответов, которые требуют проверки. Когда бот столкнётся со сложным вопросом или получит негативную оценку, он появится здесь.</p></article><aside className="panel how-panel"><span className="section-label">Как это работает</span><h3>Единый центр качества</h3><ul><li><span>1</span>Бот отмечает слабый ответ</li><li><span>2</span>Вы добавляете правильную информацию</li><li><span>3</span>Ответ сразу попадает в базу знаний</li></ul></aside></div>;
+  }
+
+  return <div className="attention-layout">
+    <section>
+      {pending.length > 0 && <article className="panel">
+        <span className="section-label">Ждут ответа</span>
+        <h2>Бот не смог ответить</h2>
+        {pending.map((e) => <div key={e.id} className="check-row next">
+          <span className="check-state"><AlertCircle /></span>
+          <div><b>{ESCALATION_REASON_LABELS[e.reason] || "Нет ответа"}</b><small>{e.visitorQuestion || e.question}{e.botReply ? ` — ответ бота: ${e.botReply}` : ""}</small></div>
+          <Button variant="outline" disabled={busyId === e.id} onClick={() => markProcessed(e.id)}>Обработано</Button>
+        </div>)}
+      </article>}
+      {needsVerification.length > 0 && <article className="panel">
+        <span className="section-label">Ответили — нужна проверка</span>
+        <h2>Проверьте ответ в тестовом чате</h2>
+        {needsVerification.map((e) => <div key={e.id} className="check-row next">
+          <span className="check-state"><Clock3 /></span>
+          <div><b>{e.question}</b><small>{e.answer}</small></div>
+          <Button variant="outline" disabled={busyId === e.id} onClick={() => markVerified(e.id)}>Отметить проверенным</Button>
+        </div>)}
+      </article>}
+    </section>
+    <aside className="panel how-panel"><span className="section-label">Как это работает</span><h3>Единый центр качества</h3><ul><li><span>1</span>Бот отмечает слабый ответ</li><li><span>2</span>Вы добавляете правильную информацию</li><li><span>3</span>Ответ сразу попадает в базу знаний</li></ul></aside>
+  </div>;
 }
 
 type DialogListItem = {
@@ -424,10 +494,10 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
   return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isBot ? <div className="prototype-options"><button className="active"><span className="bot-dot"><Bot/></span><p><b>Бани — ИИ-консультант</b><small>Работает · i-viking.ru</small></p><Check/></button><button><span className="bot-dot"><Bot/></span><p><b>Квадро Хаус</b><small>Черновик · не установлен</small></p><ArrowRight/></button><button><Plus/><p><b>Создать нового бота</b><small>Отдельная база знаний и аналитика</small></p><ArrowRight/></button></div> : isProfile ? <div className="prototype-form"><label><span>Имя</span><input defaultValue="Олег"/></label><label><span>Email</span><input defaultValue="oleg@example.ru"/></label><div className="switch-row"><div><Bell/><span><b>Еженедельный отчёт</b><small>По понедельникам на почту</small></span></div><Switch defaultChecked/></div></div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : isConnection ? <div className="prototype-form"><div className="prototype-steps"><span className="done"><Check/></span><p><b>Выберите сервис</b><small>Telegram, Bitrix24 или amoCRM</small></p><span>2</span><p><b>Разрешите доступ</b><small>Только к заявкам и нужным полям</small></p><span>3</span><p><b>Проверьте тестовую передачу</b><small>Покажем результат до включения</small></p></div></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && !isBot && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
 }
 
-function AppContent({ view, setView, onAction, analytics, companyName }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string }) {
+function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} />, readiness: <Readiness setView={setView} />, attention: <Attention />, dialogs: <Dialogs />, training: <Training />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM />, billing: <Billing/>, team: <Team />, support: <Support />,
-  }), [setView, onAction, analytics]);
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs />, training: <Training />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM />, billing: <Billing/>, team: <Team />, support: <Support />,
+  }), [setView, onAction, analytics, refetchAnalytics]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
 
@@ -443,7 +513,7 @@ const COMPANY_ROLE_LABELS: Record<string, string> = { owner: "Владелец",
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
   const [action, setAction] = useState<string | null>(null);
-  const { me, analytics } = useCabinetData();
+  const { me, analytics, refetchAnalytics } = useCabinetData();
   const companyName = me?.companyName || "…";
   const botLabel = me?.bot?.label || me?.bot?.name || "Бот";
   const botDomain = me?.bot?.sourceWebsite || "";
@@ -459,5 +529,5 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <SidebarMenuItem key={item.id}><SidebarMenuButton tooltip={item.label} isActive={view === item.id} onClick={() => setView(item.id)}><item.icon /><span>{item.label}</span></SidebarMenuButton>{navBadge(item) && <SidebarMenuBadge>{navBadge(item)}</SidebarMenuBadge>}</SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <SidebarMenuItem key={item.id}><SidebarMenuButton tooltip={item.label} isActive={view === item.id} onClick={() => setView(item.id)}><item.icon /><span>{item.label}</span></SidebarMenuButton>{navBadge(item) && <SidebarMenuBadge>{navBadge(item)}</SidebarMenuBadge>}</SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
 }
