@@ -280,11 +280,7 @@ function Attention({ analytics, onProcessed }: { analytics: CabinetAnalytics; on
       {pending.length > 0 && <article className="panel">
         <span className="section-label">Ждут ответа</span>
         <h2>Бот не смог ответить</h2>
-        {pending.map((e) => <div key={e.id} className="escalation-row">
-          <span className="check-state"><AlertCircle /></span>
-          <div><b>{ESCALATION_REASON_LABELS[e.reason] || "Нет ответа"}</b><small>{e.visitorQuestion || e.question}{e.botReply ? ` — ответ бота: ${e.botReply}` : ""}</small></div>
-          <Button variant="outline" disabled={busyId === e.id} onClick={() => markProcessed(e.id)}>Обработано</Button>
-        </div>)}
+        {pending.map((e) => <PendingEscalationRow key={e.id} e={e} busy={busyId === e.id} onProcess={() => markProcessed(e.id)} onAnswered={onProcessed} />)}
       </article>}
       {needsVerification.length > 0 && <article className="panel">
         <span className="section-label">Ответили — нужна проверка</span>
@@ -298,6 +294,125 @@ function Attention({ analytics, onProcessed }: { analytics: CabinetAnalytics; on
     </section>
     <aside className="panel how-panel"><span className="section-label">Как это работает</span><h3>Единый центр качества</h3><ul><li><span>1</span>Бот отмечает слабый ответ</li><li><span>2</span>Вы добавляете правильную информацию</li><li><span>3</span>Ответ сразу попадает в базу знаний</li></ul></aside>
   </div>;
+}
+
+// Draft-then-confirm answer flow for one pending escalation: preview never
+// writes anything (POST .../answer/preview, with the owner's own draft text
+// or empty to have the bot suggest one from the business's own systemPrompt),
+// confirm (POST .../answer/confirm) is the only step that saves the answer
+// and delivers it into the live dialog — mirrors the same two-step shape
+// Telegram's own reply flow already uses (TelegramService.handleReplyAnswer).
+function PendingEscalationRow({
+  e,
+  busy,
+  onProcess,
+  onAnswered,
+}: {
+  e: { id: string; reason: string; question: string; botReply: string | null; visitorQuestion?: string };
+  busy: boolean;
+  onProcess: () => void;
+  onAnswered: () => void;
+}) {
+  const [answering, setAnswering] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [preview, setPreview] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+
+  const requestPreview = async () => {
+    setPreviewLoading(true);
+    setPreview(null);
+    try {
+      const r = await fetch(`/api/cabinet/escalations/${e.id}/answer/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft.trim() ? { text: draft.trim() } : {}),
+      });
+      const data = r.ok ? await r.json() : null;
+      setPreview(data?.text || "Не получилось подготовить ответ, попробуйте ещё раз.");
+    } catch {
+      setPreview("Не получилось подготовить ответ, попробуйте ещё раз.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const confirmAnswer = async () => {
+    if (!preview) return;
+    setConfirming(true);
+    try {
+      const r = await fetch(`/api/cabinet/escalations/${e.id}/answer/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: preview }),
+      });
+      if (r.ok) {
+        setConfirmed(true);
+        onAnswered();
+      }
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <div className="escalation-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}>
+        <span className="check-state"><AlertCircle /></span>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <b>{ESCALATION_REASON_LABELS[e.reason] || "Нет ответа"}</b>
+          <small>{e.visitorQuestion || e.question}{e.botReply ? ` — ответ бота: ${e.botReply}` : ""}</small>
+        </div>
+        {!answering && !confirmed && (
+          <div style={{ display: "flex", gap: 8, flex: "0 0 auto" }}>
+            <Button variant="outline" onClick={() => setAnswering(true)}>Ответить</Button>
+            <Button variant="outline" disabled={busy} onClick={onProcess}>Обработано</Button>
+          </div>
+        )}
+      </div>
+
+      {confirmed && (
+        <p style={{ color: "#237a52", fontSize: 12, margin: 0, paddingLeft: 34 }}>
+          Ответ отправлен в диалог и ждёт вашей проверки в разделе ниже.
+        </p>
+      )}
+
+      {answering && !confirmed && (
+        <div style={{ marginTop: 8, paddingLeft: 34, display: "flex", flexDirection: "column", gap: 8 }}>
+          <textarea
+            value={draft}
+            onChange={(ev) => setDraft(ev.target.value)}
+            placeholder="Свой вариант ответа (необязательно — оставьте пустым, чтобы бот предложил вариант сам)"
+            rows={2}
+            style={{ width: "100%", resize: "vertical", font: "inherit", padding: "8px 10px", borderRadius: 10, border: "1px solid var(--line)" }}
+          />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Button variant="outline" disabled={previewLoading} onClick={requestPreview}>
+              {previewLoading ? "Готовлю…" : draft.trim() ? "Проверить мой ответ" : "Сгенерировать ответ"}
+            </Button>
+            <Button variant="outline" onClick={() => { setAnswering(false); setPreview(null); setDraft(""); }}>
+              Отмена
+            </Button>
+          </div>
+          {preview && (
+            <div style={{ padding: 12, background: "var(--secondary)", borderRadius: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+              <textarea
+                value={preview}
+                onChange={(ev) => setPreview(ev.target.value)}
+                rows={3}
+                style={{ width: "100%", resize: "vertical", font: "inherit", padding: "8px 10px", borderRadius: 10, border: "1px solid var(--line)", background: "#fff" }}
+              />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <Button disabled={confirming} onClick={confirmAnswer}>{confirming ? "Отправляю…" : "Подтвердить и отправить"}</Button>
+                <Button variant="outline" disabled={previewLoading} onClick={requestPreview}>Сгенерировать заново</Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 type DialogListItem = {
@@ -331,12 +446,12 @@ function fmtDialogDate(iso: string): string {
 // Real /api/cabinet/dialogs + /api/cabinet/dialogs/:id — same two endpoints
 // and the same list/detail conventions the old cabinet used (title = lead
 // name or bot name, "Ждёт ответа"/"Заявка получена" pill logic, deal-context
-// box). Two things from the reference's own demo markup are NOT here:
-// "Взять диалог" and "AI-резюме" have no real backend behind them at all
-// (no take-over action, no summary endpoint) — omitted rather than shown
-// with fake data; the channel filter is gone too since every real dialog
-// comes from the same one channel (the site widget) right now, nothing to
-// filter by yet.
+// box). AI-резюме is real (POST /api/cabinet/dialogs/:id/summary, on demand,
+// below). One thing from the reference's own demo markup is still NOT here:
+// "Взять диалог" has no real backend behind it (no take-over action) —
+// omitted rather than shown with fake data; the channel filter is gone too
+// since every real dialog comes from the same one channel (the site widget)
+// right now, nothing to filter by yet.
 function Dialogs() {
   const [dialogs, setDialogs] = useState<DialogListItem[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
