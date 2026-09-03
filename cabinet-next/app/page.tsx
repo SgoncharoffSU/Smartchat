@@ -38,7 +38,7 @@ type View = "dashboard" | "readiness" | "attention" | "dialogs" | "training" | "
 // (not the full response shape) — only the fields this page actually reads.
 type CabinetMe = {
   companyName: string;
-  bot: { id: string; name: string; label: string; sourceWebsite: string | null } | null;
+  bot: { id: string; name: string; label: string; sourceWebsite: string | null; widgetToken: string } | null;
   userName: string;
   companyRole: string;
 } | null;
@@ -380,8 +380,35 @@ function Dialogs() {
   </div>;
 }
 
-function Training() {
-  return <div className="training-layout"><section className="training-guide"><span className="section-label">Тестовая среда</span><h2>Поговорите с ботом как клиент</h2><p>Это точная копия виджета на сайте. Тестовые сообщения не влияют на аналитику.</p><div className="tip-card"><WandSparkles /><div><b>Как обучать быстрее</b><span>Если ответ не подходит, нажмите «Улучшить ответ» и добавьте правильную информацию. Бот запомнит её сразу.</span></div></div><div className="share-test"><Users /><div><b>Дать доступ коллеге</b><span>Без входа в личный кабинет</span></div><Button variant="outline">Скопировать ссылку</Button></div></section><section className="widget-preview"><div className="widget-head"><span className="bot-avatar">А</span><div><b>Алексей</b><small><i /> На связи прямо сейчас</small></div><button><X /></button></div><div className="widget-messages"><p className="widget-bot">Добрый день! Помогу подобрать решение. Что для вас сейчас важнее всего?</p><p className="widget-user">Хочу понять стоимость и сроки</p><p className="widget-bot">Подскажите, какой вариант рассматриваете и где планируется установка?</p><button className="improve"><WandSparkles /> Улучшить ответ</button></div><div className="widget-input"><input placeholder="Напишите сообщение" /><button><Send /></button></div></section></div>;
+// Real widget, not a mockup: same /cabinet/test-widget-preview.html iframe
+// the old cabinet embedded (real widget.js, data-preview="true" — actual
+// launcher/teaser/chat, actual bot replies, nothing hand-drawn). "Улучшить
+// ответ" (per-message correction) isn't wired here yet — that lives on the
+// real message bubbles widget.js renders inside the iframe, which this page
+// doesn't reach into; flagged as a follow-up rather than faked.
+function Training({ me }: { me: CabinetMe }) {
+  const [copied, setCopied] = useState(false);
+  const token = me?.bot?.widgetToken;
+  const previewSrc = token ? `/cabinet/test-widget-preview.html?token=${encodeURIComponent(token)}` : undefined;
+  const copyLink = () => {
+    if (!previewSrc) return;
+    navigator.clipboard.writeText(`${window.location.origin}${previewSrc}`).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return <div className="training-layout">
+    <section className="training-guide">
+      <span className="section-label">Тестовая среда</span>
+      <h2>Поговорите с ботом как клиент</h2>
+      <p>Это точная копия виджета на сайте. Тестовые сообщения не влияют на аналитику.</p>
+      <div className="tip-card"><WandSparkles /><div><b>Как обучать быстрее</b><span>Под ответом бота нажмите «👎 Плохой ответ?» и добавьте правильную информацию — бот запомнит её сразу.</span></div></div>
+      <div className="share-test"><Users /><div><b>Дать доступ коллеге</b><span>Без входа в личный кабинет</span></div><Button variant="outline" onClick={copyLink} disabled={!previewSrc}>{copied ? "Скопировано" : "Скопировать ссылку"}</Button></div>
+    </section>
+    <section className="widget-preview">
+      {previewSrc ? <iframe src={previewSrc} title="Чат с ботом" style={{ width: "100%", height: "100%", border: 0 }} /> : <div className="dialogs-empty-conv">Загружаю…</div>}
+    </section>
+  </div>;
 }
 
 const testGroups: Array<[string, string, number, number, React.ElementType]> = [
@@ -494,10 +521,10 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
   return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isBot ? <div className="prototype-options"><button className="active"><span className="bot-dot"><Bot/></span><p><b>Бани — ИИ-консультант</b><small>Работает · i-viking.ru</small></p><Check/></button><button><span className="bot-dot"><Bot/></span><p><b>Квадро Хаус</b><small>Черновик · не установлен</small></p><ArrowRight/></button><button><Plus/><p><b>Создать нового бота</b><small>Отдельная база знаний и аналитика</small></p><ArrowRight/></button></div> : isProfile ? <div className="prototype-form"><label><span>Имя</span><input defaultValue="Олег"/></label><label><span>Email</span><input defaultValue="oleg@example.ru"/></label><div className="switch-row"><div><Bell/><span><b>Еженедельный отчёт</b><small>По понедельникам на почту</small></span></div><Switch defaultChecked/></div></div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : isConnection ? <div className="prototype-form"><div className="prototype-steps"><span className="done"><Check/></span><p><b>Выберите сервис</b><small>Telegram, Bitrix24 или amoCRM</small></p><span>2</span><p><b>Разрешите доступ</b><small>Только к заявкам и нужным полям</small></p><span>3</span><p><b>Проверьте тестовую передачу</b><small>Покажем результат до включения</small></p></div></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && !isBot && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
 }
 
-function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void }) {
+function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs />, training: <Training />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM />, billing: <Billing/>, team: <Team />, support: <Support />,
-  }), [setView, onAction, analytics, refetchAnalytics]);
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs />, training: <Training me={me} />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM />, billing: <Billing/>, team: <Team />, support: <Support />,
+  }), [setView, onAction, analytics, refetchAnalytics, me]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
 
@@ -529,5 +556,5 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <SidebarMenuItem key={item.id}><SidebarMenuButton tooltip={item.label} isActive={view === item.id} onClick={() => setView(item.id)}><item.icon /><span>{item.label}</span></SidebarMenuButton>{navBadge(item) && <SidebarMenuBadge>{navBadge(item)}</SidebarMenuBadge>}</SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <SidebarMenuItem key={item.id}><SidebarMenuButton tooltip={item.label} isActive={view === item.id} onClick={() => setView(item.id)}><item.icon /><span>{item.label}</span></SidebarMenuButton>{navBadge(item) && <SidebarMenuBadge>{navBadge(item)}</SidebarMenuBadge>}</SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
 }
