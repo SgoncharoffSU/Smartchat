@@ -20,7 +20,7 @@ import {
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuBadge,
-  SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger,
+  SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger, useSidebar,
 } from "@/components/ui/sidebar";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -280,7 +280,7 @@ function Attention({ analytics, onProcessed }: { analytics: CabinetAnalytics; on
       {pending.length > 0 && <article className="panel">
         <span className="section-label">Ждут ответа</span>
         <h2>Бот не смог ответить</h2>
-        {pending.map((e) => <div key={e.id} className="check-row next">
+        {pending.map((e) => <div key={e.id} className="escalation-row">
           <span className="check-state"><AlertCircle /></span>
           <div><b>{ESCALATION_REASON_LABELS[e.reason] || "Нет ответа"}</b><small>{e.visitorQuestion || e.question}{e.botReply ? ` — ответ бота: ${e.botReply}` : ""}</small></div>
           <Button variant="outline" disabled={busyId === e.id} onClick={() => markProcessed(e.id)}>Обработано</Button>
@@ -289,7 +289,7 @@ function Attention({ analytics, onProcessed }: { analytics: CabinetAnalytics; on
       {needsVerification.length > 0 && <article className="panel">
         <span className="section-label">Ответили — нужна проверка</span>
         <h2>Проверьте ответ в тестовом чате</h2>
-        {needsVerification.map((e) => <div key={e.id} className="check-row next">
+        {needsVerification.map((e) => <div key={e.id} className="escalation-row">
           <span className="check-state"><Clock3 /></span>
           <div><b>{e.question}</b><small>{e.answer}</small></div>
           <Button variant="outline" disabled={busyId === e.id} onClick={() => markVerified(e.id)}>Отметить проверенным</Button>
@@ -582,6 +582,22 @@ function initials(name: string): string {
 
 const COMPANY_ROLE_LABELS: Record<string, string> = { owner: "Владелец", admin: "Администратор", manager: "Менеджер", employee: "Сотрудник" };
 
+// useSidebar() only works inside SidebarProvider's own subtree — Home()
+// itself renders that provider, so it can't call the hook directly. Picking
+// a real page here used to leave the mobile drawer open ON TOP of it
+// (found live, on a phone) — setOpenMobile(false) is the same "close after
+// navigating" behavior the shadcn sidebar's own mobile menu button uses
+// elsewhere, just not wired to these nav buttons before.
+function NavMenuItem({ item, view, setView, badge }: { item: { id: View; label: string; icon: React.ElementType }; view: View; setView: (v: View) => void; badge?: string }) {
+  const { setOpenMobile } = useSidebar();
+  return <SidebarMenuItem>
+    <SidebarMenuButton tooltip={item.label} isActive={view === item.id} onClick={() => { setView(item.id); setOpenMobile(false); }}>
+      <item.icon /><span>{item.label}</span>
+    </SidebarMenuButton>
+    {badge && <SidebarMenuBadge>{badge}</SidebarMenuBadge>}
+  </SidebarMenuItem>;
+}
+
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
   const [action, setAction] = useState<string | null>(null);
@@ -604,5 +620,5 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <SidebarMenuItem key={item.id}><SidebarMenuButton tooltip={item.label} isActive={view === item.id} onClick={() => setView(item.id)}><item.icon /><span>{item.label}</span></SidebarMenuButton>{navBadge(item) && <SidebarMenuBadge>{navBadge(item)}</SidebarMenuBadge>}</SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
 }
