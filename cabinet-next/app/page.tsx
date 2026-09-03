@@ -200,8 +200,114 @@ function Attention() {
   return <div className="attention-layout"><article className="panel empty-quality"><div className="empty-orbit"><ShieldCheck /></div><h2>Сейчас всё под контролем</h2><p>Нет ответов, которые требуют проверки. Когда бот столкнётся со сложным вопросом или получит негативную оценку, он появится здесь.</p><div className="empty-actions"><Button variant="outline">Найти повторяющиеся вопросы</Button><Button className="primary-action">Проверить тестовый диалог</Button></div></article><aside className="panel how-panel"><span className="section-label">Как это работает</span><h3>Единый центр качества</h3><ul><li><span>1</span>Бот отмечает слабый ответ</li><li><span>2</span>Вы добавляете правильную информацию</li><li><span>3</span>Ответ сразу попадает в базу знаний</li></ul></aside></div>;
 }
 
+type DialogListItem = {
+  id: string;
+  botName: string;
+  status: string;
+  updatedAt: string;
+  messageCount: number;
+  lastMessagePreview: string | null;
+  hasUnansweredEscalation: boolean;
+  lead: { name: string | null; phone: string | null; email: string | null } | null;
+  dealTitle: string | null;
+};
+type DialogDetail = {
+  id: string;
+  botName: string;
+  lead: { name: string | null; phone: string | null; email: string | null } | null;
+  dealTitle: string | null;
+  messages: Array<{ id: string; role: string; content: string }>;
+};
+
+function fmtDialogDate(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
+}
+
+// Real /api/cabinet/dialogs + /api/cabinet/dialogs/:id — same two endpoints
+// and the same list/detail conventions the old cabinet used (title = lead
+// name or bot name, "Ждёт ответа"/"Заявка получена" pill logic, deal-context
+// box). Two things from the reference's own demo markup are NOT here:
+// "Взять диалог" and "AI-резюме" have no real backend behind them at all
+// (no take-over action, no summary endpoint) — omitted rather than shown
+// with fake data; the channel filter is gone too since every real dialog
+// comes from the same one channel (the site widget) right now, nothing to
+// filter by yet.
 function Dialogs() {
-  return <div className="dialogs-shell"><aside className="dialog-list"><div className="dialog-tools"><div className="search-field"><Search /><input placeholder="Поиск по диалогам" /></div><button aria-label="Фильтры"><ListFilter /></button></div><div className="filter-chips"><button className="active">Все</button><button>С заявкой</button><button>Нужен человек</button></div><div className="channel-filter"><button className="active"><Globe2 />Сайт</button><button>Telegram</button><button>WhatsApp</button></div>{["Анна · подбор бани", "Михаил · стоимость", "Новый посетитель"].map((name, i) => <button className={`dialog-row ${i === 0 ? "active" : ""}`} key={name}><span className="dialog-avatar">{i ? "М" : "А"}</span><span><b>{name}</b><small>{i === 0 ? "Нужна баня для семьи из четырёх…" : "Хочу узнать срок изготовления…"}</small></span><time>{i === 0 ? "12:41" : "вчера"}</time></button>)}</aside><section className="conversation"><div className="conversation-head"><div><b>Анна · подбор бани</b><span><i /> Диалог завершён · 4 мин · Сайт</span></div><div><Button variant="outline" className="take-dialog"><Headphones />Взять диалог</Button><StatusPill>Заявка получена</StatusPill><button className="icon-button"><MoreHorizontal /></button></div></div><div className="conversation-context"><span><Globe2 /></span><p><b>Источник: Яндекс Реклама</b><small>Страница «Бани 6 метров» · utm_campaign=summer</small></p><button>Открыть страницу <ExternalLink /></button></div><div className="messages"><div className="message bot-message"><span className="mini-bot"><Bot /></span><p>Здравствуйте! Помогу подобрать баню. Сколько человек будет пользоваться ею обычно?</p><small>12:38</small></div><div className="message client-message"><p>Для семьи из четырёх человек. Хотим пользоваться круглый год.</p><small>12:39</small></div><div className="message bot-message"><span className="mini-bot"><Bot /></span><p>Тогда подойдут модели 6 или 8 метров. Подскажите, участок уже подготовлен и в каком регионе планируется установка?</p><small>12:39</small></div><div className="goal-message"><Target /><span><b>Цель достигнута</b><small>Посетитель оставил номер телефона</small></span></div></div><div className="conversation-foot"><div><ClipboardCheck /><span><b>AI-резюме</b><small>Семья из 4 человек, круглогодичное использование, выбирает между 6 и 8 м. Следующий шаг: позвонить и уточнить регион.</small></span></div><Button variant="outline">Открыть лид <ArrowRight /></Button></div></section></div>;
+  const [dialogs, setDialogs] = useState<DialogListItem[] | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [conversation, setConversation] = useState<DialogDetail | null>(null);
+  const [filter, setFilter] = useState<"all" | "lead" | "human">("all");
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    fetch("/api/cabinet/dialogs?page=1")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const list: DialogListItem[] = data?.dialogs ?? [];
+        setDialogs(list);
+        if (list.length > 0) setActiveId(list[0].id);
+      })
+      .catch(() => setDialogs([]));
+  }, []);
+
+  useEffect(() => {
+    if (!activeId) { setConversation(null); return; }
+    setConversation(null);
+    fetch(`/api/cabinet/dialogs/${activeId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setConversation)
+      .catch(() => setConversation(null));
+  }, [activeId]);
+
+  const visible = (dialogs ?? []).filter((d) => {
+    if (filter === "lead" && !d.lead) return false;
+    if (filter === "human" && !d.hasUnansweredEscalation) return false;
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (d.lead?.name || d.botName || "").toLowerCase().includes(q) || (d.lastMessagePreview || "").toLowerCase().includes(q);
+  });
+  const active = (dialogs ?? []).find((d) => d.id === activeId) ?? null;
+
+  return <div className="dialogs-shell">
+    <aside className="dialog-list">
+      <div className="dialog-tools"><div className="search-field"><Search /><input placeholder="Поиск по диалогам" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>
+      <div className="filter-chips">
+        <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>Все</button>
+        <button className={filter === "lead" ? "active" : ""} onClick={() => setFilter("lead")}>С заявкой</button>
+        <button className={filter === "human" ? "active" : ""} onClick={() => setFilter("human")}>Нужен человек</button>
+      </div>
+      {dialogs === null ? <div className="dialogs-empty-conv">Загружаю…</div> : visible.length === 0 ? <div className="dialogs-empty-conv">{dialogs.length === 0 ? "Диалогов пока нет." : "Ничего не нашлось."}</div> : visible.map((d) => {
+        const title = d.lead?.name || d.botName || "Диалог";
+        return <button className={`dialog-row ${d.id === activeId ? "active" : ""}`} key={d.id} onClick={() => setActiveId(d.id)}>
+          <span className="dialog-avatar">{title.trim().slice(0, 1).toUpperCase()}</span>
+          <span><b>{title}</b><small>{d.lastMessagePreview || "—"}{d.hasUnansweredEscalation && <span className="dialog-row-escalation-badge">ждёт ответа</span>}</small></span>
+          <time>{fmtDialogDate(d.updatedAt)}</time>
+        </button>;
+      })}
+    </aside>
+    <section className="conversation">
+      {!active ? <div className="dialogs-empty-conv">Выберите диалог слева</div> : <>
+        <div className="conversation-head">
+          <div><b>{active.lead?.name || active.botName || "Диалог"}</b><span><i /> {active.botName} · {fmtDialogDate(active.updatedAt)}</span></div>
+          <div>{active.hasUnansweredEscalation ? <StatusPill tone="orange">Ждёт ответа</StatusPill> : active.lead ? <StatusPill>Заявка получена</StatusPill> : null}<button className="icon-button"><MoreHorizontal /></button></div>
+        </div>
+        {active.dealTitle && <div className="conversation-context"><span><Globe2 /></span><p><b>Сделка в CRM: {active.dealTitle}</b><small>{active.lead?.name || active.lead?.phone || active.lead?.email || ""}</small></p><button onClick={() => { window.location.href = "/crm.html"; }}>Открыть в CRM <ExternalLink /></button></div>}
+        <div className="messages">
+          {!conversation ? <div className="dialogs-empty-conv">Загружаю…</div> : conversation.messages.map((m) => (
+            <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} key={m.id}>
+              {m.role === "assistant" && <span className="mini-bot"><Bot /></span>}
+              <p>{m.content}</p>
+            </div>
+          ))}
+        </div>
+      </>}
+    </section>
+  </div>;
 }
 
 function Training() {
