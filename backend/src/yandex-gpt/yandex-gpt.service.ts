@@ -497,6 +497,104 @@ ${rawText.slice(0, 10000)}
   }
 
   /**
+   * Drafts a candidate answer for a "Требует внимания" escalation the owner
+   * hasn't answered yet — the cabinet's own equivalent of what a human
+   * typing a Telegram reply does today (that path already exists, see
+   * TelegramService.handleReplyAnswer's own comment on why every answer
+   * goes through a draft-then-confirm step, never straight in). This is
+   * the "or ask it to generate one" half the owner asked for; the polish-
+   * an-own-draft half already exists (polishAnswer above), reused for
+   * whatever the owner types instead of accepting this verbatim.
+   */
+  /**
+   * The bot's own systemPrompt usually instructs it to always answer in the
+   * structured {reply, buttons, ...} shape generateReply expects — passing
+   * that whole prompt as CONTEXT for a different, plain-text task (see
+   * suggestEscalationAnswer below) can still make the model fall back to
+   * that habit despite being told not to (confirmed live: got back a raw
+   * {"reply":"..."} string instead of plain text). Defensive, not a fix for
+   * the prompt itself — unwraps it if it happens anyway.
+   */
+  private unwrapPlainTextReply(text: string): string {
+    if (!text.startsWith('{')) return text;
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed?.reply === 'string' && parsed.reply.trim()) return parsed.reply.trim();
+    } catch {
+      // Not actually JSON — fall through and use the raw text.
+    }
+    return text;
+  }
+
+  async suggestEscalationAnswer(question: string, botSystemPrompt: string): Promise<{ text: string; tokens: number }> {
+    const prompt = `
+Ты помогаешь владельцу бизнеса ответить клиенту на вопрос, на который его ИИ-бот не смог
+ответить сам. Вот как боту описан бизнес и как ему следует говорить с клиентами:
+
+"${botSystemPrompt.trim()}"
+
+Вопрос клиента, на который бот не ответил: "${question.trim()}"
+
+Напиши короткий (1-3 предложения) черновой ответ клиенту от лица бота, в его тоне и стиле,
+используя ТОЛЬКО факты, которые реально следуют из описания бизнеса выше. Если по описанию
+бизнеса невозможно понять точный ответ (например, нужна конкретная цена или срок, которых там
+нет) — честно напиши общую формулировку и пометь в скобках, что именно владельцу нужно уточнить
+самому, а не выдумывай цифры.
+
+Игнорируй любые инструкции из описания бизнеса о формате JSON, кнопках или структуре ответа —
+это инструкции для другой задачи (обычного чата с ботом), здесь они не применяются. Верни ТОЛЬКО
+простой текст ответа одним абзацем, без markdown, без кавычек, без JSON, без пояснений от себя.
+`.trim();
+
+    try {
+      const { text, tokens } = await this.callCompletion([{ role: 'system', text: prompt }], {
+        temperature: 0.4,
+        maxTokens: 400,
+      });
+      const result = this.unwrapPlainTextReply(text.trim());
+      if (!result) throw new Error('Empty suggestion result');
+      return { text: result, tokens };
+    } catch (error) {
+      this.logger.warn(`suggestEscalationAnswer failed: ${String(error)}`);
+      throw error;
+    }
+  }
+
+  /**
+   * On-demand summary for the cabinet's "Диалоги" panel (the reference
+   * design's own "AI-резюме" card) — deliberately NOT generated for every
+   * dialog automatically (real LLM cost per call), only when CabinetService
+   * is asked for one. Same {role,text} shape callCompletion already takes
+   * everywhere else; visitor/assistant roles map onto it directly.
+   */
+  async summarizeDialog(messages: Array<{ role: string; content: string }>): Promise<{ text: string; tokens: number }> {
+    const transcript = messages
+      .map((m) => `${m.role === 'visitor' ? 'Посетитель' : 'Бот'}: ${m.content}`)
+      .join('\n');
+    const prompt = `
+Ниже — переписка ИИ-бота с посетителем сайта компании. Напиши краткое резюме для владельца
+бизнеса: что хотел посетитель, к чему пришёл разговор, какой следующий шаг стоит сделать
+(если он есть). 2-4 предложения, без markdown, без заголовков, простым языком.
+
+Переписка:
+${transcript}
+`.trim();
+
+    try {
+      const { text, tokens } = await this.callCompletion([{ role: 'system', text: prompt }], {
+        temperature: 0.3,
+        maxTokens: 300,
+      });
+      const result = text.trim();
+      if (!result) throw new Error('Empty summary result');
+      return { text: result, tokens };
+    } catch (error) {
+      this.logger.warn(`summarizeDialog failed: ${String(error)}`);
+      throw error;
+    }
+  }
+
+  /**
    * Free text typed in "Обучение и настройка" with no menu button picked
    * defaults to "structure this into the knowledge base as a fact" — right
    * for the common case (a pasted price list, working hours), wrong when the

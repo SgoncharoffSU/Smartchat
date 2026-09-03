@@ -217,6 +217,21 @@ export class CabinetController {
     return this.cabinet.verifyEscalation(req.companyId, id);
   }
 
+  // The cabinet's own "answer this without Telegram" path — draft (own text
+  // polished, or AI-suggested from scratch) then confirm, same safety net
+  // as a Telegram reply. Preview never writes anything; confirm does.
+  @Post('escalations/:id/answer/preview')
+  @UseGuards(AuthGuard)
+  previewEscalationAnswer(@Req() req: AuthedRequest, @Param('id') id: string, @Body() body: { text?: string }) {
+    return this.cabinet.previewEscalationAnswer(req.companyId, id, body?.text);
+  }
+
+  @Post('escalations/:id/answer/confirm')
+  @UseGuards(AuthGuard)
+  confirmEscalationAnswer(@Req() req: AuthedRequest, @Param('id') id: string, @Body() body: { text: string }) {
+    return this.cabinet.confirmEscalationAnswer(req.companyId, id, body?.text);
+  }
+
   // "Обработано" checkbox — see CabinetService.setEscalationProcessed.
   @Post('escalations/:id/process')
   @UseGuards(AuthGuard)
@@ -259,6 +274,16 @@ export class CabinetController {
   @UseGuards(AuthGuard)
   getDialogDetail(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.cabinet.getDialogDetail(req.companyId, id);
+  }
+
+  // On-demand AI summary for the "Диалоги" panel — real LLM call per click,
+  // deliberately not part of getDialogDetail above (which loads on every
+  // dialog selection; a summary on every one of those would be a real-money
+  // LLM call the owner never asked for).
+  @Post('dialogs/:id/summary')
+  @UseGuards(AuthGuard)
+  summarizeDialog(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.cabinet.summarizeDialog(req.companyId, id);
   }
 
   @Post('reset-stats')

@@ -1633,6 +1633,79 @@ export class CabinetService {
     };
   }
 
+  /**
+   * On-demand only (see YandexGptService.summarizeDialog's own comment) —
+   * called when the "Диалоги" panel's own summary button is clicked, never
+   * pre-generated for the whole list. Same ownership check + PII redaction
+   * as getDialogDetail above, since this reads the same messages.
+   */
+  async summarizeDialog(companyId: string, dialogId: string): Promise<{ summary: string }> {
+    const dialog = await this.prisma.dialog.findFirst({ where: { id: dialogId, bot: { companyId } } });
+    if (!dialog) throw new NotFoundException('Dialog not found');
+
+    const messages = await this.prisma.message.findMany({ where: { dialogId }, orderBy: { createdAt: 'asc' } });
+    if (messages.length === 0) return { summary: 'В этом диалоге пока нет сообщений.' };
+
+    const { text } = await this.yandexGpt.summarizeDialog(
+      messages.map((m) => ({ role: m.role, content: this.redactPii(m.content) })),
+    );
+    return { summary: text };
+  }
+
+  /**
+   * The cabinet's own equivalent of typing a Telegram reply to an
+   * escalation — same draft-then-confirm safety net (see
+   * TelegramService.handleReplyAnswer's own comment for why this is never
+   * one step): text=your own rough draft gets grammar-polished (facts
+   * untouched, same polishAnswer used for a Telegram draft), text omitted
+   * asks the model to propose an answer from scratch using the bot's own
+   * systemPrompt as context. Either way this only returns a preview —
+   * nothing is written until confirmAnswer below.
+   */
+  async previewEscalationAnswer(companyId: string, escalationId: string, text?: string): Promise<{ text: string }> {
+    const escalation = await this.prisma.escalation.findFirst({
+      where: { id: escalationId, companyId },
+      include: { bot: { select: { systemPrompt: true } } },
+    });
+    if (!escalation) throw new NotFoundException('Escalation not found');
+    if (escalation.answeredAt) throw new BadRequestException('Escalation already answered');
+
+    if (text?.trim()) {
+      const { text: polished } = await this.yandexGpt.polishAnswer(text);
+      return { text: polished };
+    }
+    const question = escalation.visitorQuestion ?? escalation.question;
+    const { text: suggested } = await this.yandexGpt.suggestEscalationAnswer(question, escalation.bot.systemPrompt);
+    return { text: suggested };
+  }
+
+  /**
+   * Finalizes whatever the owner confirmed (the preview above, edited or
+   * not) — same effect as a confirmed Telegram reply: sets answer/answeredAt,
+   * delivers into the live chat session if it's still open (the visitor's
+   * widget picks it up via its own poll — see WidgetService.getNewMessages),
+   * moves the escalation into "Ответили — осталось проверить" (already
+   * wired: /escalations/:id/verify is what pushes it into the knowledge base
+   * once the owner has actually checked it in the test chat).
+   */
+  async confirmEscalationAnswer(companyId: string, escalationId: string, text: string): Promise<{ ok: true }> {
+    const escalation = await this.prisma.escalation.findFirst({ where: { id: escalationId, companyId } });
+    if (!escalation) throw new NotFoundException('Escalation not found');
+    if (escalation.answeredAt) throw new BadRequestException('Escalation already answered');
+    if (!text?.trim()) throw new BadRequestException('Answer text is required');
+
+    await this.prisma.escalation.update({
+      where: { id: escalationId },
+      data: { answer: text.trim(), answeredAt: new Date() },
+    });
+    if (escalation.dialogId) {
+      await this.prisma.message.create({
+        data: { dialogId: escalation.dialogId, role: MessageRole.assistant, content: text.trim() },
+      });
+    }
+    return { ok: true };
+  }
+
   private async findPendingCompany(token: string) {
     if (!token) throw new NotFoundException('Invalid or already-used registration link');
     const company = await this.prisma.company.findUnique({ where: { registrationToken: token } });
