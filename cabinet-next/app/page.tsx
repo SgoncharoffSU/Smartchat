@@ -79,14 +79,31 @@ async function fetchJsonWithRetry<T>(url: string, attempts = 5): Promise<T | nul
 function useCabinetData() {
   const [me, setMe] = useState<CabinetMe>(null);
   const [analytics, setAnalytics] = useState<CabinetAnalytics>(null);
+  const [signedOut, setSignedOut] = useState(false);
   const refetchAnalytics = () => {
     fetchJsonWithRetry<CabinetAnalytics>("/api/cabinet/analytics?period=week").then(setAnalytics);
   };
   useEffect(() => {
-    fetchJsonWithRetry<CabinetMe>("/api/cabinet/me").then(setMe);
+    // No session cookie (a real logout, an expired session, or — confirmed
+    // live — just opening this URL in a private/incognito window expecting
+    // to already be signed in there, which is impossible by design) used to
+    // look EXACTLY like "data won't load": every number sat at its "…"
+    // placeholder forever with zero indication why. /api/cabinet/me is the
+    // one authoritative "am I signed in" check — a 401 specifically from
+    // THIS call (not analytics, not any other endpoint) means genuinely
+    // signed out, so send them to the real sign-in page instead of leaving
+    // them staring at a blank dashboard.
+    fetch("/api/cabinet/me").then((r) => {
+      if (r.status === 401) {
+        setSignedOut(true);
+        window.location.href = "/cabinet/login.html";
+        return;
+      }
+      return r.ok ? r.json() : fetchJsonWithRetry<CabinetMe>("/api/cabinet/me");
+    }).then((data) => { if (data) setMe(data); });
     refetchAnalytics();
   }, []);
-  return { me, analytics, refetchAnalytics };
+  return { me, analytics, refetchAnalytics, signedOut };
 }
 
 // Real getAnalytics numbers are integers; ru-RU grouping matches the
@@ -568,7 +585,10 @@ const COMPANY_ROLE_LABELS: Record<string, string> = { owner: "Владелец",
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
   const [action, setAction] = useState<string | null>(null);
-  const { me, analytics, refetchAnalytics } = useCabinetData();
+  const { me, analytics, refetchAnalytics, signedOut } = useCabinetData();
+  if (signedOut) {
+    return <div className="dialogs-empty-conv" style={{ padding: 40 }}>Сессия не найдена, перенаправляю на вход…</div>;
+  }
   const companyName = me?.companyName || "…";
   const botLabel = me?.bot?.label || me?.bot?.name || "Бот";
   const botDomain = me?.bot?.sourceWebsite || "";
