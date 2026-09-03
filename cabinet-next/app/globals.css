@@ -160,3 +160,10 @@
    подписка?" was barely legible). Bumped size and darkened close to --ink. */
 .escalation-row small{color:#42505a;font-size:12px;margin-top:3px;line-height:1.4}
 .escalation-row>button{flex:0 0 auto}
+/* Buttons here (Ответить/Обработано, Улучшить/Предложить с нуля,
+   Отметить проверенным...) use the default <Button> size everywhere,
+   which reads as oversized on a phone next to the now-larger question text
+   above — shrink them (height/padding/font) on mobile only, desktop unchanged. */
+@media(max-width:760px){
+  .escalation-row button{height:34px;padding:0 10px;font-size:10px}
+}
