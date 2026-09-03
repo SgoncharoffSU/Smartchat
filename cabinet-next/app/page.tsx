@@ -427,7 +427,7 @@ function PendingEscalationRow({
             <Button variant="outline" disabled={previewLoading} onClick={() => requestPreview()}>
               {previewLoading ? "Готовлю…" : draft.trim() ? "Проверить мой ответ" : "Сгенерировать ответ"}
             </Button>
-            <Button variant="outline" onClick={() => { setAnswering(false); setPreview(null); setDraft(""); }}>
+            <Button variant="outline" onClick={() => { previewRequestId.current++; setAnswering(false); setPreview(null); setDraft(""); }}>
               Отмена
             </Button>
           </div>
