@@ -154,5 +154,9 @@
    block it's meant for can ever match it, however these rows get nested. */
 .escalation-row .escalation-text{display:flex;flex:1 1 220px;min-width:0;flex-direction:column}
 .escalation-row b{font-size:12px}
-.escalation-row small{color:#7c8992;font-size:10px;margin-top:3px}
+/* The visitor's actual question lives in this <small> — 10px light grey read
+   as an afterthought next to the 12px bold reason label above it, when the
+   question is the whole point of the card (found live: "Сколько стоит
+   подписка?" was barely legible). Bumped size and darkened close to --ink. */
+.escalation-row small{color:#42505a;font-size:12px;margin-top:3px;line-height:1.4}
 .escalation-row>button{flex:0 0 auto}
