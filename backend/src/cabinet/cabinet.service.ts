@@ -1144,7 +1144,15 @@ export class CabinetService {
         where: { botId: bot.id, isPreview: false, createdAt: sinceFilter },
         select: {
           createdAt: true,
-          messages: { where: { role: 'visitor' }, take: 1, select: { id: true } },
+          // 2+ messages of ANY role, not "at least one visitor message" — same
+          // definition getAnalytics uses for this same "Открыли чат" label
+          // (see its own comment above: isInit's teaser is always message #1,
+          // so 2+ is the honest "the visitor actually opened the chat" signal).
+          // This used to filter by role:'visitor' here, which measures a
+          // stricter, different thing (the visitor sent a message — that's
+          // "Диалоги", not "Открыли чат") and silently disagreed with the
+          // dashboard card sharing this chart's label.
+          messages: { take: 2, select: { id: true } },
         },
       }),
       // Same enablesProvisioning gap as getAnalytics (see its own comment,
@@ -1175,7 +1183,7 @@ export class CabinetService {
       const bucket = buckets.get(localDateKey(dialog.createdAt));
       if (!bucket) continue; // outside the requested window after rounding — ignore
       bucket.shown += 1;
-      if (dialog.messages.length > 0) bucket.opened += 1;
+      if (dialog.messages.length >= 2) bucket.opened += 1;
     }
     for (const leadDate of leadDates) {
       const bucket = buckets.get(localDateKey(leadDate));
@@ -1694,10 +1702,16 @@ export class CabinetService {
     if (escalation.answeredAt) throw new BadRequestException('Escalation already answered');
     if (!text?.trim()) throw new BadRequestException('Answer text is required');
 
-    await this.prisma.escalation.update({
-      where: { id: escalationId },
+    // updateMany with answeredAt: null in the WHERE, not a separate read-then-write,
+    // so the "already answered?" check and the write are one atomic statement — a
+    // double-click or a client retry racing this same call only ever lets one of
+    // them win, instead of both passing the earlier findFirst check and both
+    // appending a duplicate assistant message into the live dialog below.
+    const { count } = await this.prisma.escalation.updateMany({
+      where: { id: escalationId, answeredAt: null },
       data: { answer: text.trim(), answeredAt: new Date() },
     });
+    if (count === 0) throw new BadRequestException('Escalation already answered');
     if (escalation.dialogId) {
       await this.prisma.message.create({
         data: { dialogId: escalation.dialogId, role: MessageRole.assistant, content: text.trim() },
