@@ -513,8 +513,15 @@ type DialogDetail = {
   botName: string;
   lead: { name: string | null; phone: string | null; email: string | null } | null;
   dealTitle: string | null;
-  messages: Array<{ id: string; role: string; content: string }>;
+  messages: Array<{ id: string; role: string; content: string; createdAt: string }>;
 };
+
+// Always Europe/Moscow, regardless of the viewer's own browser timezone —
+// business requirement ("по МСК"): a message time should read the same for
+// everyone looking at this dialog, not shift per viewer.
+function fmtMessageTime(iso: string): string {
+  return new Date(iso).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
 
 function fmtDialogDate(iso: string): string {
   const d = new Date(iso);
@@ -628,6 +635,7 @@ function Dialogs({ setView, onOpenDeal }: { setView: (v: View) => void; onOpenDe
             <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} key={m.id}>
               {m.role === "assistant" && <span className="mini-bot"><Bot /></span>}
               <p>{m.content}</p>
+              <small>{fmtMessageTime(m.createdAt)} МСК</small>
             </div>
           ))}
         </div>

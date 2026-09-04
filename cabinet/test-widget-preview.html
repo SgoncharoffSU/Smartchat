@@ -11,14 +11,24 @@
 </head>
 <body>
   <script>
-    // Embedded by the cabinet's "Тестирование" pane (see paneFrameSrc in
-    // cabinet/index.html) inside its own iframe box — position:fixed inside
-    // widget.js anchors to THIS iframe's viewport, not the cabinet page's, so
-    // the launcher/teaser/chat window render confined to the pane instead of
-    // floating over the whole cabinet. Same data-preview mechanism test-chat.html
-    // (the public prospect-facing demo link) already uses — real launcher
-    // button, real teaser bubble with the bot's actual opening line, real
-    // click-to-open — not a hand-built approximation of it.
+    // Embedded by the cabinet's "Обучение бота" pane inside its own iframe
+    // box — position:fixed inside widget.js anchors to THIS iframe's
+    // viewport, not the cabinet page's, so the launcher/teaser/chat window
+    // render confined to the pane instead of floating over the whole
+    // cabinet. Same data-preview mechanism test-chat.html (the public
+    // prospect-facing demo link) already uses — real widget.js, real
+    // chat.js, not a hand-built approximation of it.
+    //
+    // data-auto-open + the pane's own CSS keeping this iframe's rendered
+    // width at or under widget.js's own MOBILE_BREAKPOINT (480px) together
+    // put the widget into its existing full-screen mobile mode immediately
+    // (open chat filling top:0/left:0/right:0/bottom:0, launcher bubble
+    // hidden) instead of its normal desktop behavior — a real click-to-open
+    // launcher plus a smaller floating 380x560 panel with visible empty
+    // space around it inside this larger pane, reading as a second, nested
+    // chat window rather than the pane simply BEING the chat (found live:
+    // "в этом окне открывается еще один чат" — the reference's own static
+    // mockup is just one flush header+messages+input stack, no launcher).
     var params = new URLSearchParams(location.search);
     var botToken = params.get('token');
     var color = params.get('color') || '#4f46e5';
@@ -28,8 +38,9 @@
     s.setAttribute('data-color', color);
     s.setAttribute('data-teaser-delay-ms', '1500');
     s.setAttribute('data-preview', 'true');
+    s.setAttribute('data-auto-open', 'true');
     // Unlike test-chat.html (the public demo link), this page is only ever
-    // reached from inside the cabinet's own "Тестирование" pane — safe to
+    // reached from inside the cabinet's own "Обучение бота" pane — safe to
     // show the "mark as bad" control here. See widget.js/chat.js.
     s.setAttribute('data-owner-testing', 'true');
     document.body.appendChild(s);
