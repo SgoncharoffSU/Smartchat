@@ -659,7 +659,13 @@ function Dialogs({ setView, onOpenDeal }: { setView: (v: View) => void; onOpenDe
 function Training({ me }: { me: CabinetMe }) {
   const [copied, setCopied] = useState(false);
   const token = me?.bot?.widgetToken;
-  const previewSrc = token ? `/cabinet/test-widget-preview.html?token=${encodeURIComponent(token)}` : undefined;
+  // autoopen=1 only from here — the legacy cabinet embeds this same shared
+  // page in a wider pane where auto-opening would recreate the exact
+  // "second, nested chat window" bug this flag is meant to fix (see
+  // test-widget-preview.html's own comment); this box alone is capped
+  // narrow enough (.widget-preview, ≤460px) for widget.js's own mobile
+  // full-screen mode to make the box simply BE the open chat.
+  const previewSrc = token ? `/cabinet/test-widget-preview.html?token=${encodeURIComponent(token)}&autoopen=1` : undefined;
   const copyLink = () => {
     if (!previewSrc) return;
     navigator.clipboard.writeText(`${window.location.origin}${previewSrc}`).then(() => {
@@ -769,6 +775,12 @@ function CRM({ me, dealToOpen, onDealOpened }: { me: CabinetMe; dealToOpen: stri
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const canSeeAllDeals = me?.companyRole === "owner" || me?.companyRole === "manager";
+  // Same guard as dialogRequestId/previewRequestId elsewhere in this file —
+  // openDealById had none (found by code review): clicking deal A then
+  // quickly clicking deal B before A's (possibly still-retrying) fetch
+  // resolves let A's late response silently overwrite the panel back to A
+  // after the owner had already moved on to B.
+  const openDealRequestId = useRef(0);
 
   const loadBoard = () => fetchJsonWithRetry<Board>("/api/cabinet/deals").then((data) => data && setBoard(data));
 
@@ -790,7 +802,10 @@ function CRM({ me, dealToOpen, onDealOpened }: { me: CabinetMe; dealToOpen: stri
   }, [canSeeAllDeals]);
 
   const openDealById = (id: string) => {
-    fetchJsonWithRetry<DealDetail>(`/api/cabinet/deals/${id}`).then((data) => data && setOpenDeal(data));
+    const requestId = ++openDealRequestId.current;
+    fetchJsonWithRetry<DealDetail>(`/api/cabinet/deals/${id}`).then((data) => {
+      if (data && openDealRequestId.current === requestId) setOpenDeal(data);
+    });
   };
 
   // "Открыть лид" (Диалоги) hands off a dealId through shared state instead
@@ -918,6 +933,25 @@ function DealPanel({ deal, stages, customFieldDefs, teamMembers, canReassign, on
     setDialogOpen(false); setDialogMessages(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deal.id]);
+
+  // customFieldDefs loads asynchronously in the parent CRM component and can
+  // still be [] at the exact moment this panel first mounts (opened right
+  // after the board loaded, before that separate fetch resolves) — the
+  // lazy useState initializer above only ever runs once, so without this a
+  // deal opened in that narrow window showed no custom field inputs at all
+  // until closed and reopened (found by code review). Backfills any newly-
+  // available keys without touching ones already being edited.
+  useEffect(() => {
+    setCustomFields((cf) => {
+      let changed = false;
+      const next = { ...cf };
+      for (const f of customFieldDefs) {
+        if (!(f.key in next)) { next[f.key] = deal.customFields[f.key] || ""; changed = true; }
+      }
+      return changed ? next : cf;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customFieldDefs]);
 
   const save = () => {
     setSaving(true); setSaveError(null);
