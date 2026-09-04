@@ -7,9 +7,32 @@
 <style>
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; background: #fafafa; }
+  /* Fixed to the page, not the widget's own nested chat iframe — sits above
+     it via z-index (higher than any z-index widget.js itself uses, see its
+     own HERO_FLOATING_Z_INDEX/launcher constants) so it stays reachable
+     regardless of which mode the widget is currently rendering in. Top-left,
+     not top-right, so it never sits under the widget's own close ("×")
+     button in the opposite corner. */
+  #scResetBtn {
+    position: fixed; top: 10px; left: 10px; z-index: 2147483647;
+    border: 1px solid rgba(0,0,0,.12); background: rgba(255,255,255,.92);
+    color: #333; font: 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 7px 12px; border-radius: 999px; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  }
+  #scResetBtn:hover { background: #fff; }
 </style>
 </head>
 <body>
+  <!-- Real reset, not a decoration — clears THIS visitor's own test session
+       (see the script below) and reloads, so the owner (or a colleague
+       following the shared link) can try a different opening line/answer
+       path instead of being stuck continuing whatever the bot already said
+       last time (found live: "не вижу сброса диалога... нет возможности
+       сброса, чтобы пробовать различные варианты"). Visible unconditionally
+       — useful whether this page is reached via cabinet-next's auto-open
+       preview or the legacy cabinet's own click-to-open embed. -->
+  <button type="button" id="scResetBtn">↺ Сбросить диалог</button>
   <script>
     // Embedded by the cabinet's "Обучение бота" pane inside its own iframe
     // box — position:fixed inside widget.js anchors to THIS iframe's
@@ -19,22 +42,22 @@
     // prospect-facing demo link) already uses — real widget.js, real
     // chat.js, not a hand-built approximation of it.
     //
-    // This same page is embedded from TWO different panes with two
-    // different container widths — cabinet-next's "Обучение бота"
-    // (.widget-preview, capped at 460px — under widget.js's own 480px
-    // MOBILE_BREAKPOINT) and the legacy cabinet's own "Обучение бота"/
-    // "Виджет и приветствие" panes (.training-layout/.settings-layout,
-    // which render several hundred px wider on a normal desktop window).
-    // data-auto-open only makes sense where the container is ALSO narrow
-    // enough to trip widget.js's isMobile() check — auto-opening into its
-    // normal (non-mobile) floating-panel behavior in a wide pane would
-    // recreate the exact "second, nested chat window" bug this was meant to
-    // fix (a small floating panel + a still-visible launcher bubble, inside
-    // a much larger, mostly-empty pane), just for the OTHER embedder instead
-    // (found by code review — cross-checked both panes' actual CSS widths).
-    // So this is opt-in via ?autoopen=1, which only cabinet-next's iframe
-    // src passes; the legacy cabinet's own src is unchanged and keeps its
-    // original click-to-open behavior exactly as before.
+    // This same page is embedded from TWO different panes — cabinet-next's
+    // "Обучение бота" (.widget-preview, sized to the reference prototype's
+    // own 510px — the owner asked for prototype sizes, our colors) and the
+    // legacy cabinet's own "Обучение бота"/"Виджет и приветствие" panes
+    // (.training-layout/.settings-layout). Both are well past widget.js's
+    // own 480px MOBILE_BREAKPOINT, so auto-opening would land in the
+    // NORMAL (non-mobile) floating-panel behavior — a small floating chat
+    // plus a still-visible launcher bubble inside a much larger pane, i.e.
+    // exactly the "second, nested chat window" look this is meant to avoid.
+    // data-force-fullscreen (a new, explicit widget.js flag — real embeds
+    // never set it) sidesteps that by forcing the SAME full-screen mode a
+    // real visitor gets on an actual phone, on any container width, instead
+    // of coupling that behavior to an incidental narrow width. Both auto-open
+    // and force-fullscreen are opt-in via ?autoopen=1, which only
+    // cabinet-next's iframe src passes; the legacy cabinet's own src is
+    // unchanged and keeps its original click-to-open floating behavior.
     var params = new URLSearchParams(location.search);
     var botToken = params.get('token');
     var color = params.get('color') || '#4f46e5';
@@ -45,12 +68,23 @@
     s.setAttribute('data-color', color);
     s.setAttribute('data-teaser-delay-ms', '1500');
     s.setAttribute('data-preview', 'true');
-    if (autoOpen) s.setAttribute('data-auto-open', 'true');
+    if (autoOpen) {
+      s.setAttribute('data-auto-open', 'true');
+      s.setAttribute('data-force-fullscreen', 'true');
+    }
     // Unlike test-chat.html (the public demo link), this page is only ever
     // reached from inside the cabinet's own "Обучение бота" pane — safe to
     // show the "mark as bad" control here. See widget.js/chat.js.
     s.setAttribute('data-owner-testing', 'true');
     document.body.appendChild(s);
+
+    document.getElementById('scResetBtn').addEventListener('click', function () {
+      // Same key format widget.js itself uses (see its own sessionKey) —
+      // duplicated here rather than imported since widget.js exposes no
+      // public API, only reads this key inside its own closure on load.
+      if (botToken) localStorage.removeItem('smartchat_session_' + botToken);
+      location.reload();
+    });
   </script>
 </body>
 </html>

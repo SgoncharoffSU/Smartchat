@@ -96,19 +96,22 @@
    filling the card, with its own real chat content then scrolling inside
    that tiny box (found live: "чат... не занимает все пространство... плюс
    появилась вертикальная прокрутка"). */
-/* max-width dropped from the reference's 510px to 460px — real widget.js
-   (loaded inside the iframe below) checks ITS OWN rendered width against a
-   480px MOBILE_BREAKPOINT to decide whether the chat opens as a full-screen
-   panel (real chat apps' mobile mode: header+messages+input filling the
-   whole box, launcher bubble hidden — what this box needs, matching the
-   reference's own flush single-stack mockup) or as a smaller floating panel
-   plus a separate visible launcher bubble (its normal desktop behavior for
-   a real embed, where it must float over real page content it doesn't own).
-   510px sat just above that breakpoint, so the "site" behind the widget
-   here got the latter — a second, smaller chat-shaped box floating with
-   empty space around it inside this larger one (see the auto-open comment
-   in test-widget-preview.html for the full story). */
-.widget-preview{max-width:460px;width:100%;margin:0 auto;height:min(680px,calc(100vh - 260px));background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgba(8,21,34,.11);overflow:hidden}.widget-head{display:flex;align-items:center;gap:9px;padding:14px 16px;background:var(--ink);color:#fff}.widget-head>button{margin-left:auto;border:0;background:transparent;color:#8fa0ae}.bot-avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:var(--lime);color:var(--ink);font-weight:800}.widget-head div{display:flex;flex-direction:column}.widget-head b{font-size:11px}.widget-head small{font-size:9px;color:#95a6b5}.widget-head small i{display:inline-block;width:5px;height:5px;border-radius:50%;background:#69d793}.widget-messages{min-height:390px;padding:18px;background:#f7f8f7}.widget-messages p{max-width:80%;padding:10px 12px;margin-bottom:10px;border-radius:12px;font-size:10px;line-height:1.5}.widget-bot{background:#fff;border:1px solid var(--line)}.widget-user{margin-left:auto;background:#e7ebff}.improve{display:flex;align-items:center;gap:5px;margin:2px 0 0 12px;border:0;background:transparent;color:#596dcc;font-size:9px}.improve svg{width:12px}
+/* max-width back to the reference's own 510px (owner's explicit request:
+   "прототип за основу... размеры соблюдай из прототипа") — an earlier pass
+   shrank this to 460px purely as a side-channel trick to trip real
+   widget.js's own 480px MOBILE_BREAKPOINT (full-screen chat, no separate
+   launcher bubble) instead of its normal floating-panel behavior. That's now
+   done properly instead: test-widget-preview.html passes a real, explicit
+   data-force-fullscreen flag (a new, additive widget.js attribute — real
+   embeds never set it) that gets the same full-screen result independent of
+   container width, so the width here is free to match the reference
+   exactly. height is still ours (the reference never needed one — a static
+   mockup's height is just whatever .widget-head + .widget-messages{min-
+   height:390px} + .widget-input naturally sum to, ~505px for real column
+   proportions close to the reference's own near-square 510-ish look) but a
+   real embedded iframe's height:100% needs a definite number to resolve
+   against at all, hence the explicit value here rather than none. */
+.widget-preview{max-width:510px;width:100%;margin:0 auto;height:min(510px,calc(100vh - 260px));background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgba(8,21,34,.11);overflow:hidden}.widget-head{display:flex;align-items:center;gap:9px;padding:14px 16px;background:var(--ink);color:#fff}.widget-head>button{margin-left:auto;border:0;background:transparent;color:#8fa0ae}.bot-avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:var(--lime);color:var(--ink);font-weight:800}.widget-head div{display:flex;flex-direction:column}.widget-head b{font-size:11px}.widget-head small{font-size:9px;color:#95a6b5}.widget-head small i{display:inline-block;width:5px;height:5px;border-radius:50%;background:#69d793}.widget-messages{min-height:390px;padding:18px;background:#f7f8f7}.widget-messages p{max-width:80%;padding:10px 12px;margin-bottom:10px;border-radius:12px;font-size:10px;line-height:1.5}.widget-bot{background:#fff;border:1px solid var(--line)}.widget-user{margin-left:auto;background:#e7ebff}.improve{display:flex;align-items:center;gap:5px;margin:2px 0 0 12px;border:0;background:transparent;color:#596dcc;font-size:9px}.improve svg{width:12px}
 .widget-input{display:flex;align-items:center;gap:8px;padding:11px;border-top:1px solid var(--line);background:#fff}.widget-input input,.widget-input span{flex:1;border:0;outline:0;color:#98a2a8;font-size:10px}.widget-input button{display:grid;place-items:center;width:31px;height:31px;border:0;border-radius:9px;background:var(--lime);color:var(--ink)}.widget-input button svg{width:14px}
 
 /* Data pages */

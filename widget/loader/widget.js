@@ -181,8 +181,15 @@
   });
 
   var MOBILE_BREAKPOINT = 480;
+  // Real embeds never set this — it exists for the cabinet's own "Обучение
+  // бота" preview, whose container width is meant to match the reference
+  // prototype's own 510px (owner's explicit request) rather than being kept
+  // under MOBILE_BREAKPOINT just to trick this same check. Forces the exact
+  // full-screen "the box IS the chat" behavior on ANY container width,
+  // instead of coupling that behavior to an incidental narrow width.
+  var forceFullScreen = scriptTag.getAttribute('data-force-fullscreen') === 'true';
   function isMobile() {
-    return window.innerWidth <= MOBILE_BREAKPOINT;
+    return forceFullScreen || window.innerWidth <= MOBILE_BREAKPOINT;
   }
 
   // On phones, a small floating box is cramped once the on-screen keyboard
