@@ -562,24 +562,26 @@ function Dialogs() {
 
   useEffect(() => {
     const requestId = ++dialogRequestId.current;
-    if (!activeId) { setConversation(null); return; }
+    if (!activeId) { setConversation(null); setSummary(null); return; }
     setConversation(null);
     setSummary(null);
     fetchJsonWithRetry<DialogDetail>(`/api/cabinet/dialogs/${activeId}`)
       .then((data) => { if (dialogRequestId.current === requestId) setConversation(data); })
       .catch(() => { if (dialogRequestId.current === requestId) setConversation(null); });
-  }, [activeId]);
-
-  const loadSummary = () => {
-    if (!activeId) return;
-    const requestId = ++dialogRequestId.current;
+    // Reference's AI-résumé is always just THERE, no click to reveal it — and
+    // gating it behind a manual button had its own dead end: the button was
+    // rendered by `!summary`, so it simply vanished once a summary loaded,
+    // with nothing put in its place (found live: "после нажатия на Показать
+    // резюме, кнопка вообще исчезает"). Fetching it alongside the
+    // conversation itself, on the same request-id guard, matches the
+    // reference's always-shown look and removes the dead-end entirely.
     setSummaryLoading(true);
     fetch(`/api/cabinet/dialogs/${activeId}/summary`, { method: "POST" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (dialogRequestId.current === requestId) setSummary(data?.summary || "Не получилось получить резюме."); })
       .catch(() => { if (dialogRequestId.current === requestId) setSummary("Не получилось получить резюме."); })
       .finally(() => { if (dialogRequestId.current === requestId) setSummaryLoading(false); });
-  };
+  }, [activeId]);
 
   const visible = (dialogs ?? []).filter((d) => {
     if (filter === "lead" && !d.lead) return false;
@@ -625,9 +627,9 @@ function Dialogs() {
         </div>
         <div className="conversation-foot">
           <div><ClipboardCheck /><span><b>AI-резюме</b>
-            {summary ? <small>{summary}</small> : <small>{summaryLoading ? "Готовлю резюме…" : "Что хотел посетитель и какой следующий шаг — по клику."}</small>}
+            <small>{summary ?? (summaryLoading ? "Готовлю резюме…" : "Резюме недоступно.")}</small>
           </span></div>
-          {!summary && <Button variant="outline" disabled={summaryLoading || !conversation} onClick={loadSummary}>{summaryLoading ? "Готовлю…" : "Показать AI-резюме"}</Button>}
+          {(active.lead || active.dealTitle) && <Button variant="outline" onClick={() => { window.location.href = "/crm.html"; }}>Открыть лид <ArrowRight /></Button>}
         </div>
       </>}
     </section>
