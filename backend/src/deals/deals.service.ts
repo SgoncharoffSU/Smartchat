@@ -80,6 +80,10 @@ export class DealsService {
         customFieldValues: { include: { field: true } },
         assignedUser: true,
         activities: { orderBy: { createdAt: 'desc' }, include: { author: true } },
+        // Open tasks (completedAt still null) first — Postgres' own default
+        // for DESC is NULLS FIRST, but spelled out explicitly rather than
+        // relying on that default, then newest-created within each group.
+        tasks: { orderBy: [{ completedAt: { sort: 'desc', nulls: 'first' } }, { createdAt: 'desc' }] },
       },
     });
     if (!full) throw new NotFoundException('Deal not found');
@@ -93,6 +97,13 @@ export class DealsService {
         text: a.text,
         authorName: a.author?.name ?? null,
         createdAt: a.createdAt,
+      })),
+      tasks: full.tasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        dueDate: t.dueDate,
+        completedAt: t.completedAt,
+        createdAt: t.createdAt,
       })),
     };
   }
@@ -237,6 +248,48 @@ export class DealsService {
     await this.assertDealVisible(companyId, dealId, userId, companyRole);
     if (!text?.trim()) throw new BadRequestException('Текст заметки обязателен');
     await this.prisma.dealActivity.create({ data: { dealId, authorUserId: userId, kind: 'note', text: text.trim() } });
+    return this.getDeal(companyId, dealId, userId, companyRole);
+  }
+
+  /**
+   * A task is its own checkbox item (DealTask.completedAt), not something
+   * inferred from the activity feed — but setting one ALSO drops a
+   * 'task_created' line into that same feed, so the timeline reads as one
+   * continuous story instead of the task list and the notes/history feed
+   * silently disagreeing about what happened and when.
+   */
+  async createTask(companyId: string, dealId: string, userId: string, companyRole: string, title: string, dueDate?: string) {
+    await this.assertDealVisible(companyId, dealId, userId, companyRole);
+    if (!title?.trim()) throw new BadRequestException('Название задачи обязательно');
+    const parsedDueDate = dueDate ? new Date(dueDate) : null;
+    if (dueDate && (!parsedDueDate || Number.isNaN(parsedDueDate.getTime()))) {
+      throw new BadRequestException('Некорректная дата');
+    }
+    const task = await this.prisma.dealTask.create({
+      data: { dealId, title: title.trim(), dueDate: parsedDueDate, createdByUserId: userId },
+    });
+    await this.prisma.dealActivity.create({
+      data: { dealId, authorUserId: userId, kind: 'task_created', text: `Поставлена задача: ${task.title}` },
+    });
+    return this.getDeal(companyId, dealId, userId, companyRole);
+  }
+
+  async setTaskCompleted(companyId: string, dealId: string, taskId: string, userId: string, companyRole: string, completed: boolean) {
+    await this.assertDealVisible(companyId, dealId, userId, companyRole);
+    const task = await this.prisma.dealTask.findFirst({ where: { id: taskId, dealId } });
+    if (!task) throw new NotFoundException('Task not found');
+    // No-op (and no duplicate activity line) if it's already in that state —
+    // a second checkbox click racing the first, or the panel re-rendering
+    // with stale props, shouldn't log "выполнена" twice.
+    const alreadyInState = completed ? !!task.completedAt : !task.completedAt;
+    if (!alreadyInState) {
+      await this.prisma.dealTask.update({ where: { id: taskId }, data: { completedAt: completed ? new Date() : null } });
+      if (completed) {
+        await this.prisma.dealActivity.create({
+          data: { dealId, authorUserId: userId, kind: 'task_completed', text: `Задача выполнена: ${task.title}` },
+        });
+      }
+    }
     return this.getDeal(companyId, dealId, userId, companyRole);
   }
 

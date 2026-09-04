@@ -115,6 +115,76 @@
 .install-main{text-align:center;padding:50px 7%}.install-icon,.support-icon{display:grid;place-items:center;width:55px;height:55px;margin:0 auto 18px;border-radius:15px;background:var(--lime);color:var(--ink)}.install-main>p{max-width:620px;margin:12px auto 22px;color:var(--muted);line-height:1.6}.code-box{display:flex;align-items:center;gap:12px;padding:10px 10px 10px 14px;border:1px solid var(--line);border-radius:12px;background:#f7f8f7;text-align:left}.code-box code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#344554;font-size:10px}.code-box button{display:flex;align-items:center;gap:5px;padding:8px 10px;border:0;border-radius:8px;background:var(--ink);color:#fff;font-size:9px}.platforms{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:18px;color:#7d8992;font-size:9px}.platforms button{border:1px solid var(--line);border-radius:8px;background:#fff;padding:7px 9px;color:#46545f}.launch-help,.support-side article{height:max-content}.launch-help>svg,.support-side article>svg{color:#5065ca}.launch-help p,.support-side p{margin:9px 0 16px;color:var(--muted);font-size:11px;line-height:1.55}
 .integration-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.integration-card{display:flex;flex-direction:column;align-items:flex-start;min-height:255px;padding:20px;background:#fff;border:1px solid var(--line);border-radius:15px}.integration-card.featured{border-color:#bac3f0;box-shadow:0 9px 30px rgba(80,100,200,.07)}.integration-logo{display:grid;place-items:center;width:42px;height:42px;margin-bottom:14px;border-radius:12px;font-weight:800}.integration-logo.telegram{background:#e5f3ff;color:#258ac4}.integration-logo.bitrix{background:#e2f4ff;color:#1784bc}.integration-logo.amo{background:#f0e7ff;color:#7655ba}.integration-card h3{margin:14px 0 6px}.integration-card p{flex:1;color:var(--muted);font-size:10px;line-height:1.55}.notification-settings{max-width:760px}.switch-row{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:14px 0;border-top:1px solid var(--line)}.switch-row:first-of-type{margin-top:15px}.switch-row>div{display:flex;align-items:center;gap:10px}.switch-row svg{color:#5267ca}.switch-row span{display:flex;flex-direction:column}.switch-row b{font-size:11px}.switch-row small{font-size:9px;color:#7b8892}
 .crm-toolbar .primary-action{margin-left:auto}.kanban{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:11px;overflow-x:auto;padding-bottom:8px}.kanban-col{min-height:530px;padding:9px;background:#e9eceb;border-radius:14px}.kanban-head{display:grid;grid-template-columns:1fr 22px 26px;align-items:center;padding:5px 4px 12px}.kanban-head>span{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:750}.kanban-head>b{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:#dadddc;font-size:9px}.kanban-head button{border:0;background:transparent;color:#7d8992}.col-dot{display:inline-block;width:7px;height:7px;border-radius:50%}.c0{background:#8298ff}.c1{background:#f0b05d}.c2{background:#58af7c}.c3{background:#98a2aa}.kanban-stack{display:flex;flex-direction:column;gap:8px}.deal-card{padding:13px;background:#fff;border:1px solid #dfe3e2;border-radius:11px}.deal-card>div:first-child{display:flex;align-items:center;justify-content:space-between}.deal-avatar{width:28px;height:28px;font-size:10px}.deal-card h3{margin-top:11px;font-size:12px}.deal-card p{margin-top:4px;color:#697782;font-size:9px}.deal-card>small{display:block;margin-top:10px;color:#98a2a9;font-size:8px}.deal-foot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:1px solid #edf0ef}.deal-foot span{display:flex;align-items:center;gap:5px;color:#5b6975;font-size:8px}.deal-foot svg{width:12px}.deal-foot button,.add-deal{border:0;background:transparent;color:#65737d}.drop-empty{display:grid;place-items:center;min-height:90px;border:1px dashed #c7cecc;border-radius:10px;color:#919c9f;font-size:9px;text-align:center}.add-deal{width:100%;padding:8px;font-size:9px}
+
+/* Our own additions, not part of the reference — the reference's CRM() is
+   static demo cards (fixed 4 columns, no drag-and-drop, no detail panel at
+   all). Real pipelines have a user-configurable stage count (pipeline/stage
+   CRUD elsewhere in this app), so the vendored .kanban's hardcoded
+   repeat(4,...) would leave a dead empty column with 3 stages or wrap a 5th
+   onto a second row instead of scrolling — .kanban itself is left untouched,
+   this is layered on top via .kanban-dynamic. */
+.kanban.kanban-dynamic{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(220px,1fr)}
+.kanban-col.drag-over{background:var(--accent)}
+.kanban-col{max-height:calc(100vh - 260px);display:flex;flex-direction:column}
+.kanban-stack{flex:1;overflow-y:auto}
+.deal-card{cursor:grab}
+.deal-card.dragging{opacity:.4}
+.deal-card:active{cursor:grabbing}
+
+/* Deal detail panel — the reference has no equivalent at all. Left column is
+   static (client card, stage, fields); right is a live timeline (tasks
+   pinned above the chronological notes/history feed) — see DealPanel's own
+   comment in page.tsx for why it's split this way. */
+.crm-overlay{position:fixed;inset:0;background:rgba(8,21,34,.35);display:flex;justify-content:flex-end;z-index:200}
+.crm-panel{width:min(880px,96vw);background:#fff;height:100%;overflow-y:auto}
+.crm-panel-header{display:flex;align-items:center;gap:10px;padding:20px 24px;border-bottom:1px solid var(--line)}
+.crm-panel-close{border:0;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:var(--muted);width:30px;height:30px;border-radius:999px;flex:none;display:grid;place-items:center}
+.crm-panel-close:hover{background:var(--secondary)}
+.crm-panel-title{margin:0;font-size:16px;font-weight:750}
+.crm-panel-header small{display:block;margin-top:2px;color:#9ca3af;font-size:10px}
+.crm-panel-body{display:grid;grid-template-columns:320px 1fr;align-items:start}
+.crm-panel-static{padding:20px 24px;border-right:1px solid var(--line)}
+.crm-panel-timeline{padding:20px 24px;display:flex;flex-direction:column;gap:14px}
+
+.crm-client-card{background:var(--secondary);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}
+.crm-client-avatar{width:40px;height:40px;border-radius:999px;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px;flex:none}
+.crm-client-fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.crm-client-fields input{width:100%;border:1px solid transparent;background:transparent;border-radius:7px;padding:3px 6px;margin:-3px -6px;font-size:12.5px;font-family:inherit;color:var(--ink)}
+.crm-client-fields input:first-child{font-size:14px;font-weight:700}
+.crm-client-fields input:hover,.crm-client-fields input:focus{border-color:var(--line);background:#fff;outline:0}
+.crm-client-call{width:34px;height:34px;border-radius:999px;background:var(--ink);display:grid;place-items:center;flex:none;text-decoration:none}
+
+.crm-stage-pills{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:18px}
+.crm-stage-pill{display:flex;align-items:center;gap:6px;border-radius:999px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--muted)}
+.crm-stage-pill.active{color:#fff;border-color:transparent}
+.crm-stage-pill-dot{width:7px;height:7px;border-radius:999px}
+
+.crm-panel-static .crm-field-row{margin-bottom:12px}
+.crm-field-row label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+.crm-field-row input,.crm-field-row select,.crm-field-row textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;font-family:inherit}
+
+.deal-task-add{display:flex;gap:8px}
+.deal-task-add input{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-family:inherit}
+.deal-tasks{display:flex;flex-direction:column;gap:8px}
+.deal-task{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.deal-task input[type=checkbox]{margin-top:2px;width:15px;height:15px;flex:none}
+.deal-task-title{font-size:12.5px;font-weight:600;color:var(--ink)}
+.deal-task.done .deal-task-title{color:var(--muted);text-decoration:line-through}
+.deal-task-due{font-size:10.5px;color:var(--muted)}
+
+.deal-timeline{display:flex;flex-direction:column}
+.deal-timeline-item{font-size:12px;color:#475568;padding:10px 0;border-bottom:1px solid #f1f5f9}
+.deal-timeline-item:last-child{border-bottom:0}
+.deal-timeline-item.system{color:var(--muted);font-style:italic}
+.deal-timeline-item .meta{color:#9ca3af;font-size:10.5px;margin-top:3px}
+
+.crm-dialog-toggle{border:1px solid var(--line);background:var(--secondary);color:var(--blue);font-size:11.5px;font-weight:700;border-radius:8px;padding:7px 12px;cursor:pointer;align-self:flex-start}
+.crm-dialog-thread{max-height:280px;overflow-y:auto;padding:10px;background:var(--secondary);border-radius:10px}
+.crm-dialog-msg{max-width:82%;padding:8px 12px;border-radius:12px;font-size:11.5px;line-height:1.4;margin-bottom:8px;white-space:pre-wrap;word-break:break-word}
+.crm-dialog-msg.client{background:#fff;border:1px solid var(--line);margin-right:auto}
+.crm-dialog-msg.support{background:var(--ink);color:#fff;margin-left:auto}
+
+@media(max-width:760px){.crm-panel{width:100vw}.crm-panel-body{grid-template-columns:1fr}.crm-panel-static{border-right:0;border-bottom:1px solid var(--line)}.kanban.kanban-dynamic{grid-auto-columns:minmax(240px,1fr)}}
 .team-table .table-head,.team-row{grid-template-columns:minmax(230px,1.5fr) 130px minmax(180px,1fr) 90px 36px}.team-row>div:first-child{display:flex;align-items:center;gap:9px}.team-row>div:first-child>span:last-child{display:flex;flex-direction:column}.team-row b{font-size:11px}.team-row small,.team-row>span{color:#7d8992;font-size:9px}.roles-panel{max-width:700px}.roles-panel>div{display:flex;align-items:center;gap:12px;margin-top:14px}.roles-panel>div>span{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#eef1ff;color:#5065c7}.roles-panel p{display:flex;flex-direction:column}.roles-panel b{font-size:11px}.roles-panel small{margin-top:2px;color:#7c8992;font-size:9px}
 .support-main{padding:35px}.support-main>p{max-width:620px;margin:10px auto 20px;color:var(--muted);line-height:1.55;text-align:center}.support-main h2{text-align:center}.support-categories{display:flex;justify-content:center;gap:7px;margin-bottom:18px}.support-categories button{padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#56636e;font-size:9px}.support-main textarea{min-height:130px;resize:vertical}.support-main .primary-action{margin-top:15px}.support-side{display:flex;flex-direction:column;gap:12px}.support-side article>button{width:100%;display:flex;align-items:center;justify-content:space-between;padding:10px 0;border:0;border-top:1px solid var(--line);background:transparent;color:#475762;text-align:left;font-size:10px}.support-side article>button svg{width:13px}
 

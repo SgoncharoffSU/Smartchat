@@ -47,6 +47,16 @@ export class DealsController {
     return this.deals.addActivity(req.companyId, id, req.userId, req.companyRole ?? 'owner', body.text);
   }
 
+  @Post(':id/tasks')
+  createTask(@Req() req: AuthedRequest, @Param('id') id: string, @Body() body: { title: string; dueDate?: string }) {
+    return this.deals.createTask(req.companyId, id, req.userId, req.companyRole ?? 'owner', body.title, body.dueDate);
+  }
+
+  @Patch(':id/tasks/:taskId')
+  setTaskCompleted(@Req() req: AuthedRequest, @Param('id') id: string, @Param('taskId') taskId: string, @Body() body: { completed: boolean }) {
+    return this.deals.setTaskCompleted(req.companyId, id, taskId, req.userId, req.companyRole ?? 'owner', !!body.completed);
+  }
+
   @Get('pipeline/stages')
   getPipeline(@Req() req: AuthedRequest) {
     return this.deals.getPipelineConfig(req.companyId);

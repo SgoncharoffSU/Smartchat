@@ -208,6 +208,7 @@ model User {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   assignedDeals Deal[] @relation("DealAssignee")
   dealActivities DealActivity[]
+  dealTasksCreated DealTask[]
 
   @@map("users")
 }
@@ -296,7 +297,7 @@ model DealActivity {
   // Null for system-generated entries (auto stage-sync from an inbound CRM
   // update, etc.) — a real note always has an author.
   authorUserId String?  @map("author_user_id")
-  // 'note' | 'stage_change' | 'system'
+  // 'note' | 'stage_change' | 'system' | 'task_created' | 'task_completed'
   kind         String
   text         String
   createdAt    DateTime @default(now()) @map("created_at")
@@ -305,6 +306,25 @@ model DealActivity {
   author User? @relation(fields: [authorUserId], references: [id])
 
   @@map("deal_activities")
+}
+
+// A deal's task list — a checkbox item distinct from DealActivity: setting
+// or completing one ALSO drops a line into the activity feed ('task_created'/
+// 'task_completed' kinds below), but the open/done checkbox state itself
+// lives here, not as something inferred from the feed text.
+model DealTask {
+  id              String    @id @default(uuid())
+  dealId          String    @map("deal_id")
+  title           String
+  dueDate         DateTime? @map("due_date")
+  completedAt     DateTime? @map("completed_at")
+  createdByUserId String?   @map("created_by_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  deal      Deal  @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdByUserId], references: [id])
+
+  @@map("deal_tasks")
 }
 
 // The mini-CRM's own deal card — deliberately NOT 1:1 with Dialog like Lead
@@ -359,6 +379,7 @@ model Deal {
   stage        PipelineStage          @relation(fields: [stageId], references: [id])
   customFieldValues DealCustomFieldValue[]
   activities   DealActivity[]
+  tasks        DealTask[]
 
   @@map("deals")
 }

@@ -7,7 +7,7 @@ import {
   FileUp, Flame, Globe2, GraduationCap, Headphones, History, Inbox, Info, LayoutDashboard, LifeBuoy, Link2, ListFilter,
   MessageSquareText, MoreHorizontal, MousePointerClick, Plus, Rocket, Search, Send, Settings2,
   ShieldCheck, SlidersHorizontal, Sparkles, Target, TestTube2, Users, WandSparkles,
-  ArrowLeft, Wallet, Workflow, X, Zap,
+  ArrowLeft, Phone, Wallet, Workflow, X, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -185,7 +185,12 @@ function StatusPill({ tone = "green", children }: { tone?: "green" | "blue" | "o
 }
 
 function PageHeader({ view, onPrimary, companyName }: { view: View; onPrimary?: (label: string) => void; companyName: string }) {
-  const actions: Partial<Record<View, string>> = { knowledge: "Добавить знания", dialogs: "Экспорт", integrations: "Добавить интеграцию", crm: "Новая сделка", team: "Пригласить", support: "Новое обращение" };
+  // crm dropped from here — CRM() now has its own real "Новая сделка" button
+  // (real POST /api/cabinet/deals); this generic header slot only ever opened
+  // the fake "demo state" dialog, so with both on screen at once the header's
+  // copy was a confusing, non-functional duplicate (found live, testing the
+  // real button: the header's fake one sits first in the DOM and shadows it).
+  const actions: Partial<Record<View, string>> = { knowledge: "Добавить знания", dialogs: "Экспорт", integrations: "Добавить интеграцию", team: "Пригласить", support: "Новое обращение" };
   const action = actions[view];
   return <div className="page-header"><div><div className="crumb">{companyName} <span>/</span> {titles[view].title}</div><h1>{titles[view].title}</h1><p>{titles[view].desc}</p></div>{action && <Button className="primary-action" data-live onClick={() => onPrimary?.(action)}><Plus />{action}</Button>}</div>;
 }
@@ -529,7 +534,7 @@ function fmtDialogDate(iso: string): string {
 // omitted rather than shown with fake data; the channel filter is gone too
 // since every real dialog comes from the same one channel (the site widget)
 // right now, nothing to filter by yet.
-function Dialogs() {
+function Dialogs({ setView, onOpenDeal }: { setView: (v: View) => void; onOpenDeal: (dealId: string) => void }) {
   const [dialogs, setDialogs] = useState<DialogListItem[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [conversation, setConversation] = useState<DialogDetail | null>(null);
@@ -617,7 +622,7 @@ function Dialogs() {
           <div className="conversation-title"><b>{active.lead?.name || active.botName || "Диалог"}</b><span><i /> {active.botName} · {fmtDialogDate(active.updatedAt)}</span></div>
           <div>{active.hasUnansweredEscalation ? <StatusPill tone="orange">Ждёт ответа</StatusPill> : active.lead ? <StatusPill>Заявка получена</StatusPill> : null}<button className="icon-button"><MoreHorizontal /></button></div>
         </div>
-        {active.dealTitle && <div className="conversation-context"><span><Globe2 /></span><p><b>Сделка в CRM: {active.dealTitle}</b><small>{active.lead?.name || active.lead?.phone || active.lead?.email || ""}</small></p><button onClick={() => { window.location.href = active.dealId ? `/cabinet/crm.html?deal=${active.dealId}` : "/cabinet/crm.html"; }}>Открыть в CRM <ExternalLink /></button></div>}
+        {active.dealTitle && <div className="conversation-context"><span><Globe2 /></span><p><b>Сделка в CRM: {active.dealTitle}</b><small>{active.lead?.name || active.lead?.phone || active.lead?.email || ""}</small></p><button onClick={() => { if (active.dealId) onOpenDeal(active.dealId); setView("crm"); }}>Открыть в CRM <ExternalLink /></button></div>}
         <div className="messages">
           {!conversation ? <div className="dialogs-empty-conv">Загружаю…</div> : conversation.messages.map((m) => (
             <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} key={m.id}>
@@ -630,7 +635,7 @@ function Dialogs() {
           <div><ClipboardCheck /><span><b>AI-резюме</b>
             <small>{summary ?? (summaryLoading ? "Готовлю резюме…" : "Резюме недоступно.")}</small>
           </span></div>
-          {(active.lead || active.dealTitle) && <Button variant="outline" onClick={() => { window.location.href = active.dealId ? `/cabinet/crm.html?deal=${active.dealId}` : "/cabinet/crm.html"; }}>Открыть лид <ArrowRight /></Button>}
+          {(active.lead || active.dealTitle) && <Button variant="outline" onClick={() => { if (active.dealId) onOpenDeal(active.dealId); setView("crm"); }}>Открыть лид <ArrowRight /></Button>}
         </div>
       </>}
     </section>
@@ -726,15 +731,300 @@ function Leads({ setView }: { setView: (v: View) => void }) {
   return <div className="leads-page"><section className="leads-summary"><article><span className="lead-icon blue"><Inbox /></span><div><small>Всего лидов</small><b>119</b><em>+18 за неделю</em></div></article><article><span className="lead-icon lime"><Flame /></span><div><small>Новые</small><b>7</b><em>Нужна реакция</em></div></article><article><span className="lead-icon violet"><Headphones /></span><div><small>В работе</small><b>84</b><em>70,6% обработано</em></div></article><article><span className="lead-icon green"><Check /></span><div><small>Успешно</small><b>28</b><em>23,5% от всех</em></div></article></section><section className="leads-board"><div className="leads-toolbar"><div className="search-field"><Search /><input placeholder="Имя, контакт или запрос" /></div><div className="filter-chips">{["Все", "Новый", "В работе", "Успешно"].map(item => <button data-live className={status === item ? "active" : ""} onClick={() => setStatus(item)} key={item}>{item}</button>)}</div><button className="filter-button"><ListFilter />Период: неделя</button></div><div className="leads-table"><div className="lead-table-head"><span>Лид</span><span>Что нужно клиенту</span><span>Следующий шаг</span><span>Источник</span><span>Статус</span><span /></div>{visibleLeads.map((lead, index) => <article className="lead-row" key={lead.name}><div className="lead-person"><span className="dialog-avatar">{lead.name[0]}</span><p><b>{lead.name}</b><small>{lead.contact} · {lead.time}</small></p></div><p className="lead-summary-cell"><BrainCircuit /><span>{lead.request}</span></p><p className="next-step"><Clock3 /><span>{lead.next}</span></p><span className="lead-source"><Globe2 />{lead.source}</span><StatusPill tone={lead.status === "Успешно" ? "green" : lead.status === "Новый" ? "orange" : "blue"}>{lead.status}</StatusPill><button className="lead-open" data-live onClick={() => setView(index === 0 ? "dialogs" : "crm")} aria-label={`Открыть лид ${lead.name}`}><ArrowRight /></button></article>)}</div></section><div className="leads-note"><ShieldCheck /><span><b>Демо-данные</b><small>Контакты скрыты. В рабочем кабинете лид открывается вместе с диалогом, источником и полной историей.</small></span></div></div>;
 }
 
-const columns = [
-  { name: "Новая", count: 2, items: [["Анна", "Подбор бани · 6 или 8 м", "Сегодня, 12:41"], ["Михаил", "Запрос стоимости", "Сегодня, 10:16"]] },
-  { name: "В работе", count: 1, items: [["Сергей", "Установка в Московской области", "Вчера"]] },
-  { name: "Успешно", count: 1, items: [["Елена", "Баня 6 м · договор", "25 августа"]] },
-  { name: "Отказ", count: 0, items: [] },
-];
+type DealStage = { id: string; name: string; color: string; order: number; isWon: boolean; isLost: boolean };
+type DealSummary = {
+  id: string; title: string; name: string | null; phone: string | null; email: string | null;
+  amount: number | null; currency: string | null; stageId: string; assignedUserId: string | null;
+  assignedUserName: string | null; source: string; createdAt: string; updatedAt: string;
+  customFields: Record<string, string | null>;
+};
+type DealActivityItem = { id: string; kind: string; text: string; authorName: string | null; createdAt: string };
+type DealTaskItem = { id: string; title: string; dueDate: string | null; completedAt: string | null; createdAt: string };
+type DealDetail = DealSummary & { dialogId: string | null; activities: DealActivityItem[]; tasks: DealTaskItem[] };
+type CustomFieldDef = { id: string; key: string; label: string; type: string; options?: string[] };
+type TeamMember = { id: string; name: string | null; email: string };
+type Board = { stages: DealStage[]; deals: DealSummary[] };
 
-function CRM() {
-  return <div className="crm-page"><div className="crm-toolbar"><div className="search-field"><Search /><input placeholder="Поиск по сделкам" /></div><button className="filter-button"><ListFilter /> Фильтры</button><Button className="primary-action"><Plus />Новая сделка</Button></div><div className="kanban">{columns.map((col, ci) => <section className="kanban-col" key={col.name}><div className="kanban-head"><span><i className={`col-dot c${ci}`} />{col.name}</span><b>{col.count}</b><button><MoreHorizontal /></button></div><div className="kanban-stack">{col.items.map(item => <article className="deal-card" key={item[0]}><div><span className="deal-avatar">{item[0][0]}</span><StatusPill tone={ci === 2 ? "green" : ci === 3 ? "gray" : "blue"}>{ci === 0 ? "Новая" : col.name}</StatusPill></div><h3>{item[0]}</h3><p>{item[1]}</p><small>{item[2]}</small><div className="deal-foot"><span><MessageSquareText /> Диалог</span><button><ArrowRight /></button></div></article>)}{col.items.length === 0 && <div className="drop-empty">Перетащите сделку сюда</div>}<button className="add-deal"><Plus /> Добавить</button></div></section>)}</div></div>;
+function fmtDealDate(iso: string): string {
+  return new Date(iso).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+function initialOfName(name: string | null | undefined): string {
+  return (name || "?").trim().charAt(0).toUpperCase() || "?";
+}
+
+function CRM({ me, dealToOpen, onDealOpened }: { me: CabinetMe; dealToOpen: string | null; onDealOpened: () => void }) {
+  const [board, setBoard] = useState<Board | null>(null);
+  const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [openDeal, setOpenDeal] = useState<DealDetail | null>(null);
+  const [search, setSearch] = useState("");
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+  const canSeeAllDeals = me?.companyRole === "owner" || me?.companyRole === "manager";
+
+  const loadBoard = () => fetchJsonWithRetry<Board>("/api/cabinet/deals").then((data) => data && setBoard(data));
+
+  useEffect(() => {
+    loadBoard();
+    fetchJsonWithRetry<CustomFieldDef[]>("/api/cabinet/deals/custom-fields/list").then((data) => setCustomFieldDefs(data ?? []));
+    if (canSeeAllDeals) fetchJsonWithRetry<TeamMember[]>("/api/cabinet/team").then((data) => setTeamMembers(data ?? []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const openDealById = (id: string) => {
+    fetch(`/api/cabinet/deals/${id}`).then((r) => (r.ok ? r.json() : null)).then((data) => data && setOpenDeal(data));
+  };
+
+  // "Открыть лид" (Диалоги) hands off a dealId through shared state instead
+  // of a full page navigation (the two used to be separate apps — crm.html
+  // was a standalone static page — so this went through window.location.href
+  // + a ?deal= query param the static page read on load; now that CRM lives
+  // in the same React tree, it's just a normal cross-view prop).
+  useEffect(() => {
+    if (dealToOpen) { openDealById(dealToOpen); onDealOpened(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealToOpen]);
+
+  const moveDealToStage = (dealId: string, stageId: string) => {
+    fetch(`/api/cabinet/deals/${dealId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stageId }) })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((updated) => { loadBoard(); if (openDeal?.id === dealId) setOpenDeal(updated); })
+      .catch(() => loadBoard());
+  };
+
+  const createDeal = () => {
+    const title = window.prompt("Название новой сделки:");
+    if (!title) return;
+    fetch("/api/cabinet/deals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) })
+      .then((r) => { if (r.ok) loadBoard(); });
+  };
+
+  const visibleDeals = (board?.deals ?? []).filter((d) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [d.title, d.name, d.phone, d.email].filter(Boolean).some((v) => (v as string).toLowerCase().includes(q));
+  });
+
+  return <div className="crm-page">
+    <div className="crm-toolbar">
+      <div className="search-field"><Search /><input placeholder="Поиск по сделкам" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+      <button className="filter-button"><ListFilter /> Фильтры</button>
+      <Button className="primary-action" onClick={createDeal}><Plus />Новая сделка</Button>
+    </div>
+    {!board ? <div className="dialogs-empty-conv">Загружаю…</div> : <div className="kanban kanban-dynamic">
+      {board.stages.map((stage) => {
+        const dealsInStage = visibleDeals.filter((d) => d.stageId === stage.id);
+        return <section className={`kanban-col ${dragOverStage === stage.id ? "drag-over" : ""}`} key={stage.id}
+          onDragOver={(e) => { e.preventDefault(); setDragOverStage(stage.id); }}
+          onDragLeave={() => setDragOverStage((s) => (s === stage.id ? null : s))}
+          onDrop={(e) => { e.preventDefault(); setDragOverStage(null); if (draggingId) moveDealToStage(draggingId, stage.id); }}>
+          <div className="kanban-head"><span><i className="col-dot" style={{ background: stage.color }} />{stage.name}</span><b>{dealsInStage.length}</b></div>
+          <div className="kanban-stack">
+            {dealsInStage.map((deal) => <article className={`deal-card ${draggingId === deal.id ? "dragging" : ""}`} key={deal.id}
+              draggable
+              onDragStart={() => setDraggingId(deal.id)}
+              onDragEnd={() => setDraggingId(null)}
+              onClick={() => openDealById(deal.id)}>
+              <div><span className="deal-avatar">{initialOfName(deal.name || deal.title)}</span>{deal.assignedUserName && <StatusPill tone="blue">{deal.assignedUserName}</StatusPill>}</div>
+              <h3>{deal.title}</h3>
+              <p>{[deal.name, deal.phone].filter(Boolean).join(" · ") || "—"}</p>
+              <small>{fmtDealDate(deal.createdAt)}</small>
+              <div className="deal-foot"><span>{deal.amount ? `${deal.amount.toLocaleString("ru-RU")} ${deal.currency || ""}` : ""}</span></div>
+            </article>)}
+            {dealsInStage.length === 0 && <div className="drop-empty">Перетащите сделку сюда</div>}
+          </div>
+        </section>;
+      })}
+    </div>}
+    {openDeal && <DealPanel
+      deal={openDeal}
+      stages={board?.stages ?? []}
+      customFieldDefs={customFieldDefs}
+      teamMembers={teamMembers}
+      canReassign={canSeeAllDeals}
+      onClose={() => { setOpenDeal(null); loadBoard(); }}
+      onChanged={(updated) => { setOpenDeal(updated); loadBoard(); }}
+    />}
+  </div>;
+}
+
+// Deal detail panel — no reference equivalent at all (the prototype's own
+// CRM() is static demo cards with no drawer/panel concept). Left column is
+// static (client card, stage, fields) — glance-and-forget info that rarely
+// changes mid-session; right column is a live timeline: open tasks (with a
+// real checkbox — completing one is its own action, not just a note) pinned
+// above the chronological notes/history feed, matching how the owner
+// actually described wanting it read: "слева статичная информация, справа
+// таймлайн — задачи, заметки".
+function DealPanel({ deal, stages, customFieldDefs, teamMembers, canReassign, onClose, onChanged }: {
+  deal: DealDetail;
+  stages: DealStage[];
+  customFieldDefs: CustomFieldDef[];
+  teamMembers: TeamMember[];
+  canReassign: boolean;
+  onClose: () => void;
+  onChanged: (updated: DealDetail) => void;
+}) {
+  const [name, setName] = useState(deal.name || "");
+  const [phone, setPhone] = useState(deal.phone || "");
+  const [email, setEmail] = useState(deal.email || "");
+  const [title, setTitle] = useState(deal.title);
+  const [amount, setAmount] = useState(deal.amount != null ? String(deal.amount) : "");
+  const [assigneeId, setAssigneeId] = useState(deal.assignedUserId || "");
+  const [customFields, setCustomFields] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const f of customFieldDefs) initial[f.key] = deal.customFields[f.key] || "";
+    return initial;
+  });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMessages, setDialogMessages] = useState<Array<{ id: string; role: string; content: string }> | null>(null);
+
+  // Re-sync every local field whenever a DIFFERENT deal is opened (new id) —
+  // without the id check, moving stage from the pills below (which re-fetches
+  // and passes the SAME deal back in via onChanged) would blow away whatever
+  // the owner was mid-typing in the title/amount/name fields.
+  const dealIdRef = useRef(deal.id);
+  useEffect(() => {
+    if (dealIdRef.current === deal.id) return;
+    dealIdRef.current = deal.id;
+    setName(deal.name || ""); setPhone(deal.phone || ""); setEmail(deal.email || "");
+    setTitle(deal.title); setAmount(deal.amount != null ? String(deal.amount) : ""); setAssigneeId(deal.assignedUserId || "");
+    const initial: Record<string, string> = {};
+    for (const f of customFieldDefs) initial[f.key] = deal.customFields[f.key] || "";
+    setCustomFields(initial);
+    setDialogOpen(false); setDialogMessages(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deal.id]);
+
+  const save = () => {
+    setSaving(true); setSaveError(null);
+    const body: Record<string, unknown> = { title, name, phone, email, amount: amount ? Number(amount) : null, customFields };
+    if (canReassign) body.assignedUserId = assigneeId || null;
+    fetch(`/api/cabinet/deals/${deal.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then((r) => (r.ok ? r.json() : r.json().then((d) => Promise.reject(new Error(d.message)))))
+      .then((updated) => onChanged(updated))
+      .catch((err) => setSaveError(err.message || "Ошибка сохранения"))
+      .finally(() => setSaving(false));
+  };
+
+  const moveStage = (stageId: string) => {
+    if (stageId === deal.stageId) return;
+    fetch(`/api/cabinet/deals/${deal.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stageId }) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((updated) => updated && onChanged(updated));
+  };
+
+  const addNote = () => {
+    if (!noteText.trim()) return;
+    fetch(`/api/cabinet/deals/${deal.id}/activities`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: noteText.trim() }) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((updated) => { if (updated) { onChanged(updated); setNoteText(""); } });
+  };
+
+  const addTask = () => {
+    if (!taskTitle.trim()) return;
+    fetch(`/api/cabinet/deals/${deal.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: taskTitle.trim(), dueDate: taskDueDate || undefined }) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((updated) => { if (updated) { onChanged(updated); setTaskTitle(""); setTaskDueDate(""); } });
+  };
+
+  const toggleTask = (taskId: string, completed: boolean) => {
+    fetch(`/api/cabinet/deals/${deal.id}/tasks/${taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ completed }) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((updated) => updated && onChanged(updated));
+  };
+
+  const toggleDialogThread = () => {
+    if (dialogOpen) { setDialogOpen(false); return; }
+    setDialogOpen(true);
+    if (!dialogMessages && deal.dialogId) {
+      fetchJsonWithRetry<{ messages: Array<{ id: string; role: string; content: string }> }>(`/api/cabinet/dialogs/${deal.dialogId}`)
+        .then((data) => setDialogMessages(data?.messages ?? []));
+    }
+  };
+
+  const telHref = "tel:" + (deal.phone || "").replace(/[^+\d]/g, "");
+  const openTasks = deal.tasks.filter((t) => !t.completedAt);
+  const doneTasks = deal.tasks.filter((t) => t.completedAt);
+
+  return <div className="crm-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="crm-panel">
+      <div className="crm-panel-header">
+        <button type="button" className="crm-panel-close" onClick={onClose}><X /></button>
+        <div><h2 className="crm-panel-title">{deal.title}</h2><small>Создано {fmtDealDate(deal.createdAt)}</small></div>
+      </div>
+      <div className="crm-panel-body">
+        <div className="crm-panel-static">
+          <div className="crm-client-card">
+            <div className="crm-client-avatar">{initialOfName(name)}</div>
+            <div className="crm-client-fields">
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя клиента" />
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Телефон" />
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+            </div>
+            {deal.phone && <a className="crm-client-call" href={telHref}><Phone size={16} color="#fff" /></a>}
+          </div>
+          <div className="crm-stage-pills">
+            {stages.map((s) => <button type="button" key={s.id} className={`crm-stage-pill ${s.id === deal.stageId ? "active" : ""}`} style={s.id === deal.stageId ? { background: s.color } : undefined} onClick={() => moveStage(s.id)}>
+              <span className="crm-stage-pill-dot" style={{ background: s.id === deal.stageId ? "rgba(255,255,255,.85)" : s.color }} />{s.name}
+            </button>)}
+          </div>
+          <div className="crm-field-row"><label>Название сделки</label><input value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+          <div className="crm-field-row"><label>Сумма</label><input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+          {canReassign && <div className="crm-field-row"><label>Ответственный</label><select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+            <option value="">Не назначено</option>
+            {teamMembers.map((u) => <option value={u.id} key={u.id}>{u.name || u.email}</option>)}
+          </select></div>}
+          {customFieldDefs.map((f) => <div className="crm-field-row" key={f.key}><label>{f.label}</label>
+            {f.type === "textarea"
+              ? <textarea rows={3} value={customFields[f.key] || ""} onChange={(e) => setCustomFields((cf) => ({ ...cf, [f.key]: e.target.value }))} />
+              : <input type={f.type === "number" ? "number" : f.type === "date" ? "date" : f.type === "phone" ? "tel" : f.type === "email" ? "email" : "text"} value={customFields[f.key] || ""} onChange={(e) => setCustomFields((cf) => ({ ...cf, [f.key]: e.target.value }))} />}
+          </div>)}
+          <Button className="primary-action" disabled={saving} onClick={save}>{saving ? "Сохраняю…" : "Сохранить"}</Button>
+          {saveError && <small style={{ color: "#d54848", display: "block", marginTop: 6 }}>{saveError}</small>}
+        </div>
+        <div className="crm-panel-timeline">
+          <div className="deal-task-add">
+            <input placeholder="Новая задача" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
+            <input type="date" value={taskDueDate} onChange={(e) => setTaskDueDate(e.target.value)} style={{ maxWidth: 140 }} />
+            <Button variant="outline" onClick={addTask}>Добавить</Button>
+          </div>
+          {openTasks.length > 0 && <div className="deal-tasks">
+            {openTasks.map((t) => <label className="deal-task" key={t.id}>
+              <input type="checkbox" checked={false} onChange={() => toggleTask(t.id, true)} />
+              <span><span className="deal-task-title">{t.title}</span>{t.dueDate && <span className="deal-task-due"> · до {fmtDealDate(t.dueDate)}</span>}</span>
+            </label>)}
+          </div>}
+          {doneTasks.length > 0 && <div className="deal-tasks">
+            {doneTasks.map((t) => <label className="deal-task done" key={t.id}>
+              <input type="checkbox" checked={true} onChange={() => toggleTask(t.id, false)} />
+              <span className="deal-task-title">{t.title}</span>
+            </label>)}
+          </div>}
+          <div className="crm-field-row"><label>Добавить заметку</label><textarea rows={2} value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+            <Button variant="outline" style={{ marginTop: 6 }} onClick={addNote}>Добавить</Button>
+          </div>
+          <div className="deal-timeline">
+            {deal.activities.length === 0 ? <p className="empty">Пока нет записей.</p> : deal.activities.map((a) => <div className={`deal-timeline-item ${a.kind !== "note" ? "system" : ""}`} key={a.id}>
+              {a.text}
+              <div className="meta">{a.authorName ? `${a.authorName} · ` : ""}{fmtDealDate(a.createdAt)}</div>
+            </div>)}
+          </div>
+          {deal.dialogId && <>
+            <button type="button" className="crm-dialog-toggle" onClick={toggleDialogThread}>{dialogOpen ? "Скрыть переписку" : "Показать переписку"}</button>
+            {dialogOpen && <div className="crm-dialog-thread">
+              {!dialogMessages ? "Загрузка…" : dialogMessages.map((m) => <div className={`crm-dialog-msg ${m.role === "assistant" ? "support" : "client"}`} key={m.id}>{m.content}</div>)}
+            </div>}
+          </>}
+        </div>
+      </div>
+    </div>
+  </div>;
 }
 
 type CheckoutChoice = { name: string; detail: string; total: number };
@@ -778,10 +1068,10 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
   return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isBot ? <div className="prototype-options"><button className="active"><span className="bot-dot"><Bot/></span><p><b>Бани — ИИ-консультант</b><small>Работает · i-viking.ru</small></p><Check/></button><button><span className="bot-dot"><Bot/></span><p><b>Квадро Хаус</b><small>Черновик · не установлен</small></p><ArrowRight/></button><button><Plus/><p><b>Создать нового бота</b><small>Отдельная база знаний и аналитика</small></p><ArrowRight/></button></div> : isProfile ? <div className="prototype-form"><label><span>Имя</span><input defaultValue="Олег"/></label><label><span>Email</span><input defaultValue="oleg@example.ru"/></label><div className="switch-row"><div><Bell/><span><b>Еженедельный отчёт</b><small>По понедельникам на почту</small></span></div><Switch defaultChecked/></div></div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : isConnection ? <div className="prototype-form"><div className="prototype-steps"><span className="done"><Check/></span><p><b>Выберите сервис</b><small>Telegram, Bitrix24 или amoCRM</small></p><span>2</span><p><b>Разрешите доступ</b><small>Только к заявкам и нужным полям</small></p><span>3</span><p><b>Проверьте тестовую передачу</b><small>Покажем результат до включения</small></p></div></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && !isBot && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
 }
 
-function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, period, changePeriod }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void }) {
+function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, period, changePeriod, crmDealToOpen, setCrmDealToOpen }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs />, training: <Training me={me} />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM />, billing: <Billing/>, team: <Team />, support: <Support />,
-  }), [setView, onAction, analytics, refetchAnalytics, me, period, changePeriod]);
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} />, training: <Training me={me} />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
+  }), [setView, onAction, analytics, refetchAnalytics, me, period, changePeriod, crmDealToOpen, setCrmDealToOpen]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
 
@@ -813,6 +1103,9 @@ function NavMenuItem({ item, view, setView, badge }: { item: { id: View; label: 
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
   const [action, setAction] = useState<string | null>(null);
+  // "Открыть лид" (Диалоги) -> CRM's deal panel — a cross-view handoff, so it
+  // lives up here alongside view/setView rather than inside either page.
+  const [crmDealToOpen, setCrmDealToOpen] = useState<string | null>(null);
   const { me, analytics, refetchAnalytics, signedOut, period, changePeriod } = useCabinetData();
   if (signedOut) {
     return <div className="dialogs-empty-conv" style={{ padding: 40 }}>Сессия не найдена, перенаправляю на вход…</div>;
@@ -832,5 +1125,5 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} period={period} changePeriod={changePeriod}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
 }
