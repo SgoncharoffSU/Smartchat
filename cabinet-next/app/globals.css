@@ -124,6 +124,13 @@
    onto a second row instead of scrolling — .kanban itself is left untouched,
    this is layered on top via .kanban-dynamic. */
 .kanban.kanban-dynamic{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(220px,1fr)}
+/* Vendored .kanban-head is grid-template-columns:1fr 22px 26px — a 3rd
+   column for the reference's own "..." menu button, which this real column
+   header has no equivalent for (no real per-stage menu action exists yet).
+   Left as 3 columns, our 2 real children (name, count) left the count badge
+   stranded in the MIDDLE track instead of flush-right (found by code
+   review) — overridden to the 2 columns we actually use. */
+.kanban-head.kanban-head-2col{grid-template-columns:1fr 26px}
 .kanban-col.drag-over{background:var(--accent)}
 .kanban-col{max-height:calc(100vh - 260px);display:flex;flex-direction:column}
 .kanban-stack{flex:1;overflow-y:auto}

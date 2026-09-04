@@ -767,12 +767,22 @@ function CRM({ me, dealToOpen, onDealOpened }: { me: CabinetMe; dealToOpen: stri
   useEffect(() => {
     loadBoard();
     fetchJsonWithRetry<CustomFieldDef[]>("/api/cabinet/deals/custom-fields/list").then((data) => setCustomFieldDefs(data ?? []));
-    if (canSeeAllDeals) fetchJsonWithRetry<TeamMember[]>("/api/cabinet/team").then((data) => setTeamMembers(data ?? []));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Separate effect keyed on canSeeAllDeals itself, not folded into the
+  // mount-only effect above — `me` (and so canSeeAllDeals) is still null on
+  // the very first render, loading in via its own retried fetch elsewhere;
+  // an effect that only checked canSeeAllDeals once at mount would find it
+  // false at that instant and never re-fetch once `me` actually populates,
+  // leaving the "Ответственный" dropdown permanently stuck on "Не назначено"
+  // for an owner/manager who opened CRM before /api/cabinet/me resolved.
+  useEffect(() => {
+    if (canSeeAllDeals) fetchJsonWithRetry<TeamMember[]>("/api/cabinet/team").then((data) => setTeamMembers(data ?? []));
+  }, [canSeeAllDeals]);
+
   const openDealById = (id: string) => {
-    fetch(`/api/cabinet/deals/${id}`).then((r) => (r.ok ? r.json() : null)).then((data) => data && setOpenDeal(data));
+    fetchJsonWithRetry<DealDetail>(`/api/cabinet/deals/${id}`).then((data) => data && setOpenDeal(data));
   };
 
   // "Открыть лид" (Диалоги) hands off a dealId through shared state instead
@@ -818,7 +828,7 @@ function CRM({ me, dealToOpen, onDealOpened }: { me: CabinetMe; dealToOpen: stri
           onDragOver={(e) => { e.preventDefault(); setDragOverStage(stage.id); }}
           onDragLeave={() => setDragOverStage((s) => (s === stage.id ? null : s))}
           onDrop={(e) => { e.preventDefault(); setDragOverStage(null); if (draggingId) moveDealToStage(draggingId, stage.id); }}>
-          <div className="kanban-head"><span><i className="col-dot" style={{ background: stage.color }} />{stage.name}</span><b>{dealsInStage.length}</b></div>
+          <div className="kanban-head kanban-head-2col"><span><i className="col-dot" style={{ background: stage.color }} />{stage.name}</span><b>{dealsInStage.length}</b></div>
           <div className="kanban-stack">
             {dealsInStage.map((deal) => <article className={`deal-card ${draggingId === deal.id ? "dragging" : ""}`} key={deal.id}
               draggable
@@ -912,31 +922,45 @@ function DealPanel({ deal, stages, customFieldDefs, teamMembers, canReassign, on
       .finally(() => setSaving(false));
   };
 
+  // Every action below shares save()'s own saveError surface — none of them
+  // had ANY error handling before (found by code review): a failed fetch or
+  // a non-ok response (e.g. the deal's visibility changed in another session
+  // while this panel was open, so assertDealVisible/assertCanEdit now 404s/
+  // 403s) just silently did nothing, looking exactly like success while sibling
+  // save() already showed a real error for the identical failure class.
+  const reportActionFailure = (action: string) => (err: unknown) => {
+    setSaveError(err instanceof Error && err.message ? err.message : `Не получилось: ${action}`);
+  };
+
   const moveStage = (stageId: string) => {
     if (stageId === deal.stageId) return;
     fetch(`/api/cabinet/deals/${deal.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stageId }) })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((updated) => updated && onChanged(updated));
+      .then((r) => (r.ok ? r.json() : r.json().then((d) => Promise.reject(new Error(d.message)))))
+      .then((updated) => onChanged(updated))
+      .catch(reportActionFailure("сменить стадию"));
   };
 
   const addNote = () => {
     if (!noteText.trim()) return;
     fetch(`/api/cabinet/deals/${deal.id}/activities`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: noteText.trim() }) })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((updated) => { if (updated) { onChanged(updated); setNoteText(""); } });
+      .then((r) => (r.ok ? r.json() : r.json().then((d) => Promise.reject(new Error(d.message)))))
+      .then((updated) => { onChanged(updated); setNoteText(""); })
+      .catch(reportActionFailure("добавить заметку"));
   };
 
   const addTask = () => {
     if (!taskTitle.trim()) return;
     fetch(`/api/cabinet/deals/${deal.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: taskTitle.trim(), dueDate: taskDueDate || undefined }) })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((updated) => { if (updated) { onChanged(updated); setTaskTitle(""); setTaskDueDate(""); } });
+      .then((r) => (r.ok ? r.json() : r.json().then((d) => Promise.reject(new Error(d.message)))))
+      .then((updated) => { onChanged(updated); setTaskTitle(""); setTaskDueDate(""); })
+      .catch(reportActionFailure("добавить задачу"));
   };
 
   const toggleTask = (taskId: string, completed: boolean) => {
     fetch(`/api/cabinet/deals/${deal.id}/tasks/${taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ completed }) })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((updated) => updated && onChanged(updated));
+      .then((r) => (r.ok ? r.json() : r.json().then((d) => Promise.reject(new Error(d.message)))))
+      .then((updated) => onChanged(updated))
+      .catch(reportActionFailure(completed ? "отметить задачу выполненной" : "вернуть задачу"));
   };
 
   const toggleDialogThread = () => {
@@ -989,6 +1013,7 @@ function DealPanel({ deal, stages, customFieldDefs, teamMembers, canReassign, on
           {saveError && <small style={{ color: "#d54848", display: "block", marginTop: 6 }}>{saveError}</small>}
         </div>
         <div className="crm-panel-timeline">
+          {saveError && <small style={{ color: "#d54848" }}>{saveError}</small>}
           <div className="deal-task-add">
             <input placeholder="Новая задача" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
             <input type="date" value={taskDueDate} onChange={(e) => setTaskDueDate(e.target.value)} style={{ maxWidth: 140 }} />

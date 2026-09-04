@@ -265,11 +265,18 @@ export class DealsService {
     if (dueDate && (!parsedDueDate || Number.isNaN(parsedDueDate.getTime()))) {
       throw new BadRequestException('Некорректная дата');
     }
-    const task = await this.prisma.dealTask.create({
-      data: { dealId, title: title.trim(), dueDate: parsedDueDate, createdByUserId: userId },
-    });
-    await this.prisma.dealActivity.create({
-      data: { dealId, authorUserId: userId, kind: 'task_created', text: `Поставлена задача: ${task.title}` },
+    // $transaction, not two sequential awaits — a crash or dropped connection
+    // between the two used to be able to create the task with no matching
+    // feed line (or the reverse), which is exactly the "task list and the
+    // notes/history feed silently disagree" scenario this feature's own
+    // docstring above says it prevents (found by code review).
+    await this.prisma.$transaction(async (tx) => {
+      const task = await tx.dealTask.create({
+        data: { dealId, title: title.trim(), dueDate: parsedDueDate, createdByUserId: userId },
+      });
+      await tx.dealActivity.create({
+        data: { dealId, authorUserId: userId, kind: 'task_created', text: `Поставлена задача: ${task.title}` },
+      });
     });
     return this.getDeal(companyId, dealId, userId, companyRole);
   }
@@ -283,12 +290,17 @@ export class DealsService {
     // with stale props, shouldn't log "выполнена" twice.
     const alreadyInState = completed ? !!task.completedAt : !task.completedAt;
     if (!alreadyInState) {
-      await this.prisma.dealTask.update({ where: { id: taskId }, data: { completedAt: completed ? new Date() : null } });
-      if (completed) {
-        await this.prisma.dealActivity.create({
-          data: { dealId, authorUserId: userId, kind: 'task_completed', text: `Задача выполнена: ${task.title}` },
-        });
-      }
+      // Same reasoning as createTask above — one $transaction, not two
+      // sequential awaits, so the checkbox and the feed line can't drift
+      // apart on a crash between them.
+      await this.prisma.$transaction(async (tx) => {
+        await tx.dealTask.update({ where: { id: taskId }, data: { completedAt: completed ? new Date() : null } });
+        if (completed) {
+          await tx.dealActivity.create({
+            data: { dealId, authorUserId: userId, kind: 'task_completed', text: `Задача выполнена: ${task.title}` },
+          });
+        }
+      });
     }
     return this.getDeal(companyId, dealId, userId, companyRole);
   }
