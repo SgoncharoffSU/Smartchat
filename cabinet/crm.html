@@ -606,6 +606,14 @@
       teamMembers = results[1] || [];
       return loadBoard();
     })
+    .then(function () {
+      // "Открыть лид" (cabinet-next's Диалоги) links here with ?deal=<id> —
+      // renderDealPanel needs customFieldDefs/teamMembers already loaded
+      // above, so this only runs once the board itself has rendered, not
+      // read as a page-load-time param before that.
+      var dealId = new URLSearchParams(location.search).get('deal');
+      if (dealId) openDeal(dealId);
+    })
     .catch(function () {});
 </script>
 </body>

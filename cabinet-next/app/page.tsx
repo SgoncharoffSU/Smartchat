@@ -500,6 +500,7 @@ type DialogListItem = {
   lastMessagePreview: string | null;
   hasUnansweredEscalation: boolean;
   lead: { name: string | null; phone: string | null; email: string | null } | null;
+  dealId: string | null;
   dealTitle: string | null;
 };
 type DialogDetail = {
@@ -616,7 +617,7 @@ function Dialogs() {
           <div className="conversation-title"><b>{active.lead?.name || active.botName || "Диалог"}</b><span><i /> {active.botName} · {fmtDialogDate(active.updatedAt)}</span></div>
           <div>{active.hasUnansweredEscalation ? <StatusPill tone="orange">Ждёт ответа</StatusPill> : active.lead ? <StatusPill>Заявка получена</StatusPill> : null}<button className="icon-button"><MoreHorizontal /></button></div>
         </div>
-        {active.dealTitle && <div className="conversation-context"><span><Globe2 /></span><p><b>Сделка в CRM: {active.dealTitle}</b><small>{active.lead?.name || active.lead?.phone || active.lead?.email || ""}</small></p><button onClick={() => { window.location.href = "/cabinet/crm.html"; }}>Открыть в CRM <ExternalLink /></button></div>}
+        {active.dealTitle && <div className="conversation-context"><span><Globe2 /></span><p><b>Сделка в CRM: {active.dealTitle}</b><small>{active.lead?.name || active.lead?.phone || active.lead?.email || ""}</small></p><button onClick={() => { window.location.href = active.dealId ? `/cabinet/crm.html?deal=${active.dealId}` : "/cabinet/crm.html"; }}>Открыть в CRM <ExternalLink /></button></div>}
         <div className="messages">
           {!conversation ? <div className="dialogs-empty-conv">Загружаю…</div> : conversation.messages.map((m) => (
             <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} key={m.id}>
@@ -629,7 +630,7 @@ function Dialogs() {
           <div><ClipboardCheck /><span><b>AI-резюме</b>
             <small>{summary ?? (summaryLoading ? "Готовлю резюме…" : "Резюме недоступно.")}</small>
           </span></div>
-          {(active.lead || active.dealTitle) && <Button variant="outline" onClick={() => { window.location.href = "/cabinet/crm.html"; }}>Открыть лид <ArrowRight /></Button>}
+          {(active.lead || active.dealTitle) && <Button variant="outline" onClick={() => { window.location.href = active.dealId ? `/cabinet/crm.html?deal=${active.dealId}` : "/cabinet/crm.html"; }}>Открыть лид <ArrowRight /></Button>}
         </div>
       </>}
     </section>
