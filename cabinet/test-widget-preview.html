@@ -12,13 +12,14 @@
      own HERO_FLOATING_Z_INDEX/launcher constants) so it stays reachable
      regardless of which mode the widget is currently rendering in. Top-right:
      chat-ui's own header (widget/chat-ui/index.html) puts the bot avatar and
-     name flush left with nothing on the right, so this is the one corner
-     that never sits on top of them once the chat fills the whole preview
-     (data-force-fullscreen); in the normal floating-panel mode the small
-     panel docks bottom-right, well clear of this page-level top-right corner
-     either way. */
+     name flush left with nothing on the right, so this is the side that never
+     sits on top of them once the chat fills the whole preview
+     (data-force-fullscreen). Offset by 46px from the edge (not flush right:
+     10px) to clear widget.js's own real "✕" close circle — mobileCloseBtn,
+     36px, also fixed top:10/right:10 in mobile/fullscreen mode — which this
+     button would otherwise sit directly on top of and make unclickable. */
   #scResetBtn {
-    position: fixed; top: 10px; right: 10px; z-index: 2147483647;
+    position: fixed; top: 10px; right: 56px; z-index: 2147483647;
     border: 1px solid rgba(0,0,0,.12); background: rgba(255,255,255,.92);
     color: #333; font: 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     padding: 7px 12px; border-radius: 999px; cursor: pointer;
