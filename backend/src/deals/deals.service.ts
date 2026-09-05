@@ -63,7 +63,17 @@ export class DealsService {
     const pipeline = await getOrCreateDefaultPipeline(this.prisma, companyId);
     const deals = await this.prisma.deal.findMany({
       where: this.dealVisibilityWhere(companyId, userId, companyRole),
-      include: { customFieldValues: { include: { field: true } }, assignedUser: true },
+      include: {
+        customFieldValues: { include: { field: true } },
+        assignedUser: true,
+        // Just enough to show "a task is set" + its due date on the card
+        // itself, without pulling every task for every deal on the board —
+        // take:1 (soonest due date first) for the preview, a separate
+        // _count for the real total so the badge (see shapeDeal below) isn't
+        // stuck at "1" once a deal has more than one open task.
+        tasks: { where: { completedAt: null }, orderBy: { dueDate: 'asc' }, take: 1 },
+        _count: { select: { tasks: { where: { completedAt: null } } } },
+      },
       orderBy: { createdAt: 'desc' },
     });
     return {
@@ -111,6 +121,29 @@ export class DealsService {
   private shapeDeal(d: any) {
     const customFields: Record<string, string | null> = {};
     for (const v of d.customFieldValues ?? []) customFields[v.field.key] = v.value;
+    // Computed from d.tasks itself rather than trusted to already be "the
+    // soonest-due open task" at d.tasks[0] — getBoard's own include DOES
+    // sort that way before capping to 1, but getDeal's include sorts by
+    // completedAt/createdAt instead (right for ITS OWN "open tasks first in
+    // the full list" use), so trusting a shared [0] here silently picked
+    // the wrong "next" task depending on which caller ran the query (found
+    // in review — latent, since nothing consumed getDeal's copy of this
+    // yet). Re-deriving it here means shapeDeal never depends on the
+    // caller's own query ordering at all.
+    const openTasks = Array.isArray(d.tasks) ? d.tasks.filter((t: any) => !t.completedAt) : [];
+    // openTaskCount prefers the real _count (getBoard's own include has one)
+    // — getDeal doesn't fetch that aggregate, but its own `tasks` include IS
+    // the complete, uncapped list, so openTasks.length is exactly as
+    // accurate there; getBoard's own `tasks` is capped to 1 (just the
+    // soonest-due preview), which is why it needs the separate _count to
+    // not undercount.
+    const openTaskCount = d._count?.tasks ?? openTasks.length;
+    const nextOpenTask = [...openTasks].sort((a: any, b: any) => {
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    })[0];
     return {
       id: d.id,
       title: d.title,
@@ -126,6 +159,12 @@ export class DealsService {
       createdAt: d.createdAt,
       updatedAt: d.updatedAt,
       customFields,
+      // Shown as a small badge on the card itself (see cabinet-next's
+      // deal-card) — "a task is set" was previously only visible after
+      // opening the deal (found live: "на карточке лида должно быть видно,
+      // что поставлена задача").
+      openTaskCount,
+      nextTaskDueDate: nextOpenTask?.dueDate ?? null,
     };
   }
 

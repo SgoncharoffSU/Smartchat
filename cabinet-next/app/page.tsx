@@ -29,7 +29,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 
-type View = "dashboard" | "readiness" | "attention" | "dialogs" | "training" | "tests" | "knowledge" | "widget" | "install" | "integrations" | "leads" | "crm" | "billing" | "team" | "support";
+type View = "dashboard" | "readiness" | "attention" | "dialogs" | "training" | "tests" | "knowledge" | "widget" | "install" | "integrations" | "crm" | "billing" | "team" | "support";
 
 // Real data from our existing NestJS API (same origin as this app, so the
 // browser's own smartchat_cabinet_session cookie is sent automatically — no
@@ -212,7 +212,6 @@ const nav = [
     { id: "integrations" as View, label: "Интеграции", icon: Workflow },
   ]},
   { label: "Продажи", items: [
-    { id: "leads" as View, label: "Лиды", icon: Inbox, badge: "7" },
     { id: "crm" as View, label: "CRM", icon: Target },
   ]},
   { label: "Аккаунт", items: [
@@ -233,7 +232,6 @@ const titles: Record<View, { title: string; desc: string }> = {
   widget: { title: "Виджет и приветствие", desc: "Внешний вид, голос и первый контакт с посетителем" },
   install: { title: "Установка", desc: "Подключите готового бота к сайту" },
   integrations: { title: "Интеграции", desc: "Заявки и уведомления в сервисах вашей команды" },
-  leads: { title: "Лиды", desc: "Контакты, потребность и следующий шаг без чтения всего диалога" },
   crm: { title: "CRM", desc: "Заявки от первого контакта до результата" },
   billing: { title: "Тариф и оплата", desc: "Выберите удобную модель оплаты и управляйте расходами" },
   team: { title: "Команда", desc: "Роли сотрудников и доступ к сделкам" },
@@ -1413,24 +1411,18 @@ function Integrations() {
   return <div className="integrations-page"><div style={{ display: "flex", justifyContent: "flex-end" }}><AddIntegrationSheet><Button className="primary-action"><Plus />Добавить интеграцию</Button></AddIntegrationSheet></div><div className="integration-grid"><article className="integration-card featured"><div className="integration-logo telegram"><Send /></div><StatusPill tone={telegram ? "green" : "gray"}>{telegram ? "Подключено" : "Не подключено"}</StatusPill><h3>Telegram</h3><p>Сложные вопросы, новые заявки и возможность быстро подключиться к разговору.</p><Button className="primary-action" data-live onClick={() => setTelegram(!telegram)}>{telegram ? "Открыть настройки" : "Подключить Telegram"}</Button></article><article className="integration-card"><div className="integration-logo bitrix">B24</div><StatusPill tone="gray">Не подключено</StatusPill><h3>Bitrix24</h3><p>Создавайте сделки автоматически и передавайте историю диалога.</p><Button variant="outline">Подключить</Button></article><article className="integration-card"><div className="integration-logo amo">amo</div><StatusPill tone="gray">Не подключено</StatusPill><h3>amoCRM</h3><p>Заявки, этапы воронки и обратная синхронизация статусов.</p><Button variant="outline">Подключить</Button></article></div><section className="panel notification-settings"><div className="panel-head"><div><span className="section-label">Уведомления</span><h2>Что отправлять в Telegram</h2></div></div><div className="switch-row"><div><Target /><span><b>Новые заявки</b><small>Контакт, запрос и ссылка на диалог</small></span></div><Switch checked={leads} onCheckedChange={setLeads} /></div><div className="switch-row"><div><AlertCircle /><span><b>Сложные вопросы</b><small>Когда бот не уверен в ответе</small></span></div><Switch defaultChecked /></div></section></div>;
 }
 
-const leadItems = [
-  { name: "Анна", contact: "+7 ••• •• 41", request: "Ищет баню для семьи из четырёх человек, круглогодичное использование, выбирает 6 или 8 м.", next: "Позвонить и уточнить регион", source: "Яндекс Реклама", status: "Новый", time: "12:41" },
-  { name: "Михаил", contact: "+7 ••• •• 08", request: "Запросил стоимость модели 6 м с доставкой и установкой.", next: "Отправить расчёт", source: "Прямой заход", status: "В работе", time: "10:16" },
-  { name: "Елена", contact: "+7 ••• •• 76", request: "Выбрала модель 6 м, готова согласовать комплектацию и договор.", next: "Подготовить договор", source: "Социальные сети", status: "Успешно", time: "вчера" },
-];
-
-function Leads({ setView }: { setView: (v: View) => void }) {
-  const [status, setStatus] = useState("Все");
-  const visibleLeads = status === "Все" ? leadItems : leadItems.filter(item => item.status === status);
-  return <div className="leads-page"><section className="leads-summary"><article><span className="lead-icon blue"><Inbox /></span><div><small>Всего лидов</small><b>119</b><em>+18 за неделю</em></div></article><article><span className="lead-icon lime"><Flame /></span><div><small>Новые</small><b>7</b><em>Нужна реакция</em></div></article><article><span className="lead-icon violet"><Headphones /></span><div><small>В работе</small><b>84</b><em>70,6% обработано</em></div></article><article><span className="lead-icon green"><Check /></span><div><small>Успешно</small><b>28</b><em>23,5% от всех</em></div></article></section><section className="leads-board"><div className="leads-toolbar"><div className="search-field"><Search /><input placeholder="Имя, контакт или запрос" /></div><div className="filter-chips">{["Все", "Новый", "В работе", "Успешно"].map(item => <button data-live className={status === item ? "active" : ""} onClick={() => setStatus(item)} key={item}>{item}</button>)}</div><button className="filter-button"><ListFilter />Период: неделя</button></div><div className="leads-table"><div className="lead-table-head"><span>Лид</span><span>Что нужно клиенту</span><span>Следующий шаг</span><span>Источник</span><span>Статус</span><span /></div>{visibleLeads.map((lead, index) => <article className="lead-row" key={lead.name}><div className="lead-person"><span className="dialog-avatar">{lead.name[0]}</span><p><b>{lead.name}</b><small>{lead.contact} · {lead.time}</small></p></div><p className="lead-summary-cell"><BrainCircuit /><span>{lead.request}</span></p><p className="next-step"><Clock3 /><span>{lead.next}</span></p><span className="lead-source"><Globe2 />{lead.source}</span><StatusPill tone={lead.status === "Успешно" ? "green" : lead.status === "Новый" ? "orange" : "blue"}>{lead.status}</StatusPill><button className="lead-open" data-live onClick={() => setView(index === 0 ? "dialogs" : "crm")} aria-label={`Открыть лид ${lead.name}`}><ArrowRight /></button></article>)}</div></section><div className="leads-note"><ShieldCheck /><span><b>Демо-данные</b><small>Контакты скрыты. В рабочем кабинете лид открывается вместе с диалогом, источником и полной историей.</small></span></div></div>;
-}
-
 type DealStage = { id: string; name: string; color: string; order: number; isWon: boolean; isLost: boolean };
 type DealSummary = {
   id: string; title: string; name: string | null; phone: string | null; email: string | null;
   amount: number | null; currency: string | null; stageId: string; assignedUserId: string | null;
   assignedUserName: string | null; source: string; createdAt: string; updatedAt: string;
   customFields: Record<string, string | null>;
+  // Real count of OPEN (not completed) tasks + the soonest one's due date —
+  // shown as a small badge on the card/row itself (see DealTaskBadge) so a
+  // set task no longer only shows up after opening the deal (found live:
+  // "на карточке лида должно быть видно, что поставлена задача").
+  openTaskCount: number;
+  nextTaskDueDate: string | null;
 };
 type DealActivityItem = { id: string; kind: string; text: string; authorName: string | null; createdAt: string };
 type DealTaskItem = { id: string; title: string; dueDate: string | null; completedAt: string | null; createdAt: string };
@@ -1442,8 +1434,25 @@ type Board = { stages: DealStage[]; deals: DealSummary[] };
 function fmtDealDate(iso: string): string {
   return new Date(iso).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
+function fmtShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+}
 function initialOfName(name: string | null | undefined): string {
   return (name || "?").trim().charAt(0).toUpperCase() || "?";
+}
+
+// Shared by the kanban card and the new list row — a set task used to be
+// invisible until the deal was actually opened (found live: "на карточке
+// лида должно быть видно, что поставлена задача"). Red once the soonest
+// open task's own due date has passed, same "overdue" signal a real CRM
+// task list would show.
+function DealTaskBadge({ deal }: { deal: DealSummary }) {
+  if (deal.openTaskCount === 0) return null;
+  const overdue = Boolean(deal.nextTaskDueDate && new Date(deal.nextTaskDueDate) < new Date());
+  const extra = deal.openTaskCount > 1 ? ` +${deal.openTaskCount - 1}` : "";
+  return <span className={`deal-task-badge${overdue ? " overdue" : ""}`}>
+    <Clock3 />{deal.nextTaskDueDate ? fmtShortDate(deal.nextTaskDueDate) : "без срока"}{extra}
+  </span>;
 }
 
 function CRM({ me, dealToOpen, onDealOpened }: { me: CabinetMe; dealToOpen: string | null; onDealOpened: () => void }) {
@@ -1454,6 +1463,14 @@ function CRM({ me, dealToOpen, onDealOpened }: { me: CabinetMe; dealToOpen: stri
   const [search, setSearch] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+  // "Добавить интеграцию не работает" was one dead button; this toolbar's
+  // own "Фильтры" was another — a button with no menu behind it at all.
+  // Real filters/sort now, plus a list view alongside the board (found
+  // live: "в CRM добавить фильтры, сортировку и отображение списком").
+  const [viewMode, setViewMode] = useState<"board" | "list">("board");
+  const [stageFilter, setStageFilter] = useState("all");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [sortBy, setSortBy] = useState<"updated" | "created" | "amount_desc" | "amount_asc">("updated");
   const canSeeAllDeals = me?.companyRole === "owner" || me?.companyRole === "manager";
   // Same guard as dialogRequestId/previewRequestId elsewhere in this file —
   // openDealById had none (found by code review): clicking deal A then
@@ -1512,19 +1529,63 @@ function CRM({ me, dealToOpen, onDealOpened }: { me: CabinetMe; dealToOpen: stri
       .then((r) => { if (r.ok) loadBoard(); });
   };
 
-  const visibleDeals = (board?.deals ?? []).filter((d) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return [d.title, d.name, d.phone, d.email].filter(Boolean).some((v) => (v as string).toLowerCase().includes(q));
-  });
+  const visibleDeals = (board?.deals ?? [])
+    .filter((d) => {
+      const q = search.trim().toLowerCase();
+      if (q && ![d.title, d.name, d.phone, d.email].filter(Boolean).some((v) => (v as string).toLowerCase().includes(q))) return false;
+      if (stageFilter !== "all" && d.stageId !== stageFilter) return false;
+      if (assigneeFilter === "unassigned" && d.assignedUserId) return false;
+      if (assigneeFilter !== "all" && assigneeFilter !== "unassigned" && d.assignedUserId !== assigneeFilter) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "amount_desc") return (b.amount ?? 0) - (a.amount ?? 0);
+      if (sortBy === "amount_asc") return (a.amount ?? 0) - (b.amount ?? 0);
+      if (sortBy === "created") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
 
   return <div className="crm-page">
     <div className="crm-toolbar">
       <div className="search-field"><Search /><input placeholder="Поиск по сделкам" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-      <button className="filter-button"><ListFilter /> Фильтры</button>
+      <Select value={stageFilter} onValueChange={setStageFilter}>
+        <SelectTrigger className="filter-button"><SelectValue /></SelectTrigger>
+        <SelectContent><SelectItem value="all">Все стадии</SelectItem>{(board?.stages ?? []).map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+      </Select>
+      {canSeeAllDeals && <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+        <SelectTrigger className="filter-button"><SelectValue /></SelectTrigger>
+        <SelectContent><SelectItem value="all">Все ответственные</SelectItem><SelectItem value="unassigned">Не назначено</SelectItem>{teamMembers.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}</SelectContent>
+      </Select>}
+      <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+        <SelectTrigger className="filter-button"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="updated">Сначала обновлённые</SelectItem>
+          <SelectItem value="created">Сначала новые</SelectItem>
+          <SelectItem value="amount_desc">Сумма: по убыванию</SelectItem>
+          <SelectItem value="amount_asc">Сумма: по возрастанию</SelectItem>
+        </SelectContent>
+      </Select>
+      <div className="filter-chips">
+        <button className={viewMode === "board" ? "active" : ""} onClick={() => setViewMode("board")}>Доска</button>
+        <button className={viewMode === "list" ? "active" : ""} onClick={() => setViewMode("list")}>Список</button>
+      </div>
       <Button className="primary-action" onClick={createDeal}><Plus />Новая сделка</Button>
     </div>
-    {!board ? <div className="dialogs-empty-conv">Загружаю…</div> : <div className="kanban kanban-dynamic">
+    {!board ? <div className="dialogs-empty-conv">Загружаю…</div> : viewMode === "list" ? (
+      <div className="deals-table">
+        <div className="table-head"><span>Сделка</span><span>Стадия</span><span>Ответственный</span><span>Сумма</span><span>Задача</span></div>
+        {visibleDeals.length === 0 ? <div className="dialogs-empty-conv">Ничего не нашлось.</div> : visibleDeals.map((deal) => {
+          const stage = board.stages.find((s) => s.id === deal.stageId);
+          return <div className="deal-row" key={deal.id} onClick={() => openDealById(deal.id)}>
+            <div className="deal-row-title"><span className="deal-avatar">{initialOfName(deal.name || deal.title)}</span><span><b>{deal.title}</b><small>{[deal.name, deal.phone].filter(Boolean).join(" · ") || "—"}</small></span></div>
+            <span className="deal-row-stage"><i className="col-dot" style={{ background: stage?.color }} />{stage?.name ?? "—"}</span>
+            <span className="source-cell">{deal.assignedUserName || "Не назначено"}</span>
+            <span className="source-cell">{deal.amount ? `${deal.amount.toLocaleString("ru-RU")} ${deal.currency || ""}` : "—"}</span>
+            <DealTaskBadge deal={deal} />
+          </div>;
+        })}
+      </div>
+    ) : <div className="kanban kanban-dynamic">
       {board.stages.map((stage) => {
         const dealsInStage = visibleDeals.filter((d) => d.stageId === stage.id);
         return <section className={`kanban-col ${dragOverStage === stage.id ? "drag-over" : ""}`} key={stage.id}
@@ -1542,7 +1603,7 @@ function CRM({ me, dealToOpen, onDealOpened }: { me: CabinetMe; dealToOpen: stri
               <h3>{deal.title}</h3>
               <p>{[deal.name, deal.phone].filter(Boolean).join(" · ") || "—"}</p>
               <small>{fmtDealDate(deal.createdAt)}</small>
-              <div className="deal-foot"><span>{deal.amount ? `${deal.amount.toLocaleString("ru-RU")} ${deal.currency || ""}` : ""}</span></div>
+              <div className="deal-foot"><span>{deal.amount ? `${deal.amount.toLocaleString("ru-RU")} ${deal.currency || ""}` : ""}</span><DealTaskBadge deal={deal} /></div>
             </article>)}
             {dealsInStage.length === 0 && <div className="drop-empty">Перетащите сделку сюда</div>}
           </div>
@@ -1948,7 +2009,7 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
 
 function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
   }), [setView, onAction, analytics, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
