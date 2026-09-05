@@ -239,6 +239,14 @@ export class CabinetController {
     return this.cabinet.setEscalationProcessed(req.companyId, id, Boolean(body.processed));
   }
 
+  // "Научить бота" on a dissatisfaction escalation's own card — see
+  // CabinetService.resolveDissatisfaction.
+  @Post('escalations/:id/resolve-dissatisfaction')
+  @UseGuards(AuthGuard)
+  resolveDissatisfaction(@Req() req: AuthedRequest, @Param('id') id: string, @Body() body: { note: string }) {
+    return this.cabinet.resolveDissatisfaction(req.companyId, id, body?.note ?? '');
+  }
+
   // The "Требует внимания" table only ever showed the one question/reply
   // pair the escalation itself carries — not enough to tell whether the bot
   // actually lost the thread three turns earlier. This hands back the whole

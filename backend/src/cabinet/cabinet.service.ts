@@ -1240,6 +1240,50 @@ export class CabinetService {
   }
 
   /**
+   * "Требует внимания" used to treat a 'dissatisfaction' row exactly like an
+   * 'unanswered' one — draft ONE reply to send back into that (often
+   * already-over) dialog, with no way to fix the actual underlying gap in
+   * how the bot handles this situation for the NEXT visitor (found live:
+   * "это же не научит бота быть лучше?"). This is the same
+   * classify-then-store pipeline DislikesService.resolve already uses for
+   * the test-chat's 👎 button (reused here, not duplicated: same
+   * classifyDislikeNote + createForBot/createInstruction/createCorrection
+   * calls) — just keyed off the Escalation row's own stored visitorQuestion/
+   * botReply instead of a Message row, since a real-customer dissatisfaction
+   * escalation has no dislikedMessageId (that field is 'disliked'-only, see
+   * its own schema comment) for DislikesService.resolve to look up.
+   * Auto-marks the escalation processed on success — same field/meaning as
+   * the "Обработано" checkbox above, so it drops off the pending list either
+   * way.
+   */
+  async resolveDissatisfaction(companyId: string, escalationId: string, note: string) {
+    const escalation = await this.prisma.escalation.findUnique({ where: { id: escalationId } });
+    if (!escalation || escalation.companyId !== companyId) throw new NotFoundException('Escalation not found');
+    if (escalation.reason !== 'dissatisfaction') {
+      throw new BadRequestException('Only a dissatisfaction escalation can be turned into a correction this way');
+    }
+    const trimmedNote = note.trim();
+    if (!trimmedNote) throw new BadRequestException('Note cannot be empty');
+
+    const situationContext = escalation.visitorQuestion ?? escalation.question;
+    const badReply = escalation.botReply ?? '';
+    const classification = await this.yandexGpt.classifyDislikeNote(situationContext, badReply, trimmedNote);
+
+    if (classification.type === 'fact') {
+      await this.knowledge.createForBot(escalation.botId, companyId, situationContext, trimmedNote, 'test_chat', {
+        moderationStatus: 'approved',
+      });
+    } else if (classification.type === 'instruction') {
+      await this.knowledge.createInstruction(companyId, trimmedNote, escalation.botId);
+    } else {
+      await this.knowledge.createCorrection(companyId, situationContext, badReply, trimmedNote, escalation.botId);
+    }
+
+    await this.prisma.escalation.update({ where: { id: escalationId }, data: { processedAt: new Date() } });
+    return { ok: true, type: classification.type };
+  }
+
+  /**
    * Owner-typed alternative greeting hook, wrapped into the same pinned
    * instruction shape as the AI-generated ones (see YandexGptService) and
    * appended to the greeting stage's variant pool — from this point on it's

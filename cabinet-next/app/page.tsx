@@ -401,6 +401,36 @@ function PendingEscalationRow({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  // "Недоволен ответом" isn't the same shape of problem as "Нет ответа":
+  // there's usually no one clean reply left to send back into what's often
+  // an already-over conversation, and drafting one does nothing about the
+  // NEXT visitor hitting the same misunderstanding (found live: "это же не
+  // научит бота быть лучше?"). "Научить бота" replaces "Ответить" for this
+  // reason — same classify-then-store pipeline the test-chat's 👎 already
+  // uses (see CabinetService.resolveDissatisfaction), turning the owner's
+  // note into a correction/instruction/fact instead of a one-off reply.
+  const isDissatisfaction = e.reason === "dissatisfaction";
+  const [teaching, setTeaching] = useState(false);
+  const [note, setNote] = useState("");
+  const [teachSubmitting, setTeachSubmitting] = useState(false);
+  const [teachError, setTeachError] = useState<string | null>(null);
+  const [taughtAs, setTaughtAs] = useState<string | null>(null);
+  const TEACH_TYPE_LABELS: Record<string, string> = { fact: "факт о бизнесе", instruction: "правило поведения", correction: "коррекция для похожей ситуации" };
+  const submitTeach = () => {
+    const trimmed = note.trim();
+    if (!trimmed) return;
+    setTeachSubmitting(true);
+    setTeachError(null);
+    fetch(`/api/cabinet/escalations/${e.id}/resolve-dissatisfaction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: trimmed }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => { setTaughtAs(data?.type ?? "correction"); onAnswered(); })
+      .catch(() => setTeachError("Не получилось сохранить — попробуйте ещё раз."))
+      .finally(() => setTeachSubmitting(false));
+  };
   // The old cabinet's escalation card opened the full linked dialog in a
   // modal (openEscalationDialog -> GET .../dialog) before asking the owner
   // to write or approve a reply — this card used to show only the bare
@@ -488,15 +518,40 @@ function PendingEscalationRow({
           <small>{e.visitorQuestion || e.question}{e.botReply ? ` — ответ бота: ${e.botReply}` : ""}</small>
         </div>
       </div>
-      {!confirmed && (
+      {!confirmed && !taughtAs && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <Button variant="outline" style={{ flex: 1 }} onClick={toggleDialog}>{dialogOpen ? "Скрыть переписку" : "Показать переписку"}</Button>
-          {!answering && <Button variant="outline" style={{ flex: 1 }} onClick={() => setAnswering(true)}>Ответить</Button>}
-          {!answering && <Button variant="outline" style={{ flex: 1 }} disabled={busy} onClick={onProcess}>Обработано</Button>}
+          {isDissatisfaction
+            ? (!teaching && <Button variant="outline" style={{ flex: 1 }} onClick={() => setTeaching(true)}>Научить бота</Button>)
+            : (!answering && <Button variant="outline" style={{ flex: 1 }} onClick={() => setAnswering(true)}>Ответить</Button>)}
+          {!answering && !teaching && <Button variant="outline" style={{ flex: 1 }} disabled={busy} onClick={onProcess}>Обработано</Button>}
         </div>
       )}
 
-      {dialogOpen && !confirmed && (
+      {taughtAs && (
+        <p style={{ color: "#237a52", fontSize: 12, margin: 0, paddingLeft: 34 }}>
+          Сохранено как {TEACH_TYPE_LABELS[taughtAs] ?? taughtAs} — бот учтёт это в похожих ситуациях. Карточка обработана.
+        </p>
+      )}
+
+      {teaching && !taughtAs && (
+        <div style={{ marginTop: 8, paddingLeft: 34, display: "flex", flexDirection: "column", gap: 8 }}>
+          <textarea
+            value={note}
+            onChange={(ev) => setNote(ev.target.value)}
+            placeholder="Что бот должен был понять или сделать иначе в этой ситуации?"
+            rows={2}
+            style={{ width: "100%", resize: "vertical", font: "inherit", padding: "8px 10px", borderRadius: 10, border: "1px solid var(--line)" }}
+          />
+          {teachError && <p className="form-error">{teachError}</p>}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Button disabled={teachSubmitting || !note.trim()} onClick={submitTeach}>{teachSubmitting ? "Сохраняю…" : "Сохранить"}</Button>
+            <Button variant="outline" onClick={() => { setTeaching(false); setNote(""); setTeachError(null); }}>Отмена</Button>
+          </div>
+        </div>
+      )}
+
+      {dialogOpen && !confirmed && !taughtAs && (
         <div style={{ marginTop: 8, paddingLeft: 34, maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
           {dialogLoading ? <small style={{ color: "#7d8992" }}>Загружаю переписку…</small>
             : !dialogMessages || dialogMessages.length === 0 ? <small style={{ color: "#7d8992" }}>Переписка недоступна.</small>
