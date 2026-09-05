@@ -15,7 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger,
+  Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
@@ -185,12 +185,14 @@ function StatusPill({ tone = "green", children }: { tone?: "green" | "blue" | "o
 }
 
 function PageHeader({ view, onPrimary, companyName }: { view: View; onPrimary?: (label: string) => void; companyName: string }) {
-  // crm dropped from here — CRM() now has its own real "Новая сделка" button
-  // (real POST /api/cabinet/deals); this generic header slot only ever opened
-  // the fake "demo state" dialog, so with both on screen at once the header's
+  // crm and knowledge dropped from here — both now have their own real
+  // buttons (CRM(): "Новая сделка" -> POST /api/cabinet/deals; Knowledge():
+  // "Добавить знания" -> AddKnowledgeSheet, real POST to
+  // article/file/bulk/site); this generic header slot only ever opened the
+  // fake "demo state" dialog, so with both on screen at once the header's
   // copy was a confusing, non-functional duplicate (found live, testing the
   // real button: the header's fake one sits first in the DOM and shadows it).
-  const actions: Partial<Record<View, string>> = { knowledge: "Добавить знания", dialogs: "Экспорт", integrations: "Добавить интеграцию", team: "Пригласить", support: "Новое обращение" };
+  const actions: Partial<Record<View, string>> = { dialogs: "Экспорт", integrations: "Добавить интеграцию", team: "Пригласить", support: "Новое обращение" };
   const action = actions[view];
   return <div className="page-header"><div><div className="crumb">{companyName} <span>/</span> {titles[view].title}</div><h1>{titles[view].title}</h1><p>{titles[view].desc}</p></div>{action && <Button className="primary-action" data-live onClick={() => onPrimary?.(action)}><Plus />{action}</Button>}</div>;
 }
@@ -704,20 +706,206 @@ function AutoTests() {
   <div className="test-layout"><section className="test-groups">{testGroups.map(([name,desc,total,passed,Icon]) => <article className="test-group" key={String(name)}><span className="test-group-icon"><Icon /></span><div><b>{name}</b><small>{desc}</small><Progress value={Number(passed)/Number(total)*100}/></div><strong>{String(passed)}/{String(total)}</strong><button><ArrowRight /></button></article>)}</section><aside className="test-issues panel"><span className="section-label">Приоритет исправления</span><h2>Что мешает качеству</h2><article><span className="issue-index critical">1</span><div><b>Доставка за пределы региона</b><small>В базе нет правила расчёта стоимости.</small><button>Добавить знание</button></div></article><article><span className="issue-index">2</span><div><b>Возражение «у конкурентов дешевле»</b><small>Ответ слишком общий и не раскрывает ценность.</small><button>Улучшить ответ</button></div></article><article><span className="issue-index">3</span><div><b>Невалидный номер телефона</b><small>Бот не просит проверить одну цифру.</small><button>Настроить правило</button></div></article></aside></div></div>;
 }
 
-const knowledgeItems = [
-  ["Какие размеры доступны для бань «Викинг»?", "Доступны модели длиной 4, 6 и 8 метров.", "Вопрос / ответ", "Сайт"],
-  ["Как быстро прогревается парилка?", "Мощная печь прогревает парилку до рабочей температуры примерно за час.", "Вопрос / ответ", "Сайт"],
-  ["Обращайся к посетителю только на «вы»", "Правило применяется ко всем новым диалогам.", "Инструкция", "Вручную"],
-  ["Какая гарантия предоставляется?", "На сканди-баню предоставляется гарантия 5 лет.", "Вопрос / ответ", "Сайт"],
-];
+// Real data from /api/cabinet/knowledge (see KnowledgeService.list) — this
+// used to be a fixed 4-row demo array shown to EVERY company regardless of
+// account, so a real client's real cabinet always showed the same "Бани
+// Викинг" fixtures instead of their own knowledge base (found live, on
+// chat.glavinstrument.com: "База знаний" showed demo content, not
+// GlavInstrument's own approved facts). Also wires up AddKnowledgeSheet's
+// four source buttons, which used to render but do nothing on click.
+type KnowledgeEntry = {
+  id: string;
+  question: string | null;
+  answer: string;
+  source: string;
+  moderationStatus: "pending" | "approved" | "rejected";
+  fileName: string | null;
+  createdAt: string;
+};
 
-function AddKnowledgeSheet({ children }: { children: React.ReactNode }) {
-  return <Sheet><SheetTrigger asChild>{children}</SheetTrigger><SheetContent className="knowledge-sheet"><SheetHeader><SheetTitle>Добавить знания</SheetTitle><SheetDescription>Выберите удобный источник. Перед публикацией записи можно проверить.</SheetDescription></SheetHeader><div className="source-options"><button><Link2 /><span><b>Добавить сайт</b><small>Импортировать страницы по ссылке</small></span><ArrowRight /></button><button><FileUp /><span><b>Загрузить файл</b><small>PDF, DOCX, XLSX, TXT или CSV</small></span><ArrowRight /></button><button><Database /><span><b>Вставить текст</b><small>Инструкция, статья или ответы</small></span><ArrowRight /></button><button><BookOpen /><span><b>Вопрос и ответ</b><small>Добавить одну точную запись</small></span><ArrowRight /></button></div></SheetContent></Sheet>;
+// KnowledgeSource enum values (backend/prisma/schema.prisma) mapped to the
+// short label the reference design's "Источник" column expects.
+const KNOWLEDGE_SOURCE_LABELS: Record<string, string> = {
+  manual: "Вручную", telegram: "Telegram", test_chat: "Тест-чат", site: "Сайт", bulk: "Текст", instruction: "Вручную", correction: "Тест-чат",
+};
+
+type KnowledgeStep = "site" | "file" | "text" | "qa" | null;
+
+function AddKnowledgeSheet({ children, onAdded }: { children: React.ReactNode; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<KnowledgeStep>(null);
+  const [siteUrl, setSiteUrl] = useState("");
+  const [bulkText, setBulkText] = useState("");
+  const [qaQuestion, setQaQuestion] = useState("");
+  const [qaAnswer, setQaAnswer] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [fileTitle, setFileTitle] = useState("");
+  const [fileDescription, setFileDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reset = () => {
+    setStep(null); setSiteUrl(""); setBulkText(""); setQaQuestion(""); setQaAnswer("");
+    setFile(null); setFileTitle(""); setFileDescription(""); setError(null); setSubmitting(false);
+  };
+  const close = () => { setOpen(false); reset(); };
+
+  // Shared by all 4 submit handlers below: same "disable button, clear old
+  // error, reload the real list, close and reset the sheet" shape — only
+  // the actual request (and its own validation-failure message) differs.
+  const submit = (request: () => Promise<Response>, failureMessage: string) => {
+    setSubmitting(true);
+    setError(null);
+    request()
+      .then((r) => (r.ok ? r : Promise.reject(r)))
+      .then(() => { onAdded(); close(); })
+      .catch(() => setError(failureMessage))
+      .finally(() => setSubmitting(false));
+  };
+
+  const submitSite = () => submit(
+    () => fetch("/api/cabinet/knowledge/site", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: siteUrl.trim() }) }),
+    "Не получилось загрузить страницу — проверьте ссылку.",
+  );
+  const submitText = () => submit(
+    () => fetch("/api/cabinet/knowledge/bulk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: bulkText.trim() }) }),
+    "Не получилось обработать текст.",
+  );
+  const submitQa = () => submit(
+    () => fetch("/api/cabinet/knowledge/article", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: qaQuestion.trim(), body: qaAnswer.trim() }) }),
+    "Не получилось сохранить запись.",
+  );
+  const submitFile = () => {
+    const form = new FormData();
+    form.append("file", file as File);
+    form.append("title", fileTitle.trim());
+    form.append("description", fileDescription.trim());
+    submit(
+      () => fetch("/api/cabinet/knowledge/file", { method: "POST", body: form }),
+      "Не получилось загрузить файл — проверьте тип (PDF, Word, изображение) и размер (до 15 МБ).",
+    );
+  };
+
+  const back = () => { setStep(null); setError(null); };
+
+  return <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+    <SheetTrigger asChild>{children}</SheetTrigger>
+    <SheetContent className="knowledge-sheet">
+      <SheetHeader><SheetTitle>Добавить знания</SheetTitle><SheetDescription>Выберите удобный источник. Перед публикацией записи можно проверить.</SheetDescription></SheetHeader>
+      {step === null && <div className="source-options">
+        <button onClick={() => setStep("site")}><Link2 /><span><b>Добавить сайт</b><small>Импортировать страницы по ссылке</small></span><ArrowRight /></button>
+        <button onClick={() => setStep("file")}><FileUp /><span><b>Загрузить файл</b><small>PDF, Word или изображение</small></span><ArrowRight /></button>
+        <button onClick={() => setStep("text")}><Database /><span><b>Вставить текст</b><small>Инструкция, статья или ответы</small></span><ArrowRight /></button>
+        <button onClick={() => setStep("qa")}><BookOpen /><span><b>Вопрос и ответ</b><small>Добавить одну точную запись</small></span><ArrowRight /></button>
+      </div>}
+      {step === "site" && <div className="prototype-form">
+        <label><span>Ссылка на страницу</span><input value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)} placeholder="https://" /></label>
+        {error && <p className="form-error">{error}</p>}
+        <SheetFooter><Button className="primary-action" disabled={siteUrl.trim().length < 3 || submitting} onClick={submitSite}>{submitting ? "Загружаю…" : "Импортировать"}</Button><Button variant="outline" onClick={back}>Назад</Button></SheetFooter>
+      </div>}
+      {step === "file" && <div className="prototype-form">
+        <label><span>Файл</span><input type="file" accept=".pdf,.doc,.docx,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
+        <label><span>Название</span><input value={fileTitle} onChange={(e) => setFileTitle(e.target.value)} placeholder="Например, прайс-лист" /></label>
+        <label><span>Когда его показывать (необязательно)</span><textarea value={fileDescription} onChange={(e) => setFileDescription(e.target.value)} placeholder="Опишите, что в файле и в каком случае его стоит прислать посетителю" /></label>
+        {error && <p className="form-error">{error}</p>}
+        <SheetFooter><Button className="primary-action" disabled={!file || !fileTitle.trim() || submitting} onClick={submitFile}>{submitting ? "Загружаю…" : "Загрузить"}</Button><Button variant="outline" onClick={back}>Назад</Button></SheetFooter>
+      </div>}
+      {step === "text" && <div className="prototype-form">
+        <label><span>Текст</span><textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} placeholder="Вставьте цены, условия или ответы на вопросы — ИИ сам разобьёт текст на записи" /></label>
+        {error && <p className="form-error">{error}</p>}
+        <SheetFooter><Button className="primary-action" disabled={bulkText.trim().length < 10 || submitting} onClick={submitText}>{submitting ? "Обрабатываю…" : "Добавить"}</Button><Button variant="outline" onClick={back}>Назад</Button></SheetFooter>
+      </div>}
+      {step === "qa" && <div className="prototype-form">
+        <label><span>Вопрос</span><input value={qaQuestion} onChange={(e) => setQaQuestion(e.target.value)} placeholder="Какой вопрос задают посетители?" /></label>
+        <label><span>Ответ</span><textarea value={qaAnswer} onChange={(e) => setQaAnswer(e.target.value)} placeholder="Точный ответ бота" /></label>
+        {error && <p className="form-error">{error}</p>}
+        <SheetFooter><Button className="primary-action" disabled={!qaQuestion.trim() || !qaAnswer.trim() || submitting} onClick={submitQa}>{submitting ? "Сохраняю…" : "Сохранить"}</Button><Button variant="outline" onClick={back}>Назад</Button></SheetFooter>
+      </div>}
+    </SheetContent>
+  </Sheet>;
 }
 
 function Knowledge() {
-  const [query, setQuery] = useState(""); const filtered = knowledgeItems.filter(i => i[0].toLowerCase().includes(query.toLowerCase()));
-  return <div className="knowledge-page"><div className="knowledge-summary"><div><Database /><span><b>17 записей</b><small>Все записи проверены и используются ботом</small></span></div><div className="summary-segment"><span style={{ width: "94%" }} /><small>16 вопросов и ответов</small></div><AddKnowledgeSheet><Button className="primary-action"><Plus />Добавить знания</Button></AddKnowledgeSheet></div><div className="knowledge-toolbar"><div className="search-field"><Search /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Найти по смыслу или словам" /></div><div className="filter-chips"><button className="active">Все 17</button><button>Вопросы 16</button><button>Инструкции 1</button></div><button className="filter-button"><ListFilter /> Фильтры</button></div><div className="knowledge-table"><div className="table-head"><span>Запись</span><span>Тип</span><span>Источник</span><span>Статус</span><span /></div>{filtered.map(item => <div className="knowledge-row" key={item[0]}><div><b>{item[0]}</b><small>{item[1]}</small></div><StatusPill tone="blue">{item[2]}</StatusPill><span className="source-cell">{item[3]}</span><StatusPill><Check /> Живая</StatusPill><button className="icon-button"><MoreHorizontal /></button></div>)}</div></div>;
+  const [entries, setEntries] = useState<KnowledgeEntry[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "qa" | "instruction">("all");
+  // Same guard as dialogRequestId/openDealRequestId elsewhere in this file —
+  // without it, a reload() triggered by adding a new entry could resolve
+  // AFTER an in-flight moderate()/remove() optimistic update and silently
+  // overwrite that row back to its pre-click state.
+  const listRequestId = useRef(0);
+  const reload = () => {
+    const requestId = ++listRequestId.current;
+    fetchJsonWithRetry<KnowledgeEntry[]>("/api/cabinet/knowledge").then((data) => {
+      if (listRequestId.current === requestId) setEntries(data ?? []);
+    });
+  };
+  useEffect(() => { reload(); }, []);
+
+  const total = entries?.length ?? 0;
+  const qaCount = (entries ?? []).filter((e) => e.source !== "instruction").length;
+  const approvedCount = (entries ?? []).filter((e) => e.moderationStatus === "approved").length;
+
+  const filtered = (entries ?? []).filter((e) => {
+    if (typeFilter === "instruction" && e.source !== "instruction") return false;
+    if (typeFilter === "qa" && e.source === "instruction") return false;
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return (e.question ?? "").toLowerCase().includes(q) || e.answer.toLowerCase().includes(q);
+  });
+
+  const moderate = (id: string, status: "approved" | "rejected") => {
+    // Optimistic — the owner is reviewing a short queue one row at a time;
+    // waiting for the round-trip before the pill/buttons update would make
+    // every click feel like it didn't register. Bumping listRequestId here
+    // (not just on reload() itself) invalidates any reload() GET already in
+    // flight from before this click — without it, that GET could resolve
+    // right after this optimistic update with the pre-moderation data and
+    // silently revert this row back to "pending".
+    listRequestId.current++;
+    setEntries((prev) => prev && prev.map((e) => (e.id === id ? { ...e, moderationStatus: status } : e)));
+    fetch(`/api/cabinet/knowledge/${id}/moderate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) })
+      .then((r) => { if (!r.ok) throw new Error(); })
+      .catch(() => reload());
+  };
+  const remove = (id: string) => {
+    if (!window.confirm("Удалить запись из базы знаний? Бот перестанет её использовать.")) return;
+    listRequestId.current++;
+    setEntries((prev) => prev && prev.filter((e) => e.id !== id));
+    fetch(`/api/cabinet/knowledge/${id}`, { method: "DELETE" })
+      .then((r) => { if (!r.ok) throw new Error(); })
+      .catch(() => reload());
+  };
+
+  return <div className="knowledge-page">
+    <div className="knowledge-summary">
+      <div><Database /><span><b>{total} записей</b><small>{entries === null ? "Загружаю…" : `${approvedCount} проверены и используются ботом`}</small></span></div>
+      <div className="summary-segment"><span style={{ width: total ? `${Math.round((approvedCount / total) * 100)}%` : "0%" }} /><small>{qaCount} вопросов и ответов</small></div>
+      <AddKnowledgeSheet onAdded={reload}><Button className="primary-action"><Plus />Добавить знания</Button></AddKnowledgeSheet>
+    </div>
+    <div className="knowledge-toolbar">
+      <div className="search-field"><Search /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Найти по смыслу или словам" /></div>
+      <div className="filter-chips">
+        <button className={typeFilter === "all" ? "active" : ""} onClick={() => setTypeFilter("all")}>Все {total}</button>
+        <button className={typeFilter === "qa" ? "active" : ""} onClick={() => setTypeFilter("qa")}>Вопросы {qaCount}</button>
+        <button className={typeFilter === "instruction" ? "active" : ""} onClick={() => setTypeFilter("instruction")}>Инструкции {total - qaCount}</button>
+      </div>
+    </div>
+    <div className="knowledge-table">
+      <div className="table-head"><span>Запись</span><span>Тип</span><span>Источник</span><span>Статус</span><span /></div>
+      {entries === null ? <div className="dialogs-empty-conv">Загружаю…</div>
+        : filtered.length === 0 ? <div className="dialogs-empty-conv">{total === 0 ? "База знаний пока пуста — добавьте первую запись." : "Ничего не нашлось."}</div>
+        : filtered.map((e) => <div className="knowledge-row" key={e.id}>
+          <div><b>{e.question || e.fileName || "Запись без вопроса"}</b><small>{e.answer}</small></div>
+          <StatusPill tone="blue">{e.source === "instruction" ? "Инструкция" : "Вопрос / ответ"}</StatusPill>
+          <span className="source-cell">{KNOWLEDGE_SOURCE_LABELS[e.source] ?? e.source}</span>
+          {e.moderationStatus === "pending"
+            ? <div className="kb-row-actions"><button className="kb-mini-btn approve" aria-label="Одобрить запись" onClick={() => moderate(e.id, "approved")}><Check /></button><button className="kb-mini-btn reject" aria-label="Отклонить запись" onClick={() => moderate(e.id, "rejected")}><X /></button></div>
+            : <StatusPill tone={e.moderationStatus === "rejected" ? "gray" : "green"}>{e.moderationStatus === "rejected" ? "Отклонена" : <><Check /> Живая</>}</StatusPill>}
+          <button className="icon-button" aria-label="Удалить запись" onClick={() => remove(e.id)}><MoreHorizontal /></button>
+        </div>)}
+    </div>
+  </div>;
 }
 
 function WidgetSettings() {

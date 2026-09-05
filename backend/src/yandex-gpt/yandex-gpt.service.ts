@@ -340,16 +340,22 @@ export class YandexGptService {
   }
 
   private async requestStructuredReply(params: GenerateReplyParams): Promise<StructuredReply> {
-    const stageList = params.stages
-      .map((s) => `- "${s.stageId}": ${s.instructions}`)
-      .join('\n');
+    // Ids only, not each stage's full instructions text — the current stage's
+    // own instructions are already sent separately just below
+    // (Stage instructions: ${params.stageInstructions}); this list exists
+    // purely so the model doesn't invent a nextStage id that doesn't exist.
+    // Sending every OTHER stage's full instructions here too used to resend
+    // the whole funnel's text on every single turn of every dialog — real,
+    // billed prompt tokens for content the model never actually needed once
+    // it already has its own current stage's instructions.
+    const stageList = params.stages.map((s) => `"${s.stageId}"`).join(', ');
 
     const systemMessage: ChatTurn = {
       role: 'system',
       content: [
         params.systemPrompt,
         `Current funnel stage: "${params.currentStageId}". Stage instructions: ${params.stageInstructions}`,
-        `All valid funnel stages (nextStage MUST be exactly one of these ids, never invent a new one):\n${stageList}`,
+        `All valid funnel stage ids (nextStage MUST be exactly one of these, never invent a new one): ${stageList}`,
         OUTPUT_CONTRACT,
       ].join('\n\n'),
     };
