@@ -369,6 +369,30 @@ function PendingEscalationRow({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  // The old cabinet's escalation card opened the full linked dialog in a
+  // modal (openEscalationDialog -> GET .../dialog) before asking the owner
+  // to write or approve a reply — this card used to show only the bare
+  // question + the bot's one failed reply, with no way to see what led up
+  // to it (found live: "не хватает контекста... раньше мы показывали всю
+  // переписку"). Fetched on demand, not preloaded per row, same reasoning
+  // as the "Диалоги" AI-резюме: a real LLM/DB cost per open, only paid for
+  // rows the owner actually expands.
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMessages, setDialogMessages] = useState<Array<{ id: string; role: string; content: string; createdAt: string }> | null>(null);
+  const [dialogLoading, setDialogLoading] = useState(false);
+  const toggleDialog = () => {
+    if (dialogOpen) { setDialogOpen(false); return; }
+    setDialogOpen(true);
+    if (dialogMessages !== null) return;
+    setDialogLoading(true);
+    // fetchJsonWithRetry (not a bare fetch) so a transient blip doesn't get
+    // cached as a permanent "Переписка недоступна." — a null result here
+    // means "fetch genuinely failed", left as null so the NEXT click retries
+    // instead of re-showing the same stale failure forever.
+    fetchJsonWithRetry<{ messages: Array<{ id: string; role: string; content: string; createdAt: string }> }>(`/api/cabinet/escalations/${e.id}/dialog`)
+      .then((data) => setDialogMessages(data?.messages ?? (data === null ? null : [])))
+      .finally(() => setDialogLoading(false));
+  };
   // Bumped on every requestPreview call and read back when its fetch settles,
   // so a cancelled/superseded request can never overwrite state a later one
   // (or "Отмена") already moved on from — without this, clicking "Отмена"
@@ -432,10 +456,24 @@ function PendingEscalationRow({
           <small>{e.visitorQuestion || e.question}{e.botReply ? ` — ответ бота: ${e.botReply}` : ""}</small>
         </div>
       </div>
-      {!answering && !confirmed && (
+      {!confirmed && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <Button variant="outline" style={{ flex: 1 }} onClick={() => setAnswering(true)}>Ответить</Button>
-          <Button variant="outline" style={{ flex: 1 }} disabled={busy} onClick={onProcess}>Обработано</Button>
+          <Button variant="outline" style={{ flex: 1 }} onClick={toggleDialog}>{dialogOpen ? "Скрыть переписку" : "Показать переписку"}</Button>
+          {!answering && <Button variant="outline" style={{ flex: 1 }} onClick={() => setAnswering(true)}>Ответить</Button>}
+          {!answering && <Button variant="outline" style={{ flex: 1 }} disabled={busy} onClick={onProcess}>Обработано</Button>}
+        </div>
+      )}
+
+      {dialogOpen && !confirmed && (
+        <div style={{ marginTop: 8, paddingLeft: 34, maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+          {dialogLoading ? <small style={{ color: "#7d8992" }}>Загружаю переписку…</small>
+            : !dialogMessages || dialogMessages.length === 0 ? <small style={{ color: "#7d8992" }}>Переписка недоступна.</small>
+            : dialogMessages.map((m) => (
+              <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} key={m.id} style={{ margin: 0, maxWidth: "90%" }}>
+                <p style={{ margin: 0 }}>{m.content}</p>
+                <small>{fmtMessageTime(m.createdAt)} МСК</small>
+              </div>
+            ))}
         </div>
       )}
 
