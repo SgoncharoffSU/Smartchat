@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, AlertCircle, ArrowRight, Bell, BookOpen, Bot, Check,
-  Banknote, BrainCircuit, Building2, ChevronDown, CircleHelp, ClipboardCheck, Clock3, Copy, CreditCard, Database, Download, ExternalLink,
+  Banknote, BrainCircuit, Building2, ChevronDown, CircleHelp, ClipboardCheck, Clock3, Copy, CreditCard, Database, Download, ExternalLink, Eye,
   FileUp, Flame, Globe2, GraduationCap, Headphones, History, Inbox, Info, LayoutDashboard, LifeBuoy, Link2, ListFilter,
   MessageSquareText, MoreHorizontal, MousePointerClick, Plus, Rocket, Search, Send, Settings2,
-  ShieldCheck, SlidersHorizontal, Sparkles, Target, TestTube2, Users, WandSparkles,
+  ShieldCheck, SlidersHorizontal, Sparkles, Target, TestTube2, Trash2, Users, WandSparkles,
   ArrowLeft, Phone, Wallet, Workflow, X, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -790,6 +790,8 @@ type KnowledgeEntry = {
   source: string;
   moderationStatus: "pending" | "approved" | "rejected";
   fileName: string | null;
+  fileUrl: string | null;
+  fileMimeType: string | null;
   createdAt: string;
 };
 
@@ -895,10 +897,89 @@ function AddKnowledgeSheet({ children, onAdded }: { children: React.ReactNode; o
   </Sheet>;
 }
 
+// The detail view AddKnowledgeSheet's own "открыть и посмотреть" gap was
+// missing (see Knowledge's own comment on openEntry) — full, un-truncated
+// question/answer, a real link for a file entry, editable and saved through
+// the same PATCH /api/cabinet/knowledge/:id updateEntry already uses
+// elsewhere (moderate/delete), just never wired to a UI before this.
+function KnowledgeDetailDialog({ entry, onClose, onSaved }: { entry: KnowledgeEntry | null; onClose: () => void; onSaved: (updated: KnowledgeEntry, savedId: string) => void }) {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setQuestion(entry?.question ?? "");
+    setAnswer(entry?.answer ?? "");
+    setError(null);
+    // Also reset here, not just on close — without this, switching straight
+    // from entry A (save still in flight) to entry B left B's dialog stuck
+    // showing "Сохраняю…" with its own Save button disabled until A's
+    // unrelated request happened to settle (found in review).
+    setSaving(false);
+  }, [entry?.id]);
+
+  if (!entry) return null;
+  const isInstruction = entry.source === "instruction";
+  // A file entry's `question` column is really its title (see
+  // KnowledgeService.createFileEntry: title -> question, description ->
+  // answer) — labeling and treating it as an optional Q&A "Вопрос" would
+  // mislabel what's being edited and let a blank field silently null out
+  // the title a visitor's file attachment is matched by.
+  const isFile = Boolean(entry.fileUrl);
+
+  const save = () => {
+    if (!answer.trim()) { setError(isFile ? "Описание не может быть пустым." : "Ответ не может быть пустым."); return; }
+    if (isFile && !question.trim()) { setError("Название файла не может быть пустым."); return; }
+    setSaving(true);
+    setError(null);
+    const savedId = entry.id;
+    fetch(`/api/cabinet/knowledge/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(isInstruction ? { answer } : { question: question.trim() || null, answer }),
+    })
+      // Surfaces the backend's own validation message (e.g. "Answer cannot
+      // be empty", or a 404 if another tab deleted this row meanwhile)
+      // instead of one generic string regardless of cause.
+      .then((r) => (r.ok ? r.json() : r.json().catch(() => null).then((body) => Promise.reject(new Error(body?.message)))))
+      .then((updated) => onSaved({ ...entry, ...updated }, savedId))
+      .catch((e) => setError(typeof e?.message === "string" && e.message ? e.message : "Не получилось сохранить изменения."))
+      .finally(() => setSaving(false));
+  };
+
+  return <Dialog open={Boolean(entry)} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <DialogContent className="prototype-dialog">
+      <DialogHeader>
+        <DialogTitle>{isInstruction ? "Инструкция" : "Запись базы знаний"}</DialogTitle>
+        <DialogDescription>{KNOWLEDGE_SOURCE_LABELS[entry.source] ?? entry.source}{entry.fileName ? ` · ${entry.fileName}` : ""}</DialogDescription>
+      </DialogHeader>
+      <div className="prototype-form">
+        {entry.fileUrl && <a href={entry.fileUrl} target="_blank" rel="noreferrer" className="kb-file-link"><ExternalLink />Открыть файл{entry.fileName ? `: ${entry.fileName}` : ""}</a>}
+        {!isInstruction && <label><span>{isFile ? "Название" : "Вопрос"}</span><input value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={isFile ? "Название файла" : "Без вопроса"} /></label>}
+        <label><span>{isInstruction ? "Текст инструкции" : isFile ? "Описание (по нему бот понимает, когда прислать файл)" : "Ответ"}</span><textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={6} /></label>
+        {error && <p className="form-error">{error}</p>}
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>Закрыть</Button>
+        <Button className="primary-action" disabled={saving} onClick={save}>{saving ? "Сохраняю…" : "Сохранить"}</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
+}
+
 function Knowledge() {
   const [entries, setEntries] = useState<KnowledgeEntry[] | null>(null);
   const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "qa" | "instruction">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "qa" | "instruction" | "file" | "site">("all");
+  // The 4 AddKnowledgeSheet source buttons (сайт/файл/текст/вопрос-ответ)
+  // only ever existed as an ADD flow — once something was added there was no
+  // way to open it back up and actually look at it (found live: "не хватает
+  // разделов со ссылками, файлами, сайтом, статьями... нет возможности
+  // открыть и посмотреть"). openEntry drives a detail dialog (below) that
+  // shows the full, un-truncated text (the table row itself still clips long
+  // answers with an ellipsis) plus a real link to the file for a file entry.
+  const [openEntry, setOpenEntry] = useState<KnowledgeEntry | null>(null);
   // Same guard as dialogRequestId/openDealRequestId elsewhere in this file —
   // without it, a reload() triggered by adding a new entry could resolve
   // AFTER an in-flight moderate()/remove() optimistic update and silently
@@ -915,10 +996,14 @@ function Knowledge() {
   const total = entries?.length ?? 0;
   const qaCount = (entries ?? []).filter((e) => e.source !== "instruction").length;
   const approvedCount = (entries ?? []).filter((e) => e.moderationStatus === "approved").length;
+  const fileCount = (entries ?? []).filter((e) => e.fileUrl).length;
+  const siteCount = (entries ?? []).filter((e) => e.source === "site").length;
 
   const filtered = (entries ?? []).filter((e) => {
     if (typeFilter === "instruction" && e.source !== "instruction") return false;
     if (typeFilter === "qa" && e.source === "instruction") return false;
+    if (typeFilter === "file" && !e.fileUrl) return false;
+    if (typeFilter === "site" && e.source !== "site") return false;
     const q = query.trim().toLowerCase();
     if (!q) return true;
     return (e.question ?? "").toLowerCase().includes(q) || e.answer.toLowerCase().includes(q);
@@ -959,6 +1044,8 @@ function Knowledge() {
         <button className={typeFilter === "all" ? "active" : ""} onClick={() => setTypeFilter("all")}>Все {total}</button>
         <button className={typeFilter === "qa" ? "active" : ""} onClick={() => setTypeFilter("qa")}>Вопросы {qaCount}</button>
         <button className={typeFilter === "instruction" ? "active" : ""} onClick={() => setTypeFilter("instruction")}>Инструкции {total - qaCount}</button>
+        <button className={typeFilter === "file" ? "active" : ""} onClick={() => setTypeFilter("file")}>Файлы {fileCount}</button>
+        <button className={typeFilter === "site" ? "active" : ""} onClick={() => setTypeFilter("site")}>С сайта {siteCount}</button>
       </div>
     </div>
     <div className="knowledge-table">
@@ -972,9 +1059,21 @@ function Knowledge() {
           {e.moderationStatus === "pending"
             ? <div className="kb-row-actions"><button className="kb-mini-btn approve" aria-label="Одобрить запись" onClick={() => moderate(e.id, "approved")}><Check /></button><button className="kb-mini-btn reject" aria-label="Отклонить запись" onClick={() => moderate(e.id, "rejected")}><X /></button></div>
             : <StatusPill tone={e.moderationStatus === "rejected" ? "gray" : "green"}>{e.moderationStatus === "rejected" ? "Отклонена" : <><Check /> Живая</>}</StatusPill>}
-          <button className="icon-button" aria-label="Удалить запись" onClick={() => remove(e.id)}><MoreHorizontal /></button>
+          <div className="kb-row-actions"><button className="kb-mini-btn" aria-label="Открыть запись" onClick={() => setOpenEntry(e)}><Eye /></button><button className="icon-button" aria-label="Удалить запись" onClick={() => remove(e.id)}><Trash2 /></button></div>
         </div>)}
     </div>
+    <KnowledgeDetailDialog entry={openEntry} onClose={() => setOpenEntry(null)} onSaved={(updated, savedId) => {
+      // Same listRequestId guard moderate()/remove() already use — a reload()
+      // GET in flight from before this save resolved would otherwise
+      // overwrite the just-saved row back to its pre-edit text.
+      listRequestId.current++;
+      setEntries((prev) => prev && prev.map((e) => (e.id === updated.id ? { ...e, ...updated } : e)));
+      // Only close if the dialog is STILL showing the entry that was just
+      // saved — the owner may have already closed it and opened a different
+      // one while this save was in flight; force-closing that other one out
+      // from under them would be worse than just leaving it open.
+      setOpenEntry((current) => (current && current.id === savedId ? null : current));
+    }} />
   </div>;
 }
 
