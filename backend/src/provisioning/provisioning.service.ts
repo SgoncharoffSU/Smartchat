@@ -80,8 +80,8 @@ export class ProvisioningService {
    * false, so WidgetService.sendMessage's existing trial-expired gate takes
    * over on the very next message — no separate enforcement path needed.
    */
-  async markTrialForfeited(companyId: string): Promise<void> {
-    await this.prisma.company.update({ where: { id: companyId }, data: { trialEndsAt: new Date() } });
+  async markTrialForfeited(botId: string): Promise<void> {
+    await this.prisma.bot.update({ where: { id: botId }, data: { trialEndsAt: new Date() } });
   }
 
   /**
@@ -185,7 +185,7 @@ export class ProvisioningService {
     const trialEndsAt = isDuplicate ? new Date() : new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
 
     const company = await this.prisma.company.create({
-      data: { name: companyName, registrationToken, trialEndsAt },
+      data: { name: companyName, registrationToken },
     });
 
     if (isDuplicate) {
@@ -195,6 +195,9 @@ export class ProvisioningService {
       ).catch((error) => this.logger.error(`alertPlatformAdmin failed: ${String(error)}`));
     }
 
+    // trialEndsAt lives on the bot now, not the company (one subscription/
+    // trial per bot — see Bot's own schema comment) — a brand-new company's
+    // very first bot still gets exactly the same trial it always did.
     const bot = await this.prisma.bot.create({
       data: {
         companyId: company.id,
@@ -206,6 +209,7 @@ export class ProvisioningService {
         enablesProvisioning: false,
         funnelGeneratedAt: null,
         sourceWebsite: leadData.website?.trim() || null,
+        trialEndsAt,
       },
     });
 

@@ -347,9 +347,13 @@ export class CabinetService {
   }
 
   async getMe(companyId: string, userId: string) {
+    // Billing (trial/plan/balance) moved from Company to Bot — "один бот –
+    // одна абонентская плата", a company with several bots pays for each
+    // separately (see Bot's own schema comment). Fetched per-bot now, via
+    // the bots include below, instead of a single company-wide tariffPlan.
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
-      include: { bots: { orderBy: { createdAt: 'asc' } }, tariffPlan: true },
+      include: { bots: { orderBy: { createdAt: 'asc' }, include: { tariffPlan: true } } },
     });
     if (!company) throw new NotFoundException('Company not found');
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -365,21 +369,28 @@ export class CabinetService {
       widgetToken: b.widgetToken,
       funnelGeneratedAt: b.funnelGeneratedAt,
       sourceWebsite: b.sourceWebsite,
+      trialEndsAt: b.trialEndsAt,
+      subscriptionActive: b.subscriptionActive,
+      tariffPlan: b.tariffPlan ? { id: b.tariffPlan.id, kind: b.tariffPlan.kind, name: b.tariffPlan.name } : null,
+      planExpiresAt: b.planExpiresAt,
+      tokenBalanceRub: b.tokenBalanceRub,
+      autoPayEnabled: b.autoPayEnabled,
     }));
+    // Legacy top-level aliases (trialEndsAt/subscriptionActive/tariffPlan/...)
+    // mirror the OLDEST bot's own billing state — the pre-multi-bot cabinet
+    // (cabinet/index.html) still reads these flat off /api/cabinet/me and has
+    // no concept of a bot switcher; for any company that still has exactly
+    // one bot (nearly everyone today) this is byte-for-byte the same value
+    // it always was, just sourced from bots[0] instead of the company row.
+    const primary = bots[0];
     return {
       companyName: company.name,
-      trialEndsAt: company.trialEndsAt,
-      subscriptionActive: company.subscriptionActive,
-      // Real billing state (see BillingService) — separate from the older,
-      // manually-flipped subscriptionActive above, which predates any
-      // payment gateway and stays untouched by this. tariffPlan is null
-      // until the first successful payment.
-      tariffPlan: company.tariffPlan
-        ? { id: company.tariffPlan.id, kind: company.tariffPlan.kind, name: company.tariffPlan.name }
-        : null,
-      planExpiresAt: company.planExpiresAt,
-      tokenBalanceRub: company.tokenBalanceRub,
-      autoPayEnabled: company.autoPayEnabled,
+      trialEndsAt: primary?.trialEndsAt ?? null,
+      subscriptionActive: primary?.subscriptionActive ?? false,
+      tariffPlan: primary?.tariffPlan ?? null,
+      planExpiresAt: primary?.planExpiresAt ?? null,
+      tokenBalanceRub: primary?.tokenBalanceRub ?? 0,
+      autoPayEnabled: primary?.autoPayEnabled ?? false,
       userName: user?.name ?? null,
       userEmail: user?.email ?? null,
       role: user?.role ?? 'owner',
@@ -419,6 +430,12 @@ export class CabinetService {
         funnelConfig: DEFAULT_FUNNEL_TEMPLATE as any,
         widgetToken: randomUUID(),
         isActive: true,
+        // Same 15-day trial ProvisioningService.createCompanyAndBot gives a
+        // brand-new company's first bot — billing is per-bot now (see Bot's
+        // own schema comment), so a company's 2nd/3rd bot must start its own
+        // trial too, not silently inherit (or be blocked by the lack of) the
+        // company's original one.
+        trialEndsAt: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
       },
     });
     return { id: bot.id, name: bot.name, label: bot.label, widgetToken: bot.widgetToken, funnelGeneratedAt: bot.funnelGeneratedAt };

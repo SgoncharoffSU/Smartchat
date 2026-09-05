@@ -288,7 +288,9 @@ export class WidgetService {
       }
     }
 
-    if (!bot.company.subscriptionActive && bot.company.trialEndsAt && bot.company.trialEndsAt < new Date()) {
+    // Own fields now (trial/subscription moved from Company to Bot — one
+    // subscription per bot, see Bot's own schema comment), not bot.company.*.
+    if (!bot.subscriptionActive && bot.trialEndsAt && bot.trialEndsAt < new Date()) {
       return {
         reply: 'Пробный период этого бота закончился. Свяжитесь с нами, чтобы продолжить пользоваться сервисом.',
         buttons: [],
@@ -348,17 +350,19 @@ export class WidgetService {
     signal?: AbortSignal,
   ) {
     // Fetched once and threaded through isBlocked/chargeConfirmedLead/
-    // chargeTokenUsage below — all three used to run this same company+
+    // chargeTokenUsage below — all three used to run this same bot+
     // tariffPlan query independently, 3 times over on any turn that captures
     // a lead (found by code review). tariffPlan.kind/rates don't change
     // mid-conversation, so this one snapshot is safe to reuse for all three.
-    const billingCompany = await this.billing.getCompanyWithPlan(bot.companyId);
-    // A 'token'-plan company with a depleted balance, or an 'unlimited'-plan
-    // one past its paid period — checked before touching the LLM at all
-    // (never mid-generation: cutting a reply off partway would read as the
-    // bot itself malfunctioning). No-op for anyone still just on the free
-    // trial or with no tariffPlan chosen yet (see BillingService.isBlocked).
-    if (await this.billing.isBlocked(bot.companyId, billingCompany)) {
+    // Billing is per-bot now, not per-company (see Bot's own schema comment)
+    // — "один бот – одна абонентская плата".
+    const billingBot = await this.billing.getBotWithPlan(bot.id);
+    // A 'token'-plan bot with a depleted balance, or an 'unlimited'-plan one
+    // past its paid period — checked before touching the LLM at all (never
+    // mid-generation: cutting a reply off partway would read as the bot
+    // itself malfunctioning). No-op for anyone still just on the free trial
+    // or with no tariffPlan chosen yet (see BillingService.isBlocked).
+    if (await this.billing.isBlocked(bot.id, billingBot)) {
       const blockedReply = 'Сервис временно приостановлен — оплата не подтверждена или закончился баланс. Свяжитесь с администратором аккаунта.';
       const saved = await this.messages.append(dialog.id, MessageRole.assistant, blockedReply, []);
       return {
@@ -1559,8 +1563,8 @@ export class WidgetService {
       // debit real RUB from a 'lead'-plan company's balance for a fake test
       // lead (found by code review, never observed live).
       if (savedLead.isNew && !dto.isPreview) {
-        this.billing.chargeConfirmedLead(bot.companyId, billingCompany).catch((error) => {
-          this.logger.error(`Confirmed-lead charge failed for company ${bot.companyId}: ${String(error)}`);
+        this.billing.chargeConfirmedLead(bot.id, billingBot).catch((error) => {
+          this.logger.error(`Confirmed-lead charge failed for bot ${bot.id}: ${String(error)}`);
         });
       }
       // Fire-and-forget, same reasoning as the domain-integrity check above —
@@ -1602,14 +1606,14 @@ export class WidgetService {
     }
 
     // Every turn, not just a lead-capturing one — a no-op for an 'unlimited'-
-    // plan or no-plan-yet company (see BillingService.chargeTokenUsage),
-    // real debit for a 'token'-plan one. Fire-and-forget like the
-    // notifications above: never worth delaying or failing the visitor's
-    // actual reply over a billing-ledger write.
+    // plan or no-plan-yet bot (see BillingService.chargeTokenUsage), real
+    // debit for a 'token'-plan one. Fire-and-forget like the notifications
+    // above: never worth delaying or failing the visitor's actual reply over
+    // a billing-ledger write.
     this.billing
-      .chargeTokenUsage(bot.companyId, structuredReply.tokensUsedPrompt ?? 0, structuredReply.tokensUsedCompletion ?? 0, billingCompany)
+      .chargeTokenUsage(bot.id, structuredReply.tokensUsedPrompt ?? 0, structuredReply.tokensUsedCompletion ?? 0, billingBot)
       .catch((error) => {
-        this.logger.error(`Token usage charge failed for company ${bot.companyId}: ${String(error)}`);
+        this.logger.error(`Token usage charge failed for bot ${bot.id}: ${String(error)}`);
       });
 
     return {
@@ -1947,7 +1951,7 @@ export class WidgetService {
         // the duplicate is discovered. subscriptionActive stays false, so
         // sendMessage's existing trial-expired gate applies from the very
         // next message.
-        await this.provisioning.markTrialForfeited(bot.companyId);
+        await this.provisioning.markTrialForfeited(bot.id);
         await this.telegram.alertPlatformAdmin(
           `Домен «${normalized}» (бот «${bot.name}») уже используется другим ботом — похоже на повторную ` +
             'регистрацию под тот же бизнес ради ещё одного бесплатного триала. Аккаунт переведён в платный ' +

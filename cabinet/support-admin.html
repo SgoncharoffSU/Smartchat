@@ -449,10 +449,19 @@
       editRow.hidden = !editRow.hidden;
     }
 
+    // Billing (trialEndsAt/subscriptionActive) moved from Company to Bot —
+    // one subscription per bot now, not shared company-wide (see the
+    // backend's own Bot schema comment). Shown here per the company's
+    // OLDEST bot, same "primary bot" convention /api/cabinet/me itself uses
+    // for its own legacy top-level fields — a multi-bot company's other
+    // bots each have their own independent status, not reflected in this
+    // one-line-per-company summary.
     function companyStatusText(c) {
-      if (c.subscriptionActive) return 'Оплачено';
-      if (c.trialEndsAt) {
-        var daysLeft = Math.ceil((new Date(c.trialEndsAt).getTime() - Date.now()) / 86400000);
+      var b = c.bots && c.bots[0];
+      if (!b) return '—';
+      if (b.subscriptionActive) return 'Оплачено';
+      if (b.trialEndsAt) {
+        var daysLeft = Math.ceil((new Date(b.trialEndsAt).getTime() - Date.now()) / 86400000);
         return daysLeft >= 0 ? 'Пробный, ещё ' + daysLeft + ' дн.' : 'Пробный истёк';
       }
       return '—';

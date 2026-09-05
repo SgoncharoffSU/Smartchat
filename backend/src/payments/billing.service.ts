@@ -6,7 +6,11 @@ import { Prisma } from '@prisma/client';
 
 const RETURN_URL = 'https://chat.glavinstrument.com/cabinet/?paid=1';
 
-type CompanyWithPlan = Prisma.CompanyGetPayload<{ include: { tariffPlan: true } }>;
+// Billing lives on Bot now, not Company — "один бот – одна абонентская
+// плата", a company with several bots pays for each separately (see Bot's
+// own schema comment for the full field-by-field rationale, unchanged from
+// when they lived on Company).
+type BotWithPlan = Prisma.BotGetPayload<{ include: { tariffPlan: true } }>;
 
 @Injectable()
 export class BillingService {
@@ -19,20 +23,34 @@ export class BillingService {
   ) {}
 
   /**
+   * Same convention as KnowledgeService/CabinetService/DislikesService's own
+   * findOwnedBot — botId explicit once the cabinet's bot switcher picked
+   * one, falling back to "this company's oldest bot" when omitted (the old,
+   * pre-multi-bot cabinet's checkout/autopay calls never send one).
+   */
+  private async findOwnedBot(companyId: string, botId?: string) {
+    const bot = botId
+      ? await this.prisma.bot.findFirst({ where: { id: botId, companyId } })
+      : await this.prisma.bot.findFirst({ where: { companyId }, orderBy: { createdAt: 'asc' } });
+    if (!bot) throw new NotFoundException('No bot found for this company');
+    return bot;
+  }
+
+  /**
    * Shared fetch for isBlocked/chargeTokenUsage/chargeConfirmedLead — all
-   * three used to run this same company+tariffPlan query independently, and
+   * three used to run this same bot+tariffPlan query independently, and
    * WidgetService.sendMessage calls all three in one turn (isBlocked up
    * front, the other two fire-and-forget near the end), so every message
    * that captures a lead did it 3 times over (found by code review). Each
-   * method still accepts an optional pre-fetched `company` so a caller that
+   * method still accepts an optional pre-fetched `bot` so a caller that
    * already has one (sendMessage's own isBlocked check) can pass it through
    * to the later calls instead of re-fetching; tariffPlan.kind/rates don't
    * change mid-conversation, so reusing a snapshot from earlier in the same
    * turn is safe — the actual balance decrements below are still atomic
    * Prisma {decrement} updates, never computed from this snapshot's value.
    */
-  getCompanyWithPlan(companyId: string): Promise<CompanyWithPlan | null> {
-    return this.prisma.company.findUnique({ where: { id: companyId }, include: { tariffPlan: true } });
+  getBotWithPlan(botId: string): Promise<BotWithPlan | null> {
+    return this.prisma.bot.findUnique({ where: { id: botId }, include: { tariffPlan: true } });
   }
 
   /**
@@ -77,14 +95,25 @@ export class BillingService {
   /**
    * One Payment row per checkout click, 'pending' until the webhook (via
    * confirmPayment below) verifies it actually succeeded. Returns the
-   * YooKassa-hosted page to redirect the visitor's browser to.
+   * YooKassa-hosted page to redirect the visitor's browser to. botId is the
+   * real billing owner now; companyId is looked up from it and stored
+   * alongside (denormalized — see Payment's own schema comment) purely for
+   * company-wide payment-history queries.
    */
-  async createCheckout(companyId: string, tariffPlanId: string) {
-    const plan = await this.prisma.tariffPlan.findUnique({ where: { id: tariffPlanId } });
+  async createCheckout(companyId: string, botId: string | undefined, tariffPlanId: string) {
+    const [plan, bot] = await Promise.all([
+      this.prisma.tariffPlan.findUnique({ where: { id: tariffPlanId } }),
+      // findOwnedBot itself re-checks ownership when botId IS given (the
+      // `companyId` filter in its own query) — never trusts a bot id from
+      // the request body alone, or one company could buy a plan for a bot
+      // it doesn't own.
+      this.findOwnedBot(companyId, botId),
+    ]);
     if (!plan || !plan.isActive) throw new NotFoundException('Tariff plan not found');
 
     const payment = await this.prisma.payment.create({
       data: {
+        botId: bot.id,
         companyId,
         tariffPlanId: plan.id,
         amountRub: plan.priceRub,
@@ -150,81 +179,83 @@ export class BillingService {
 
       const plan = payment.tariffPlan;
       if (plan.kind === 'unlimited') {
-        const company = await tx.company.findUnique({ where: { id: payment.companyId } });
+        const bot = await tx.bot.findUnique({ where: { id: payment.botId } });
         // Extends from "now" unless there's real time left on a still-active
         // period — stacking a renewal on top of unused days instead of
         // discarding them.
-        const base = company?.planExpiresAt && company.planExpiresAt > new Date() ? company.planExpiresAt : new Date();
+        const base = bot?.planExpiresAt && bot.planExpiresAt > new Date() ? bot.planExpiresAt : new Date();
         const periodDays = plan.periodDays ?? 30;
         const expiresAt = new Date(base.getTime() + periodDays * 24 * 60 * 60 * 1000);
-        await tx.company.update({
-          where: { id: payment.companyId },
+        await tx.bot.update({
+          where: { id: payment.botId },
           data: { tariffPlanId: plan.id, planExpiresAt: expiresAt },
         });
       } else {
         // 'token' or 'lead' — both share tokenBalanceRub (see its own schema
         // comment); top up the prepaid RUB balance, never overwrite it.
-        await tx.company.update({
-          where: { id: payment.companyId },
+        await tx.bot.update({
+          where: { id: payment.botId },
           data: { tariffPlanId: plan.id, tokenBalanceRub: { increment: payment.amountRub } },
         });
       }
     });
 
-    this.logger.log(`Payment ${payment.id} confirmed for company ${payment.companyId} (plan ${payment.tariffPlan.name})`);
+    this.logger.log(`Payment ${payment.id} confirmed for bot ${payment.botId} (plan ${payment.tariffPlan.name})`);
     return { ok: true, alreadyProcessed: false };
   }
 
   /**
    * Debits the real, measured cost of one completion call from a 'token'
-   * plan company's prepaid balance — input and output tokens priced
-   * separately (see effectiveRates) — called from WidgetService right after
-   * every completion. A no-op for an 'unlimited'-plan or no-plan-yet company
-   * (nothing to debit); balance is allowed to go negative rather than
-   * mid-reply-cutting a conversation — see isBlocked below for where that
-   * actually gets enforced, on the NEXT message instead.
+   * plan bot's prepaid balance — input and output tokens priced separately
+   * (see effectiveRates) — called from WidgetService right after every
+   * completion. A no-op for an 'unlimited'-plan or no-plan-yet bot (nothing
+   * to debit); balance is allowed to go negative rather than mid-reply-
+   * cutting a conversation — see isBlocked below for where that actually
+   * gets enforced, on the NEXT message instead.
    */
-  async chargeTokenUsage(companyId: string, promptTokens: number, completionTokens: number, company?: CompanyWithPlan | null) {
+  async chargeTokenUsage(botId: string, promptTokens: number, completionTokens: number, bot?: BotWithPlan | null) {
     if (promptTokens <= 0 && completionTokens <= 0) return;
-    company ??= await this.getCompanyWithPlan(companyId);
-    if (!company?.tariffPlan || company.tariffPlan.kind !== 'token') return;
-    const rates = this.effectiveRates(company.tariffPlan);
+    bot ??= await this.getBotWithPlan(botId);
+    if (!bot?.tariffPlan || bot.tariffPlan.kind !== 'token') return;
+    const rates = this.effectiveRates(bot.tariffPlan);
     if (!rates) return;
 
     const costRub = (promptTokens / 1000) * rates.input + (completionTokens / 1000) * rates.output;
     if (costRub <= 0) return;
-    await this.prisma.company.update({
-      where: { id: companyId },
+    await this.prisma.bot.update({
+      where: { id: botId },
       data: { tokenBalanceRub: { decrement: costRub } },
     });
   }
 
   /**
-   * Debits the flat per-lead price from a 'lead'-plan company's prepaid
-   * balance — called from WidgetService only the FIRST time a given dialog
-   * captures a lead (see widget.service.ts's own comment at the call site),
-   * never on later turns that just add more fields to the same Lead row. A
-   * no-op for any other plan kind (or no plan yet) — mirrors
-   * chargeTokenUsage's own shape/guards.
+   * Debits the flat per-lead price from a 'lead'-plan bot's prepaid balance —
+   * called from WidgetService only the FIRST time a given dialog captures a
+   * lead (see widget.service.ts's own comment at the call site), never on
+   * later turns that just add more fields to the same Lead row. A no-op for
+   * any other plan kind (or no plan yet) — mirrors chargeTokenUsage's own
+   * shape/guards.
    */
-  async chargeConfirmedLead(companyId: string, company?: CompanyWithPlan | null) {
-    company ??= await this.getCompanyWithPlan(companyId);
-    if (!company?.tariffPlan || company.tariffPlan.kind !== 'lead') return;
-    const rate = company.tariffPlan.leadRubPerLead?.toNumber();
+  async chargeConfirmedLead(botId: string, bot?: BotWithPlan | null) {
+    bot ??= await this.getBotWithPlan(botId);
+    if (!bot?.tariffPlan || bot.tariffPlan.kind !== 'lead') return;
+    const rate = bot.tariffPlan.leadRubPerLead?.toNumber();
     if (!rate) return;
-    await this.prisma.company.update({
-      where: { id: companyId },
+    await this.prisma.bot.update({
+      where: { id: botId },
       data: { tokenBalanceRub: { decrement: rate } },
     });
   }
 
   /** Real succeeded payments only — the billing page's "История операций"
    * table, same rows a 'pending' checkout never surfaces here until the
-   * webhook actually confirms it (see confirmPayment above). */
+   * webhook actually confirms it (see confirmPayment above). Company-wide
+   * (across every one of its bots) since Payment keeps a denormalized
+   * companyId alongside the real botId owner — see its own schema comment. */
   async listPayments(companyId: string) {
     const payments = await this.prisma.payment.findMany({
       where: { companyId, status: 'succeeded' },
-      include: { tariffPlan: true },
+      include: { tariffPlan: true, bot: { select: { id: true, name: true, label: true } } },
       orderBy: { confirmedAt: 'desc' },
     });
     return payments.map((p) => ({
@@ -232,16 +263,19 @@ export class BillingService {
       planName: p.tariffPlan.name,
       amountRub: p.amountRub.toNumber(),
       confirmedAt: p.confirmedAt,
+      botId: p.bot.id,
+      botName: p.bot.label || p.bot.name,
     }));
   }
 
   /**
-   * Toggle only — see Company.autoPayEnabled's own schema comment for why
-   * this doesn't yet trigger a real charge on its own (no saved YooKassa
-   * payment method integration in this pass).
+   * Toggle only — see Bot.autoPayEnabled's own schema comment for why this
+   * doesn't yet trigger a real charge on its own (no saved YooKassa payment
+   * method integration in this pass).
    */
-  async setAutoPay(companyId: string, enabled: boolean) {
-    await this.prisma.company.update({ where: { id: companyId }, data: { autoPayEnabled: enabled } });
+  async setAutoPay(companyId: string, botId: string | undefined, enabled: boolean) {
+    const bot = await this.findOwnedBot(companyId, botId);
+    await this.prisma.bot.update({ where: { id: bot.id }, data: { autoPayEnabled: enabled } });
     return { ok: true };
   }
 
@@ -249,18 +283,18 @@ export class BillingService {
    * True when the bot should stop answering — real billing state only,
    * doesn't touch the older trialEndsAt/subscriptionActive flow (that still
    * governs the "free trial" window on its own, checked separately by
-   * whatever already reads those two fields). A 'token' or 'lead' company
-   * with a depleted tokenBalanceRub is blocked (same field, see its own
-   * schema comment); an 'unlimited' company past planExpiresAt is blocked;
-   * anyone else (no tariffPlan chosen) is NOT blocked here — they're still
-   * just on the trial.
+   * whatever already reads those two fields). A 'token' or 'lead' bot with a
+   * depleted tokenBalanceRub is blocked (same field, see its own schema
+   * comment); an 'unlimited' bot past planExpiresAt is blocked; anyone else
+   * (no tariffPlan chosen) is NOT blocked here — they're still just on the
+   * trial.
    */
-  async isBlocked(companyId: string, company?: CompanyWithPlan | null): Promise<boolean> {
-    company ??= await this.getCompanyWithPlan(companyId);
-    if (!company?.tariffPlan) return false;
-    if (company.tariffPlan.kind === 'unlimited') {
-      return !company.planExpiresAt || company.planExpiresAt < new Date();
+  async isBlocked(botId: string, bot?: BotWithPlan | null): Promise<boolean> {
+    bot ??= await this.getBotWithPlan(botId);
+    if (!bot?.tariffPlan) return false;
+    if (bot.tariffPlan.kind === 'unlimited') {
+      return !bot.planExpiresAt || bot.planExpiresAt < new Date();
     }
-    return company.tokenBalanceRub.toNumber() <= 0;
+    return bot.tokenBalanceRub.toNumber() <= 0;
   }
 }
