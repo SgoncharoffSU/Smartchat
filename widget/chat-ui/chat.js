@@ -707,8 +707,25 @@
       // Recorded as early as possible — before any of the typing-delay
       // sleeps and rendering below — to close the race with pollForNewMessages
       // as tightly as this code can (see renderedMessageIds' own comment).
+      // Checked BEFORE being overwritten, not just set, because that only
+      // ever protected HALF of the race: pollForNewMessages already skips a
+      // message this function rendered first, but nothing here used to skip
+      // the reverse order — a slow reply (a real one seen live: 35s) can
+      // finish saving server-side and get picked up + rendered by a poll
+      // tick while THIS fetch is still sitting in the artificial
+      // typing/reading delay below; when it then resolves, this code used to
+      // render the exact same bubbles a second time regardless. Found live
+      // on Safari/Mac, where slower/less predictable connection timing makes
+      // that window far more likely to be hit than elsewhere, but the race
+      // itself isn't Safari-specific.
+      var alreadyRenderedByPoll = Boolean(data.messageId && renderedMessageIds[data.messageId]);
       if (data.messageId) renderedMessageIds[data.messageId] = true;
       updateBotName(data.botName);
+      if (alreadyRenderedByPoll) {
+        hideTyping(typingEl);
+        lastBotText = data.reply;
+        return;
+      }
       var bubbles = splitIntoBubbles(data.reply);
 
       // Captured BEFORE lastBotText is overwritten below — this is what the
@@ -1044,10 +1061,22 @@
         if (assistantMessages.length === 0) return;
         assistantMessages.forEach(function (m) {
           if (m.id) renderedMessageIds[m.id] = true;
-          splitIntoBubbles(m.content).forEach(function (chunk) { renderMessage('assistant', chunk); });
+          // Same situationContext requestReplyAndRender would compute for this
+          // exact reply — lastBotText/lastVisitorText still hold the PRE-turn
+          // values here (only requestReplyAndRender itself ever overwrites
+          // lastBotText, and only after this same check), so this stays correct
+          // regardless of which of the two races to render this message first.
+          var situationContext = lastBotText ? lastBotText + '\n' + lastVisitorText : lastVisitorText;
+          var lastBubbleEl = null;
+          splitIntoBubbles(m.content).forEach(function (chunk) {
+            lastBubbleEl = renderMessage('assistant', chunk);
+            if (ownerPreview) attachCorrectionControl(lastBubbleEl, situationContext, chunk);
+          });
           if (m.attachmentUrl) {
             renderAttachment({ url: m.attachmentUrl, name: m.attachmentName, mimeType: m.attachmentMimeType });
           }
+          // Per TURN, same as requestReplyAndRender's own — see its comment.
+          if (publicDislikeMode && lastBubbleEl) attachDislikeControl(lastBubbleEl, m.id);
         });
         renderButtons(assistantMessages[assistantMessages.length - 1].buttons);
       })
