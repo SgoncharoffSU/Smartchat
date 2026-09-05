@@ -55,6 +55,11 @@ type CabinetAnalytics = {
     verifiedCount: number;
     reviewedCount: number;
   };
+  // A/B/C/D greeting-hook test, real conversion numbers per variant — see
+  // CabinetService's own variantReport comment (shown = teaser served,
+  // engaged = visitor actually replied, converted = dialog reached handoff).
+  variantReport: Array<{ label: string; text: string | null; shown: number; engaged: number; converted: number; conversionRate: number }>;
+  variantsAvailable: number;
 } | null;
 
 const ESCALATION_REASON_LABELS: Record<string, string> = { dissatisfaction: "Недоволен ответом", disliked: "Дизлайк тестировщика" };
@@ -973,9 +978,123 @@ function Knowledge() {
   </div>;
 }
 
-function WidgetSettings() {
-  const [color, setColor] = useState("#8298ff"); const [saved, setSaved] = useState(false);
-  return <div className="settings-layout"><section className="settings-form"><div className="settings-section"><div className="section-title"><span><Bot /></span><div><h2>Личность бота</h2><p>То, как он представляется посетителю</p></div></div><label><span>Название компании</span><input defaultValue="Бани Викинг" /></label><div className="two-fields"><label><span>Имя бота</span><input defaultValue="Алексей" /></label><label><span>Голос</span><Select defaultValue="male"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="male">Мужской</SelectItem><SelectItem value="female">Женский</SelectItem></SelectContent></Select></label></div></div><div className="settings-section"><div className="section-title"><span><Sparkles /></span><div><h2>Внешний вид</h2><p>Цвет и расположение виджета</p></div></div><div className="color-field"><span>Акцентный цвет</span><div>{["#8298ff", "#c8ff4d", "#ff9d6c", "#182b43"].map(c => <button aria-label={`Цвет ${c}`} className={color === c ? "active" : ""} style={{ background: c }} onClick={() => setColor(c)} key={c} />)}<input value={color} onChange={e => setColor(e.target.value)} /></div></div><label><span>Расположение</span><Select defaultValue="right"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="right">Справа внизу</SelectItem><SelectItem value="left">Слева внизу</SelectItem></SelectContent></Select></label></div><div className="settings-section"><div className="section-title"><span><TestTube2 /></span><div><h2>Приветствия</h2><p>Сравнивайте варианты в A/B/C/D-тесте</p></div></div><div className="greeting"><b>A</b><textarea defaultValue="Здравствуйте! Помогу подобрать баню под ваши задачи." /><StatusPill>Активно</StatusPill></div><button className="add-greeting"><Plus /> Добавить вариант</button></div><Button className="save-button" style={{ background: saved ? "#153526" : undefined }} onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 1800); }}>{saved ? <><Check />Сохранено</> : "Сохранить изменения"}</Button></section><aside className="live-preview"><div className="preview-label"><span><i /> Предпросмотр</span><button><ExternalLink /></button></div><div className="preview-site"><div className="preview-nav" /><div className="preview-copy"><i /><i /><i /></div><div className="floating-widget" style={{ ["--widget-accent" as string]: color }}><div className="widget-head"><span className="bot-avatar">А</span><div><b>Алексей</b><small><i /> На связи</small></div></div><p>Здравствуйте! Помогу подобрать баню под ваши задачи.</p><div className="widget-input"><span>Напишите сообщение</span><button><Send /></button></div></div></div></aside></div>;
+// Real /api/cabinet/appearance (name/gender/color/position — GET+POST) and
+// /api/cabinet/variants (POST, add-only) — this page used to be pure demo
+// state (Select values that didn't even match the backend's real "bottom-
+// right"/"bottom-left" strings) with nothing here ever reaching the real
+// bot config, so every field quietly diverged from what the live widget
+// actually does (found live: "не соответствует реалиям... не участвуют в
+// процессе эти данные"). Greeting variants can only be ADDED, not edited or
+// removed, by the backend as it exists today (see CabinetService.
+// addGreetingVariant) — shown read-only with their real shown/engaged/
+// converted numbers (analytics.variantReport), not as editable textareas.
+function WidgetSettings({ me, analytics, refetchAnalytics }: { me: CabinetMe; analytics: CabinetAnalytics; refetchAnalytics: () => void }) {
+  type Appearance = { name: string; label: string | null; gender: string; color: string; position: string };
+  const [form, setForm] = useState<Appearance | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [newVariant, setNewVariant] = useState("");
+  const [addingVariant, setAddingVariant] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [variantError, setVariantError] = useState<string | null>(null);
+  // variantReport only gets an entry once real traffic is randomly assigned
+  // this variant's index (see widget.service.ts) — a freshly-added one is
+  // otherwise invisible until then, which reads as "the add silently failed"
+  // (found in review). Shown locally with zero stats until its own text
+  // shows up for real in variantReport, then dropped from here so it isn't
+  // shown twice.
+  const [pendingVariants, setPendingVariants] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchJsonWithRetry<Appearance>("/api/cabinet/appearance").then((data) => { if (data) setForm(data); });
+  }, []);
+  // me loads in via its own separately-retried fetch (see useCabinetData) —
+  // seeding companyName only once, the first time it arrives, so it doesn't
+  // clobber an edit the owner already started typing on a slow connection.
+  useEffect(() => {
+    if (me?.companyName && companyName === null) setCompanyName(me.companyName);
+  }, [me, companyName]);
+
+  const swatches = ["#4f46e5", "#8298ff", "#c8ff4d", "#ff9d6c", "#182b43"];
+
+  const save = () => {
+    if (!form) return;
+    setSaving(true);
+    setSaveError(null);
+    Promise.all([
+      fetch("/api/cabinet/appearance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.name, gender: form.gender, color: form.color, position: form.position }),
+      }),
+      companyName !== null && companyName !== me?.companyName
+        ? fetch("/api/cabinet/company", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: companyName }) })
+        : Promise.resolve(null),
+    ])
+      // Both a real 4xx (bad color format, name too long) and a network
+      // failure need handling here — fetch() only ever rejects on the
+      // latter, so the ok check is what actually catches the former instead
+      // of showing "Сохранено" over a save the backend refused. Checked and
+      // reported per-request, not combined into one pass/fail: these are two
+      // INDEPENDENT endpoints, so a name-length error on the company POST
+      // must never be reported in a way that implies the (already-committed)
+      // appearance POST didn't save either — that would send the owner
+      // re-submitting data that's already saved.
+      .then(([appearanceRes, companyRes]) => {
+        const failed: string[] = [];
+        if (!appearanceRes.ok) failed.push('внешний вид/имя бота');
+        if (companyRes && !companyRes.ok) failed.push('название компании');
+        if (failed.length > 0) {
+          setSaveError(`Не сохранилось: ${failed.join(', ')} — проверьте значение${failed.length > 1 ? 'я' : ''}. ${failed.length < 2 ? 'Остальное уже сохранено.' : ''}`.trim());
+          return;
+        }
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1800);
+      })
+      .catch(() => setSaveError("Не получилось сохранить — проверьте соединение и повторите."))
+      .finally(() => setSaving(false));
+  };
+
+  const addVariant = () => {
+    const text = newVariant.trim();
+    if (!text) return;
+    setVariantError(null);
+    // The backend stores this wrapped as `...РОВНО такой: "<text>" Не...`
+    // (buildPinnedOpenerInstruction) and later pulls it back out for display
+    // by regex-matching the first quoted span (extractVariantHook) — a
+    // literal " in the text breaks that extraction (and pendingVariants'
+    // own dedup-by-exact-text below), silently mangling what a real visitor
+    // is shown. Rejected client-side rather than trying to escape it, since
+    // the model-facing instruction has no escaping convention of its own to
+    // rely on either.
+    if (text.includes('"')) {
+      setVariantError('Текст не должен содержать кавычки ("). Опишите фразу без них.');
+      return;
+    }
+    setAddingVariant(true);
+    fetch("/api/cabinet/variants", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) })
+      .then((r) => {
+        if (!r.ok) throw new Error('add variant failed');
+        setPendingVariants((p) => [...p, text]);
+        setNewVariant("");
+        refetchAnalytics();
+      })
+      .catch(() => setVariantError("Не получилось добавить вариант — текст должен быть не короче 3 символов."))
+      .finally(() => setAddingVariant(false));
+  };
+
+  const realVariants = analytics?.variantReport ?? [];
+  const realTexts = new Set(realVariants.map((v) => v.text));
+  const displayVariants = [
+    ...realVariants,
+    ...pendingVariants
+      .filter((t) => !realTexts.has(t))
+      .map((t, i) => ({ label: String.fromCharCode(65 + realVariants.length + i), text: t, shown: 0, engaged: 0, converted: 0, conversionRate: 0 })),
+  ];
+  const previewGreeting = displayVariants.find((v) => v.text)?.text || "Здравствуйте! Чем можем помочь?";
+
+  return <div className="settings-layout"><section className="settings-form"><div className="settings-section"><div className="section-title"><span><Bot /></span><div><h2>Личность бота</h2><p>То, как он представляется посетителю</p></div></div><label><span>Название компании</span><input value={companyName ?? ""} onChange={(e) => setCompanyName(e.target.value)} placeholder="Загружаю…" /></label><div className="two-fields"><label><span>Имя бота</span><input value={form?.name ?? ""} onChange={(e) => setForm((f) => f && { ...f, name: e.target.value })} placeholder="Загружаю…" /></label><label><span>Голос</span><Select value={form?.gender ?? "female"} onValueChange={(v) => setForm((f) => f && { ...f, gender: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="male">Мужской</SelectItem><SelectItem value="female">Женский</SelectItem></SelectContent></Select></label></div></div><div className="settings-section"><div className="section-title"><span><Sparkles /></span><div><h2>Внешний вид</h2><p>Цвет и расположение виджета</p></div></div><div className="color-field"><span>Акцентный цвет</span><div>{swatches.map(c => <button aria-label={`Цвет ${c}`} className={form?.color === c ? "active" : ""} style={{ background: c }} onClick={() => setForm((f) => f && { ...f, color: c })} key={c} />)}<input value={form?.color ?? ""} onChange={(e) => setForm((f) => f && { ...f, color: e.target.value })} /></div></div><label><span>Расположение</span><Select value={form?.position ?? "bottom-right"} onValueChange={(v) => setForm((f) => f && { ...f, position: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="bottom-right">Справа внизу</SelectItem><SelectItem value="bottom-left">Слева внизу</SelectItem></SelectContent></Select></label></div><div className="settings-section"><div className="section-title"><span><TestTube2 /></span><div><h2>Приветствия</h2><p>Сравнивайте варианты в A/B/C/D-тесте — реальные показы и конверсия по каждому</p></div></div>{displayVariants.length === 0 && <p style={{ color: "#7d8992", fontSize: 11, margin: "0 0 10px" }}>Вариантов пока нет — добавьте первый ниже.</p>}{displayVariants.map(v => <div className="greeting" key={v.label}><b>{v.label}</b><p style={{ margin: 0, fontSize: 11, lineHeight: 1.5 }}>{v.text || "—"}</p><StatusPill tone={v.shown === 0 ? "gray" : "blue"}>{v.shown === 0 ? "Ещё не показан" : `${Math.round(v.conversionRate)}% из ${v.engaged}`}</StatusPill></div>)}<label style={{ marginTop: displayVariants.length ? 14 : 0 }}><span>Новый вариант приветствия</span><input value={newVariant} onChange={(e) => setNewVariant(e.target.value)} placeholder="Например: А вы знали, что баня прогревается за час?" /></label>{variantError && <p className="form-error">{variantError}</p>}<button className="add-greeting" disabled={addingVariant || !newVariant.trim()} onClick={addVariant}><Plus /> {addingVariant ? "Добавляю…" : "Добавить вариант"}</button></div>{saveError && <p className="form-error">{saveError}</p>}<Button className="save-button" disabled={!form || saving} style={{ background: saved ? "#153526" : undefined }} onClick={save}>{saved ? <><Check />Сохранено</> : saving ? "Сохраняю…" : "Сохранить изменения"}</Button></section><aside className="live-preview"><div className="preview-label"><span><i /> Предпросмотр</span><button><ExternalLink /></button></div><div className="preview-site"><div className="preview-nav" /><div className="preview-copy"><i /><i /><i /></div><div className="floating-widget" style={{ ["--widget-accent" as string]: form?.color ?? "#4f46e5" }}><div className="widget-head"><span className="bot-avatar">{initials(form?.name || "Бот")}</span><div><b>{form?.name || "Бот"}</b><small><i /> На связи</small></div></div><p>{previewGreeting}</p><div className="widget-input"><span>Напишите сообщение</span><button><Send /></button></div></div></div></aside></div>;
 }
 
 function Installation() {
@@ -1392,7 +1511,7 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
 
 function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, period, changePeriod, crmDealToOpen, setCrmDealToOpen }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} />, training: <Training me={me} />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} />, training: <Training me={me} />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings me={me} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
   }), [setView, onAction, analytics, refetchAnalytics, me, period, changePeriod, crmDealToOpen, setCrmDealToOpen]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
