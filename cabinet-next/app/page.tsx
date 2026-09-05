@@ -206,7 +206,7 @@ const nav = [
     { id: "knowledge" as View, label: "База знаний", icon: BookOpen, badge: "17" },
   ]},
   { label: "Настройка", items: [
-    { id: "readiness" as View, label: "Статус внедрения", icon: Rocket, badge: "75%" },
+    { id: "readiness" as View, label: "Статус внедрения", icon: Rocket }, // badge computed live in Home() — see navBadge/readinessPercent
     { id: "widget" as View, label: "Виджет и приветствие", icon: SlidersHorizontal },
     { id: "install" as View, label: "Установка", icon: Link2 },
     { id: "integrations" as View, label: "Интеграции", icon: Workflow },
@@ -360,16 +360,19 @@ function Dashboard({ setView, onAction, analytics, period, onPeriodChange }: { s
   </>;
 }
 
-const checklist = [
-  ["Заявка и демо-доступ", "Доступ на 15 дней открыт", 15, true],
-  ["Знакомство с менеджером", "Задачи бизнеса и сайт зафиксированы", 15, true],
-  ["Настройка сценария", "Менеджер настроил вопросы и передачу заявки", 20, true],
-  ["База знаний", "17 записей добавлены и проверены", 25, true],
-  ["Проверка ответов", "Менеджер проводит тестовые диалоги", 15, false],
-  ["Установка и интеграции", "Виджет, CRM и уведомления", 10, false],
-];
+type ReadinessStep = { key: string; title: string; nextStepTitle?: string; description: string; weight: number; completed: boolean };
+type ReadinessData = { percent: number; steps: ReadinessStep[]; nextStep: ReadinessStep | null };
 
-function Readiness({ setView }: { setView: (v: View) => void }) {
+// Used to be a hardcoded array shared by every account — 75%, "17 записей",
+// done/not-done, none of it tied to anything real (found live: "1. Заявка на
+// доступ откуда поступит... 5. База знаний. Как понять, что достаточно?").
+// CabinetService.getReadiness already computes a real, per-bot version of
+// exactly this (site/knowledge/goal/telegram/test/install, each
+// auto-detected from actual data) for the OLD cabinet — this just renders
+// the same data here instead of building a second endpoint. Fetched once in
+// Home() (not per-component) so the sidebar badge/ring and this page always
+// agree and a bot switch only costs one request, not two.
+function Readiness({ setView, readiness }: { setView: (v: View) => void; readiness: ReadinessData | null }) {
   // Real name/photo instead of the old hardcoded "Мария" no real account
   // had ever actually met (found live: "должен быть реальный менеджер").
   // One global manager for now, configured in the superadmin panel — see
@@ -379,7 +382,14 @@ function Readiness({ setView }: { setView: (v: View) => void }) {
   useEffect(() => { fetchJsonWithRetry<{ name: string; photoUrl: string | null }>("/api/cabinet/manager").then(setManager); }, []);
   const managerName = manager?.name ?? "…";
 
-  return <div className="readiness-layout"><article className="readiness-hero panel"><div><span className="section-label">Внедрение включено в любой тариф</span><h2>Менеджер готовит бот к запуску вместе с вами</h2><p>После заявки и получения демо-доступа менеджер связывается с клиентом, настраивает сценарий, помогает собрать знания, проверяет ответы и подключает продукт.</p><Button className="primary-action" data-live onClick={() => setView("support")}>Написать менеджеру <ArrowRight /></Button></div><div className="big-progress"><strong>75%</strong><Progress value={75} /><small>Следующий этап: проверка ответов</small></div></article><div className="checklist">{checklist.map(([name, desc, weight, done]) => <article className={`check-row ${done ? "done" : "next"}`} key={String(name)}><span className="check-state">{done ? <Check /> : <Clock3 />}</span><div><b>{name}</b><small>{desc}</small></div><StatusPill tone={done ? "green" : "orange"}>{done ? `Готово · ${weight}%` : `В работе · ${weight}%`}</StatusPill></article>)}</div><aside className="manager-card panel">{manager?.photoUrl ? <img className="manager-avatar" src={manager.photoUrl} alt={managerName} style={{ objectFit: "cover" }} /> : <span className="manager-avatar">{initials(managerName)}</span>}<span className="section-label">Ваш менеджер внедрения</span><h2>{managerName} помогает с запуском</h2><p>Вопросы по настройке, базе знаний, тестам и установке можно передать одному человеку — без самостоятельного внедрения.</p><div className="manager-meta"><span><b>Следующий шаг</b><small>Проверить ответы и согласовать запуск</small></span><span><b>Связь</b><small>В рабочее время через кабинет</small></span></div><Button className="primary-action" data-live onClick={() => setView("support")}>Связаться с менеджером</Button><Button variant="outline" data-live onClick={() => setView("integrations")}>Посмотреть подключения</Button></aside></div>;
+  const steps = readiness?.steps ?? [];
+  const percent = readiness?.percent ?? 0;
+  // nextStepTitle overrides the generic title with situation-specific
+  // phrasing (e.g. "Не удалось прочитать сайт X") — same fallback order as
+  // cabinet/index.html's own rendering of the identical backend field.
+  const nextStepTitle = readiness?.nextStep?.nextStepTitle || readiness?.nextStep?.title;
+
+  return <div className="readiness-layout"><article className="readiness-hero panel"><div><span className="section-label">Внедрение включено в любой тариф</span><h2>Менеджер готовит бот к запуску вместе с вами</h2><p>После заявки и получения демо-доступа менеджер связывается с клиентом, настраивает сценарий, помогает собрать знания, проверяет ответы и подключает продукт.</p><Button className="primary-action" data-live onClick={() => setView("support")}>Написать менеджеру <ArrowRight /></Button></div><div className="big-progress"><strong>{percent}%</strong><Progress value={percent} /><small>{nextStepTitle ? `Следующий этап: ${nextStepTitle}` : "Внедрение завершено"}</small></div></article><div className="checklist">{steps.map((s) => <article className={`check-row ${s.completed ? "done" : "next"}`} key={s.key}><span className="check-state">{s.completed ? <Check /> : <Clock3 />}</span><div><b>{s.title}</b><small>{s.description}</small></div><StatusPill tone={s.completed ? "green" : "orange"}>{s.completed ? `Готово · ${s.weight}%` : `В работе · ${s.weight}%`}</StatusPill></article>)}</div><aside className="manager-card panel">{manager?.photoUrl ? <img className="manager-avatar" src={manager.photoUrl} alt={managerName} style={{ objectFit: "cover" }} /> : <span className="manager-avatar">{initials(managerName)}</span>}<span className="section-label">Ваш менеджер внедрения</span><h2>{managerName} помогает с запуском</h2><p>Вопросы по настройке, базе знаний, тестам и установке можно передать одному человеку — без самостоятельного внедрения.</p><div className="manager-meta"><span><b>Следующий шаг</b><small>{nextStepTitle ?? "Всё готово"}</small></span><span><b>Связь</b><small>В рабочее время через кабинет</small></span></div><Button className="primary-action" data-live onClick={() => setView("support")}>Связаться с менеджером</Button><Button variant="outline" data-live onClick={() => setView("integrations")}>Посмотреть подключения</Button></aside></div>;
 }
 
 // Real /api/cabinet/analytics escalations.pending/needsVerification — same
@@ -2016,10 +2026,10 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
   return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isProfile ? <div className="prototype-form"><label><span>Имя</span><input defaultValue="Олег"/></label><label><span>Email</span><input defaultValue="oleg@example.ru"/></label><div className="switch-row"><div><Bell/><span><b>Еженедельный отчёт</b><small>По понедельникам на почту</small></span></div><Switch defaultChecked/></div></div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : isConnection ? <div className="prototype-form"><div className="prototype-steps"><span className="done"><Check/></span><p><b>Выберите сервис</b><small>Telegram, Bitrix24 или amoCRM</small></p><span>2</span><p><b>Разрешите доступ</b><small>Только к заявкам и нужным полям</small></p><span>3</span><p><b>Проверьте тестовую передачу</b><small>Покажем результат до включения</small></p></div></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
 }
 
-function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void }) {
+function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen, readiness }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void; readiness: ReadinessData | null }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
-  }), [setView, onAction, analytics, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen]);
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} readiness={readiness} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
+  }), [setView, onAction, analytics, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen, readiness]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
 
@@ -2111,31 +2121,58 @@ export default function Home() {
   const [crmDealToOpen, setCrmDealToOpen] = useState<string | null>(null);
   const { me, analytics, refetchAnalytics, refetchMe, signedOut, period, changePeriod, activeBotId, setActiveBotId } = useCabinetData();
   const [botSwitcherOpen, setBotSwitcherOpen] = useState(false);
-  if (signedOut) {
-    return <div className="dialogs-empty-conv" style={{ padding: 40 }}>Сессия не найдена, перенаправляю на вход…</div>;
-  }
-  const companyName = me?.companyName || "…";
   // The real active bot (see useCabinetData's own activeBotId comment), not
   // just bots[0] — a company with more than one bot expects switching here
   // to actually change what the rest of the cabinet shows (found live: "по
   // логике ожидаю этого" after clicking the bot-select / company-switch
-  // buttons and finding neither did anything real).
+  // buttons and finding neither did anything real). Computed here, ABOVE the
+  // signedOut early return below, because the hook that depends on it must
+  // stay unconditional — every hook here has to run on every render, signed
+  // out or not, or React throws on the render right after signedOut flips
+  // true (Rules of Hooks: found live via code-review).
   const activeBot = me?.bots.find((b) => b.id === activeBotId) ?? me?.bots[0] ?? null;
+  // Sidebar's own "Готово 75%" badge/ring used to be a hardcoded literal,
+  // never the same number the Readiness page itself showed once THAT was
+  // wired to real data — fetched once here (not duplicated per-component)
+  // so the sidebar and the Readiness page always agree and a bot switch only
+  // costs one request. requestId guards the same fast-switch race every
+  // other bot-scoped fetch in this file guards (see Dialogs' listRequestId)
+  // — otherwise bot B's slower response could land after bot A's on a quick
+  // A->B->A switch and show the wrong bot's percent.
+  const [readiness, setReadiness] = useState<ReadinessData | null>(null);
+  const readinessRequestId = useRef(0);
+  useEffect(() => {
+    const requestId = ++readinessRequestId.current;
+    setReadiness(null);
+    if (!activeBot?.id) return;
+    fetchJsonWithRetry<ReadinessData>(`/api/cabinet/readiness?botId=${activeBot.id}`).then((data) => {
+      if (requestId !== readinessRequestId.current) return;
+      if (data) setReadiness(data);
+    });
+  }, [activeBot?.id]);
+  if (signedOut) {
+    return <div className="dialogs-empty-conv" style={{ padding: 40 }}>Сессия не найдена, перенаправляю на вход…</div>;
+  }
+  const companyName = me?.companyName || "…";
   const botLabel = activeBot?.label || activeBot?.name || "Бот";
   const botDomain = activeBot?.sourceWebsite || "";
   const userName = me?.userName || "…";
   const roleLabel = (me && COMPANY_ROLE_LABELS[me.companyRole]) || "Сотрудник";
+  const readinessPercent = readiness?.percent ?? null;
   // Same definition as the old cabinet's own attentionCount (pending +
   // needsVerification escalations) — real, not the reference's static "0".
   const attentionCount = analytics ? analytics.escalations.pending.length + analytics.escalations.needsVerification.length : undefined;
-  const navBadge = (item: { id: View; badge?: string }): string | undefined =>
-    item.id === "attention" ? (attentionCount === undefined ? "…" : String(attentionCount)) : item.badge;
+  const navBadge = (item: { id: View; badge?: string }): string | undefined => {
+    if (item.id === "attention") return attentionCount === undefined ? "…" : String(attentionCount);
+    if (item.id === "readiness") return readinessPercent === null ? "…" : `${readinessPercent}%`;
+    return item.badge;
+  };
   // No more generic "demo action" popup on every unwired button (per the
   // account owner: "убери его везде, пусть сразу открывается нужная
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><div className="sidebar-help-collapsed" title="Внедрение готово на 75%"><ReadinessRing percent={75} /></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen}/></main></SidebarInset></SidebarProvider></TooltipProvider>
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
     <BotSwitcherDialog open={botSwitcherOpen} onClose={() => setBotSwitcherOpen(false)} bots={me?.bots ?? []} activeBotId={activeBot?.id ?? null} onSelect={(id) => { setActiveBotId(id); setBotSwitcherOpen(false); }} onCreated={(bot) => { refetchMe(); setActiveBotId(bot.id); setBotSwitcherOpen(false); }} />
   </div>;
 }

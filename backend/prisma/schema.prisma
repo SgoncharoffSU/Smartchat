@@ -480,6 +480,12 @@ model Bot {
   // of re-firing on every single visitor load of a persistently mismatched
   // install. See WidgetService.checkDomainIntegrity.
   domainMismatchAlertedAt DateTime? @map("domain_mismatch_alerted_at")
+  // Manager's own note from the "Знакомство с менеджером" onboarding call —
+  // internal only, never shown to the client, no weight in getReadiness's
+  // percent (that checklist is deliberately only real, auto-detected,
+  // owner-actionable signals). Found live: "а задачи бизнеса где фиксируем?
+  // Это цель или что?" — just a place to write it down, nothing scored.
+  managerNote             String?   @map("manager_note")
   // CRM lead-forwarding, v1 — deliberately the simplest thing that works
   // (an incoming-webhook URL / a private-integration token the owner
   // generates themselves in their own CRM), not a full OAuth app listed in

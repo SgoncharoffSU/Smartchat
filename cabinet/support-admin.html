@@ -66,6 +66,7 @@
         <button type="button" class="kb-add-tab" id="tabProviders">Провайдер ИИ</button>
         <button type="button" class="kb-add-tab" id="tabPayments">Оплата</button>
         <button type="button" class="kb-add-tab" id="tabManager">Менеджер</button>
+        <button type="button" class="kb-add-tab" id="tabOnboarding">Внедрение</button>
       </div>
 
       <div id="listView">
@@ -149,6 +150,24 @@
             </div>
             <span class="empty" id="managerPhotoStatus" style="display:block;margin-top:8px;"></span>
           </div>
+        </div>
+      </div>
+
+      <div id="onboardingView" hidden>
+        <div class="panel">
+          <h2>Внедрение — заметки о клиентах</h2>
+          <p class="sub" style="margin-bottom:14px;">
+            Сам «Статус внедрения» (сайт, база знаний, цель бота, Telegram, тест, установка) считается
+            автоматически и клиент видит его в своём кабинете. Здесь — только внутренняя заметка о задачах
+            бизнеса с созвона «Знакомство с менеджером», клиенту не показывается.
+          </p>
+          <div class="table-scroll">
+            <table id="onboardingTable" style="display:none">
+              <thead><tr><th>Компания</th><th>Бот</th><th>Заметка о задачах бизнеса</th><th></th></tr></thead>
+              <tbody id="onboardingRows"></tbody>
+            </table>
+          </div>
+          <p class="empty" id="onboardingEmpty" hidden>Ботов пока нет.</p>
         </div>
       </div>
 
@@ -254,8 +273,8 @@
       fetch('/api/cabinet/logout', { method: 'POST' }).then(function () { location.reload(); });
     });
 
-    var ALL_TABS = ['tabTickets', 'tabCompanies', 'tabProviders', 'tabPayments', 'tabManager'];
-    var ALL_TAB_VIEWS = ['listView', 'companiesView', 'providersView', 'paymentsView', 'managerView'];
+    var ALL_TABS = ['tabTickets', 'tabCompanies', 'tabProviders', 'tabPayments', 'tabManager', 'tabOnboarding'];
+    var ALL_TAB_VIEWS = ['listView', 'companiesView', 'providersView', 'paymentsView', 'managerView', 'onboardingView'];
     function activateTab(tabId) {
       ALL_TABS.forEach(function (id) { document.getElementById(id).classList.toggle('active', id === tabId); });
       ALL_TAB_VIEWS.forEach(function (id) { document.getElementById(id).hidden = true; });
@@ -287,6 +306,11 @@
       activateTab('tabManager');
       document.getElementById('managerView').hidden = false;
       loadManagerSettings();
+    });
+    document.getElementById('tabOnboarding').addEventListener('click', function () {
+      activateTab('tabOnboarding');
+      document.getElementById('onboardingView').hidden = false;
+      loadOnboarding();
     });
 
     function loadPaymentSettings() {
@@ -375,6 +399,72 @@
         .catch(function () { statusEl.textContent = 'Не получилось загрузить (JPEG/PNG/WebP, до 5 МБ).'; })
         .finally(function () { document.getElementById('managerPhotoInput').value = ''; });
     });
+
+    function loadOnboarding() {
+      fetch('/api/admin/manager-notes')
+        .then(function (res) { return res.json(); })
+        .then(renderOnboardingList)
+        .catch(function () {});
+    }
+
+    function renderOnboardingList(bots) {
+      var table = document.getElementById('onboardingTable');
+      var rows = document.getElementById('onboardingRows');
+      var empty = document.getElementById('onboardingEmpty');
+      rows.innerHTML = '';
+      empty.hidden = bots.length > 0;
+      table.style.display = bots.length > 0 ? 'table' : 'none';
+
+      bots.forEach(function (b) {
+        var tr = document.createElement('tr');
+        // textContent, not innerHTML — companyName/botLabel are customer-
+        // controlled (set at signup), so concatenating them into markup
+        // would let a name like "<img src=x onerror=...>" run in the
+        // superadmin's own session.
+        var companyTd = document.createElement('td');
+        companyTd.textContent = b.companyName;
+        var botTd = document.createElement('td');
+        botTd.textContent = b.botLabel;
+        tr.appendChild(companyTd);
+        tr.appendChild(botTd);
+
+        var noteTd = document.createElement('td');
+        var noteInput = document.createElement('input');
+        noteInput.type = 'text';
+        noteInput.style.width = '320px';
+        noteInput.value = b.managerNote || '';
+        noteInput.placeholder = 'Заметка ещё не заполнена';
+        noteTd.appendChild(noteInput);
+        tr.appendChild(noteTd);
+
+        var actionTd = document.createElement('td');
+        var saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'btn-primary btn-inline';
+        saveBtn.textContent = 'Сохранить';
+        var statusSpan = document.createElement('span');
+        statusSpan.className = 'empty';
+        statusSpan.style.marginLeft = '8px';
+        saveBtn.addEventListener('click', function () {
+          saveBtn.disabled = true;
+          statusSpan.textContent = 'Сохраняю…';
+          fetch('/api/admin/manager-notes/' + b.botId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: noteInput.value }),
+          })
+            .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+            .then(function () { statusSpan.textContent = 'Сохранено.'; })
+            .catch(function () { statusSpan.textContent = 'Не получилось сохранить.'; })
+            .finally(function () { saveBtn.disabled = false; });
+        });
+        actionTd.appendChild(saveBtn);
+        actionTd.appendChild(statusSpan);
+        tr.appendChild(actionTd);
+
+        rows.appendChild(tr);
+      });
+    }
 
     function loadProviders() {
       fetch('/api/admin/llm-providers')

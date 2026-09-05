@@ -22,6 +22,7 @@ import { DealsModule } from './deals/deals.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ImplementationManagerModule } from './implementation-manager/implementation-manager.module';
+import { ManagerNotesModule } from './manager-notes/manager-notes.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { ImplementationManagerModule } from './implementation-manager/implementa
     WebhooksModule,
     PaymentsModule,
     ImplementationManagerModule,
+    ManagerNotesModule,
   ],
 })
 export class AppModule implements NestModule {
