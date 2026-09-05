@@ -36,9 +36,15 @@ type View = "dashboard" | "readiness" | "attention" | "dialogs" | "training" | "
 // separate auth wiring needed here). Both endpoints already existed before
 // this app did; nothing added on the backend for these two. Typed loosely
 // (not the full response shape) — only the fields this page actually reads.
+type BotSummary = { id: string; name: string; label: string | null; widgetToken: string; funnelGeneratedAt: string | null; sourceWebsite?: string | null };
 type CabinetMe = {
   companyName: string;
+  // Deprecated singular alias (see CabinetService.getMe's own comment) — kept
+  // only for call sites not yet updated to bots[] + activeBotId. Prefer
+  // reading the ACTIVE bot via bots.find(b => b.id === activeBotId) instead
+  // of this, which is always just bots[0].
   bot: { id: string; name: string; label: string; sourceWebsite: string | null; widgetToken: string } | null;
+  bots: BotSummary[];
   userName: string;
   companyRole: string;
 } | null;
@@ -98,14 +104,37 @@ function useCabinetData() {
   // that just call refetchAnalytics() keep refreshing the SAME period the
   // owner is looking at), changePeriod is the one that actually switches it.
   const [period, setPeriod] = useState<AnalyticsPeriod>("week");
+  // Which of the company's bots(s) every bot-scoped page reads/writes
+  // against — real multi-bot companies exist now (see CabinetService.getMe's
+  // own bots[]/activeBotId comment), so this can no longer just be "the
+  // company's oldest bot" everywhere by default. Persisted per-browser (not
+  // per-account server-side — a deliberate, cheap choice: which bot you were
+  // last looking at is a viewing convenience, not data worth syncing across
+  // devices) so a reload doesn't silently jump back to bot #1.
+  const [activeBotId, setActiveBotIdState] = useState<string | null>(() => {
+    try { return localStorage.getItem("smartchat_cabinet_active_bot"); } catch { return null; }
+  });
+  const setActiveBotId = (id: string) => {
+    setActiveBotIdState(id);
+    try { localStorage.setItem("smartchat_cabinet_active_bot", id); } catch { /* private mode etc — just not persisted */ }
+  };
+  // Guards the same fast-double-switch race as Knowledge's listRequestId —
+  // refetchAnalytics now fires on every activeBotId change (see the
+  // [activeBotId] effect below), so a slower, superseded fetch for the bot
+  // switched AWAY from resolving after the newer one would otherwise
+  // silently show the wrong bot's numbers.
+  const analyticsRequestId = useRef(0);
   const refetchAnalytics = (p: AnalyticsPeriod = period) => {
-    fetchJsonWithRetry<CabinetAnalytics>(`/api/cabinet/analytics?period=${p}`).then(setAnalytics);
+    const requestId = ++analyticsRequestId.current;
+    fetchJsonWithRetry<CabinetAnalytics>(`/api/cabinet/analytics?period=${p}${activeBotId ? `&botId=${activeBotId}` : ""}`).then((data) => {
+      if (analyticsRequestId.current === requestId) setAnalytics(data);
+    });
   };
   const changePeriod = (p: AnalyticsPeriod) => {
     setPeriod(p);
     refetchAnalytics(p);
   };
-  useEffect(() => {
+  const refetchMe = () => {
     // No session cookie (a real logout, an expired session, or — confirmed
     // live — just opening this URL in a private/incognito window expecting
     // to already be signed in there, which is impossible by design) used to
@@ -123,9 +152,39 @@ function useCabinetData() {
       }
       return r.ok ? r.json() : fetchJsonWithRetry<CabinetMe>("/api/cabinet/me");
     }).then((data) => { if (data) setMe(data); });
+  };
+  useEffect(() => {
+    refetchMe();
     refetchAnalytics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return { me, analytics, refetchAnalytics, signedOut, period, changePeriod };
+  // Picks a real, currently-owned bot once `me` is known — the stored id
+  // from a previous session might belong to a bot that's since been deleted
+  // (not currently possible, but bots[] existing at all means the switcher
+  // is real now) or to nothing at all on a first visit. Re-fetches analytics
+  // for the resolved bot right after — the mount effect above already fired
+  // one analytics fetch with no botId (whatever the backend defaults to) so
+  // the dashboard isn't blank while `me` is still loading; this corrects it
+  // to the ACTUALLY active bot the moment that's known, which is a no-op
+  // (same bot) on a fresh visit and a real correction on a returning one.
+  useEffect(() => {
+    if (!me) return;
+    const stillValid = activeBotId && me.bots.some((b) => b.id === activeBotId);
+    // Only acts when a bot actually needs picking — the "already valid"
+    // case (typically a returning visit with a persisted choice) is already
+    // covered by the [activeBotId] effect below firing once at mount with
+    // that same persisted value, so re-triggering it here too would just be
+    // a redundant extra fetch.
+    if (!stillValid && me.bots.length > 0) {
+      setActiveBotId(me.bots[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me]);
+  useEffect(() => {
+    if (activeBotId) refetchAnalytics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBotId]);
+  return { me, analytics, refetchAnalytics, refetchMe, signedOut, period, changePeriod, activeBotId, setActiveBotId };
 }
 
 // Real getAnalytics numbers are integers; ru-RU grouping matches the
@@ -239,8 +298,8 @@ function NotificationCenter() {
   return <Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><button className="icon-button" data-live aria-label="Уведомления"><Bell /><i /></button></SheetTrigger><SheetContent className="notification-sheet"><SheetHeader><SheetTitle>Требует внимания</SheetTitle><SheetDescription>Только события, для которых нужно ваше действие.</SheetDescription></SheetHeader><div className="notification-list">{notices.map(({icon:Icon,tone,title,text:copy,time}) => <button key={title} onClick={() => setOpen(false)}><span className={`event-icon ${tone}`}><Icon /></span><p><b>{title}</b><small>{copy}</small></p><time>{time}</time><ArrowRight /></button>)}</div><div className="notification-rule"><Info/><p><b>Обычные диалоги сюда не попадают</b><small>Колокольчик показывает только лиды, ошибки, лимиты и проблемы интеграций.</small></p></div></SheetContent></Sheet>;
 }
 
-function Topbar({ onAction, botLabel, userName, userInitial, roleLabel }: { onAction: (label: string) => void; botLabel: string; userName: string; userInitial: string; roleLabel: string }) {
-  return <header className="topbar"><div className="topbar-left"><SidebarTrigger /><button className="bot-select" data-live onClick={() => onAction("Выбор бота")}><span className="bot-dot"><Bot /></span><span><small>Ваш бот</small><b>{botLabel}</b></span><ChevronDown /></button></div><div className="topbar-right"><NotificationCenter/><button className="profile" data-live onClick={() => onAction("Профиль и настройки аккаунта")}><span>{userInitial}</span><div><b>{userName}</b><small>{roleLabel}</small></div><ChevronDown /></button></div></header>;
+function Topbar({ onAction, onBotSwitch, botLabel, userName, userInitial, roleLabel }: { onAction: (label: string) => void; onBotSwitch: () => void; botLabel: string; userName: string; userInitial: string; roleLabel: string }) {
+  return <header className="topbar"><div className="topbar-left"><SidebarTrigger /><button className="bot-select" data-live onClick={onBotSwitch}><span className="bot-dot"><Bot /></span><span><small>Ваш бот</small><b>{botLabel}</b></span><ChevronDown /></button></div><div className="topbar-right"><NotificationCenter/><button className="profile" data-live onClick={() => onAction("Профиль и настройки аккаунта")}><span>{userInitial}</span><div><b>{userName}</b><small>{roleLabel}</small></div><ChevronDown /></button></div></header>;
 }
 
 function TrialBar({ onBilling }: { onBilling: () => void }) {
@@ -668,7 +727,7 @@ function fmtDialogDate(iso: string): string {
 // omitted rather than shown with fake data; the channel filter is gone too
 // since every real dialog comes from the same one channel (the site widget)
 // right now, nothing to filter by yet.
-function Dialogs({ setView, onOpenDeal }: { setView: (v: View) => void; onOpenDeal: (dealId: string) => void }) {
+function Dialogs({ setView, onOpenDeal, activeBotId }: { setView: (v: View) => void; onOpenDeal: (dealId: string) => void; activeBotId: string | null }) {
   const [dialogs, setDialogs] = useState<DialogListItem[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [conversation, setConversation] = useState<DialogDetail | null>(null);
@@ -691,14 +750,28 @@ function Dialogs({ setView, onOpenDeal }: { setView: (v: View) => void; onOpenDe
   // late response silently overwrite what's now shown for a different
   // dialog. Same pattern as PendingEscalationRow's previewRequestId.
   const dialogRequestId = useRef(0);
+  // Separate from dialogRequestId above (that one guards the per-dialog
+  // conversation fetch) — this guards the LIST fetch itself against a fast
+  // double bot-switch: A->B->A within fetchJsonWithRetry's own retry window
+  // could otherwise let B's slower response resolve after A's second, newer
+  // one and clobber it back to the wrong bot's list.
+  const listRequestId = useRef(0);
 
   useEffect(() => {
-    fetchJsonWithRetry<{ dialogs: DialogListItem[] }>("/api/cabinet/dialogs?page=1").then((data) => {
+    // Re-runs on activeBotId change, not just at mount — switching bots (see
+    // the new bot switcher) must actually show THAT bot's dialogs instead of
+    // silently continuing to show whichever bot's list happened to load
+    // first (found live: the switcher itself did nothing at all before this).
+    const requestId = ++listRequestId.current;
+    setDialogs(null);
+    setActiveId(null);
+    fetchJsonWithRetry<{ dialogs: DialogListItem[] }>(`/api/cabinet/dialogs?page=1${activeBotId ? `&botId=${activeBotId}` : ""}`).then((data) => {
+      if (listRequestId.current !== requestId) return; // superseded by a later switch
       const list: DialogListItem[] = data?.dialogs ?? [];
       setDialogs(list);
       if (list.length > 0) setActiveId(list[0].id);
     });
-  }, []);
+  }, [activeBotId]);
 
   useEffect(() => {
     const requestId = ++dialogRequestId.current;
@@ -783,9 +856,12 @@ function Dialogs({ setView, onOpenDeal }: { setView: (v: View) => void; onOpenDe
 // ответ" (per-message correction) isn't wired here yet — that lives on the
 // real message bubbles widget.js renders inside the iframe, which this page
 // doesn't reach into; flagged as a follow-up rather than faked.
-function Training({ me }: { me: CabinetMe }) {
+function Training({ me, activeBotId }: { me: CabinetMe; activeBotId: string | null }) {
   const [copied, setCopied] = useState(false);
-  const token = me?.bot?.widgetToken;
+  // The ACTIVE bot's own token, not always the company's first one — a
+  // multi-bot company switching bots must test/train the bot it actually
+  // switched to.
+  const token = (me?.bots.find((b) => b.id === activeBotId) ?? me?.bots[0])?.widgetToken;
   // autoopen=1 only from here — the legacy cabinet embeds this same shared
   // page in a wider pane where auto-opening would recreate the exact
   // "second, nested chat window" bug this flag is meant to fix (see
@@ -858,7 +934,8 @@ const KNOWLEDGE_SOURCE_LABELS: Record<string, string> = {
 
 type KnowledgeStep = "site" | "file" | "text" | "qa" | null;
 
-function AddKnowledgeSheet({ children, onAdded }: { children: React.ReactNode; onAdded: () => void }) {
+function AddKnowledgeSheet({ children, onAdded, activeBotId }: { children: React.ReactNode; onAdded: () => void; activeBotId: string | null }) {
+  const botQuery = activeBotId ? `?botId=${activeBotId}` : "";
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<KnowledgeStep>(null);
   const [siteUrl, setSiteUrl] = useState("");
@@ -891,15 +968,15 @@ function AddKnowledgeSheet({ children, onAdded }: { children: React.ReactNode; o
   };
 
   const submitSite = () => submit(
-    () => fetch("/api/cabinet/knowledge/site", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: siteUrl.trim() }) }),
+    () => fetch(`/api/cabinet/knowledge/site${botQuery}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: siteUrl.trim() }) }),
     "Не получилось загрузить страницу — проверьте ссылку.",
   );
   const submitText = () => submit(
-    () => fetch("/api/cabinet/knowledge/bulk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: bulkText.trim() }) }),
+    () => fetch(`/api/cabinet/knowledge/bulk${botQuery}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: bulkText.trim() }) }),
     "Не получилось обработать текст.",
   );
   const submitQa = () => submit(
-    () => fetch("/api/cabinet/knowledge/article", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: qaQuestion.trim(), body: qaAnswer.trim() }) }),
+    () => fetch(`/api/cabinet/knowledge/article${botQuery}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: qaQuestion.trim(), body: qaAnswer.trim() }) }),
     "Не получилось сохранить запись.",
   );
   const submitFile = () => {
@@ -908,7 +985,7 @@ function AddKnowledgeSheet({ children, onAdded }: { children: React.ReactNode; o
     form.append("title", fileTitle.trim());
     form.append("description", fileDescription.trim());
     submit(
-      () => fetch("/api/cabinet/knowledge/file", { method: "POST", body: form }),
+      () => fetch(`/api/cabinet/knowledge/file${botQuery}`, { method: "POST", body: form }),
       "Не получилось загрузить файл — проверьте тип (PDF, Word, изображение) и размер (до 15 МБ).",
     );
   };
@@ -1023,7 +1100,7 @@ function KnowledgeDetailDialog({ entry, onClose, onSaved }: { entry: KnowledgeEn
   </Dialog>;
 }
 
-function Knowledge() {
+function Knowledge({ activeBotId }: { activeBotId: string | null }) {
   const [entries, setEntries] = useState<KnowledgeEntry[] | null>(null);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "qa" | "instruction" | "file" | "site">("all");
@@ -1042,11 +1119,15 @@ function Knowledge() {
   const listRequestId = useRef(0);
   const reload = () => {
     const requestId = ++listRequestId.current;
-    fetchJsonWithRetry<KnowledgeEntry[]>("/api/cabinet/knowledge").then((data) => {
+    fetchJsonWithRetry<KnowledgeEntry[]>(`/api/cabinet/knowledge${activeBotId ? `?botId=${activeBotId}` : ""}`).then((data) => {
       if (listRequestId.current === requestId) setEntries(data ?? []);
     });
   };
-  useEffect(() => { reload(); }, []);
+  // Re-runs on activeBotId change too — each bot has its own knowledge base
+  // (see the backend's own per-bot scoping), so switching bots must actually
+  // reload this list instead of silently keeping whichever bot's entries
+  // loaded first.
+  useEffect(() => { reload(); }, [activeBotId]);
 
   const total = entries?.length ?? 0;
   const qaCount = (entries ?? []).filter((e) => e.source !== "instruction").length;
@@ -1091,7 +1172,7 @@ function Knowledge() {
     <div className="knowledge-summary">
       <div><Database /><span><b>{total} записей</b><small>{entries === null ? "Загружаю…" : `${approvedCount} проверены и используются ботом`}</small></span></div>
       <div className="summary-segment"><span style={{ width: total ? `${Math.round((approvedCount / total) * 100)}%` : "0%" }} /><small>{qaCount} вопросов и ответов</small></div>
-      <AddKnowledgeSheet onAdded={reload}><Button className="primary-action"><Plus />Добавить знания</Button></AddKnowledgeSheet>
+      <AddKnowledgeSheet onAdded={reload} activeBotId={activeBotId}><Button className="primary-action"><Plus />Добавить знания</Button></AddKnowledgeSheet>
     </div>
     <div className="knowledge-toolbar">
       <div className="search-field"><Search /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Найти по смыслу или словам" /></div>
@@ -1142,7 +1223,8 @@ function Knowledge() {
 // removed, by the backend as it exists today (see CabinetService.
 // addGreetingVariant) — shown read-only with their real shown/engaged/
 // converted numbers (analytics.variantReport), not as editable textareas.
-function WidgetSettings({ me, analytics, refetchAnalytics }: { me: CabinetMe; analytics: CabinetAnalytics; refetchAnalytics: () => void }) {
+function WidgetSettings({ me, activeBotId, analytics, refetchAnalytics }: { me: CabinetMe; activeBotId: string | null; analytics: CabinetAnalytics; refetchAnalytics: () => void }) {
+  const botQuery = activeBotId ? `?botId=${activeBotId}` : "";
   type Appearance = { name: string; label: string | null; gender: string; color: string; position: string };
   const [form, setForm] = useState<Appearance | null>(null);
   const [companyName, setCompanyName] = useState<string | null>(null);
@@ -1159,10 +1241,22 @@ function WidgetSettings({ me, analytics, refetchAnalytics }: { me: CabinetMe; an
   // shows up for real in variantReport, then dropped from here so it isn't
   // shown twice.
   const [pendingVariants, setPendingVariants] = useState<string[]>([]);
+  // Guards against a fast double bot-switch the same way Knowledge's own
+  // listRequestId does — otherwise a slower, superseded fetch for the bot
+  // switched AWAY from could resolve after the new one and overwrite it.
+  const appearanceRequestId = useRef(0);
 
   useEffect(() => {
-    fetchJsonWithRetry<Appearance>("/api/cabinet/appearance").then((data) => { if (data) setForm(data); });
-  }, []);
+    // Re-runs on activeBotId change — each bot has its own name/color/
+    // position, so switching bots must actually load THAT bot's appearance
+    // instead of silently keeping whichever one loaded first.
+    const requestId = ++appearanceRequestId.current;
+    setForm(null);
+    fetchJsonWithRetry<Appearance>(`/api/cabinet/appearance${botQuery}`).then((data) => {
+      if (appearanceRequestId.current !== requestId) return;
+      if (data) setForm(data);
+    });
+  }, [activeBotId]);
   // me loads in via its own separately-retried fetch (see useCabinetData) —
   // seeding companyName only once, the first time it arrives, so it doesn't
   // clobber an edit the owner already started typing on a slow connection.
@@ -1177,7 +1271,7 @@ function WidgetSettings({ me, analytics, refetchAnalytics }: { me: CabinetMe; an
     setSaving(true);
     setSaveError(null);
     Promise.all([
-      fetch("/api/cabinet/appearance", {
+      fetch(`/api/cabinet/appearance${botQuery}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: form.name, gender: form.gender, color: form.color, position: form.position }),
@@ -1227,7 +1321,7 @@ function WidgetSettings({ me, analytics, refetchAnalytics }: { me: CabinetMe; an
       return;
     }
     setAddingVariant(true);
-    fetch("/api/cabinet/variants", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) })
+    fetch(`/api/cabinet/variants${botQuery}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) })
       .then((r) => {
         if (!r.ok) throw new Error('add variant failed');
         setPendingVariants((p) => [...p, text]);
@@ -1655,18 +1749,17 @@ function Support() {
 
 function PrototypeActionDialog({ action, onClose }: { action: string | null; onClose: () => void }) {
   const isHistory = action?.includes("история активности");
-  const isBot = action?.includes("Выбор бота");
   const isProfile = action?.includes("Профиль");
   const isExport = action?.includes("Экспорт");
   const isConnection = action?.includes("интеграц") || action?.includes("Подключить");
   const title = action || "Действие";
-  return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isBot ? <div className="prototype-options"><button className="active"><span className="bot-dot"><Bot/></span><p><b>Бани — ИИ-консультант</b><small>Работает · i-viking.ru</small></p><Check/></button><button><span className="bot-dot"><Bot/></span><p><b>Квадро Хаус</b><small>Черновик · не установлен</small></p><ArrowRight/></button><button><Plus/><p><b>Создать нового бота</b><small>Отдельная база знаний и аналитика</small></p><ArrowRight/></button></div> : isProfile ? <div className="prototype-form"><label><span>Имя</span><input defaultValue="Олег"/></label><label><span>Email</span><input defaultValue="oleg@example.ru"/></label><div className="switch-row"><div><Bell/><span><b>Еженедельный отчёт</b><small>По понедельникам на почту</small></span></div><Switch defaultChecked/></div></div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : isConnection ? <div className="prototype-form"><div className="prototype-steps"><span className="done"><Check/></span><p><b>Выберите сервис</b><small>Telegram, Bitrix24 или amoCRM</small></p><span>2</span><p><b>Разрешите доступ</b><small>Только к заявкам и нужным полям</small></p><span>3</span><p><b>Проверьте тестовую передачу</b><small>Покажем результат до включения</small></p></div></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && !isBot && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
+  return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isProfile ? <div className="prototype-form"><label><span>Имя</span><input defaultValue="Олег"/></label><label><span>Email</span><input defaultValue="oleg@example.ru"/></label><div className="switch-row"><div><Bell/><span><b>Еженедельный отчёт</b><small>По понедельникам на почту</small></span></div><Switch defaultChecked/></div></div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : isConnection ? <div className="prototype-form"><div className="prototype-steps"><span className="done"><Check/></span><p><b>Выберите сервис</b><small>Telegram, Bitrix24 или amoCRM</small></p><span>2</span><p><b>Разрешите доступ</b><small>Только к заявкам и нужным полям</small></p><span>3</span><p><b>Проверьте тестовую передачу</b><small>Покажем результат до включения</small></p></div></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
 }
 
-function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, period, changePeriod, crmDealToOpen, setCrmDealToOpen }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void }) {
+function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} />, training: <Training me={me} />, tests: <AutoTests />, knowledge: <Knowledge />, widget: <WidgetSettings me={me} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
-  }), [setView, onAction, analytics, refetchAnalytics, me, period, changePeriod, crmDealToOpen, setCrmDealToOpen]);
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, leads: <Leads setView={setView} />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
+  }), [setView, onAction, analytics, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
 
@@ -1695,19 +1788,81 @@ function NavMenuItem({ item, view, setView, badge }: { item: { id: View; label: 
   </SidebarMenuItem>;
 }
 
+// Both the sidebar's company-switch button and the topbar's bot-select used
+// to open the same generic PrototypeActionDialog "isBot" branch — a static
+// 2-item list that did nothing on click and had no way to actually create a
+// bot (found live: "не даёт выбрать бота или добавить нового... по логике
+// ожидаю этого"). Real GET /api/cabinet/bots data already came back on
+// /api/cabinet/me (see CabinetMe.bots) — this just needed a real UI.
+function BotSwitcherDialog({ open, onClose, bots, activeBotId, onSelect, onCreated }: {
+  open: boolean; onClose: () => void; bots: BotSummary[]; activeBotId: string | null;
+  onSelect: (id: string) => void; onCreated: (bot: BotSummary) => void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reset = () => { setCreating(false); setNewName(""); setError(null); setSubmitting(false); };
+
+  const submitCreate = () => {
+    const name = newName.trim();
+    if (!name) return;
+    setSubmitting(true);
+    setError(null);
+    fetch("/api/cabinet/bots", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) })
+      .then((r) => (r.ok ? r.json() : r.json().catch(() => null).then((body) => Promise.reject(new Error(body?.message)))))
+      .then((bot) => { onCreated(bot); reset(); })
+      .catch((e) => setError(typeof e?.message === "string" && e.message ? e.message : "Не получилось создать бота."))
+      .finally(() => setSubmitting(false));
+  };
+
+  return <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); reset(); } }}>
+    <DialogContent className="prototype-dialog">
+      <DialogHeader>
+        <DialogTitle>Выбор бота</DialogTitle>
+        <DialogDescription>У каждого бота своя база знаний, аналитика и настройки виджета.</DialogDescription>
+      </DialogHeader>
+      {!creating ? <div className="prototype-options">
+        {bots.map((b) => <button key={b.id} className={b.id === activeBotId ? "active" : ""} onClick={() => onSelect(b.id)}>
+          <span className="bot-dot"><Bot /></span>
+          <p><b>{b.label || b.name}</b><small>{b.sourceWebsite || (b.funnelGeneratedAt ? "Настроен" : "Черновик · воронка не сгенерирована")}</small></p>
+          {b.id === activeBotId ? <Check /> : <ArrowRight />}
+        </button>)}
+        <button onClick={() => setCreating(true)}><Plus /><p><b>Создать нового бота</b><small>Отдельная база знаний и аналитика</small></p><ArrowRight /></button>
+      </div> : <div className="prototype-form">
+        <label><span>Название бота</span><input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Например, бот для второго сайта" /></label>
+        {error && <p className="form-error">{error}</p>}
+      </div>}
+      <DialogFooter>
+        {creating
+          ? <><Button variant="outline" onClick={reset}>Назад</Button><Button className="primary-action" disabled={submitting || !newName.trim()} onClick={submitCreate}>{submitting ? "Создаю…" : "Создать"}</Button></>
+          : <Button variant="outline" onClick={onClose}>Закрыть</Button>}
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
+}
+
 export default function Home() {
   const [view, setView] = useState<View>("dashboard");
   const [action, setAction] = useState<string | null>(null);
   // "Открыть лид" (Диалоги) -> CRM's deal panel — a cross-view handoff, so it
   // lives up here alongside view/setView rather than inside either page.
   const [crmDealToOpen, setCrmDealToOpen] = useState<string | null>(null);
-  const { me, analytics, refetchAnalytics, signedOut, period, changePeriod } = useCabinetData();
+  const { me, analytics, refetchAnalytics, refetchMe, signedOut, period, changePeriod, activeBotId, setActiveBotId } = useCabinetData();
+  const [botSwitcherOpen, setBotSwitcherOpen] = useState(false);
   if (signedOut) {
     return <div className="dialogs-empty-conv" style={{ padding: 40 }}>Сессия не найдена, перенаправляю на вход…</div>;
   }
   const companyName = me?.companyName || "…";
-  const botLabel = me?.bot?.label || me?.bot?.name || "Бот";
-  const botDomain = me?.bot?.sourceWebsite || "";
+  // The real active bot (see useCabinetData's own activeBotId comment), not
+  // just bots[0] — a company with more than one bot expects switching here
+  // to actually change what the rest of the cabinet shows (found live: "по
+  // логике ожидаю этого" after clicking the bot-select / company-switch
+  // buttons and finding neither did anything real).
+  const activeBot = me?.bots.find((b) => b.id === activeBotId) ?? me?.bots[0] ?? null;
+  const botLabel = activeBot?.label || activeBot?.name || "Бот";
+  const botDomain = activeBot?.sourceWebsite || "";
   const userName = me?.userName || "…";
   const roleLabel = (me && COMPANY_ROLE_LABELS[me.companyRole]) || "Сотрудник";
   // Same definition as the old cabinet's own attentionCount (pending +
@@ -1720,5 +1875,7 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><div className="sidebar-help-collapsed" title="Внедрение готово на 75%"><ReadinessRing percent={75} /></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><div className="sidebar-help-collapsed" title="Внедрение готово на 75%"><ReadinessRing percent={75} /></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen}/></main></SidebarInset></SidebarProvider></TooltipProvider>
+    <BotSwitcherDialog open={botSwitcherOpen} onClose={() => setBotSwitcherOpen(false)} bots={me?.bots ?? []} activeBotId={activeBot?.id ?? null} onSelect={(id) => { setActiveBotId(id); setBotSwitcherOpen(false); }} onCreated={(bot) => { refetchMe(); setActiveBotId(bot.id); setBotSwitcherOpen(false); }} />
+  </div>;
 }
