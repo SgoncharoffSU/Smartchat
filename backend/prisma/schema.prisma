@@ -969,3 +969,20 @@ model LlmProvider {
 
   @@map("llm_providers")
 }
+
+// Singleton row (always exactly one — see ImplementationManagerService's own
+// ensureRow, same convention as PaymentSettings) — the real onboarding
+// manager shown in the cabinet's "Статус внедрения" (name + photo). Used to
+// be a hardcoded demo name ("Мария") no real account had ever met (found
+// live: "должен быть реальный менеджер"). One global manager for now — the
+// account owner is presently the only staff member doing this; a real
+// per-company assignment algorithm across several managers is a deliberate
+// follow-up once there's more than one, not built preemptively.
+model ImplementationManager {
+  id        String   @id @default(uuid())
+  name      String   @default("")
+  photoUrl  String?  @map("photo_url")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("implementation_manager")
+}

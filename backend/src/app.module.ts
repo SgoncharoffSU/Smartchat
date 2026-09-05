@@ -21,6 +21,7 @@ import { LlmProviderModule } from './llm-provider/llm-provider.module';
 import { DealsModule } from './deals/deals.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { PaymentsModule } from './payments/payments.module';
+import { ImplementationManagerModule } from './implementation-manager/implementation-manager.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { PaymentsModule } from './payments/payments.module';
     DealsModule,
     WebhooksModule,
     PaymentsModule,
+    ImplementationManagerModule,
   ],
 })
 export class AppModule implements NestModule {

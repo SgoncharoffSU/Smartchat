@@ -65,6 +65,7 @@
         <button type="button" class="kb-add-tab" id="tabCompanies">Компании</button>
         <button type="button" class="kb-add-tab" id="tabProviders">Провайдер ИИ</button>
         <button type="button" class="kb-add-tab" id="tabPayments">Оплата</button>
+        <button type="button" class="kb-add-tab" id="tabManager">Менеджер</button>
       </div>
 
       <div id="listView">
@@ -125,6 +126,29 @@
           <p class="sub" id="paymentsCurrentKey" style="margin:-4px 0 12px;"></p>
           <button type="button" class="btn-primary btn-inline" id="paymentsSaveBtn">Сохранить</button>
           <span class="empty" id="paymentsStatus" style="margin-left:10px;"></span>
+        </div>
+      </div>
+
+      <div id="managerView" hidden>
+        <div class="panel">
+          <h2>Менеджер внедрения</h2>
+          <p class="sub" style="margin-bottom:14px;">
+            Один менеджер на все компании — карточка на странице «Статус внедрения» в кабинете. Когда появится
+            больше одного сотрудника, здесь появится распределение по компаниям.
+          </p>
+          <label for="managerName">Имя</label>
+          <input type="text" id="managerName" placeholder="Например, Сергей" autocomplete="off" />
+          <button type="button" class="btn-primary btn-inline" id="managerNameSaveBtn">Сохранить имя</button>
+          <span class="empty" id="managerNameStatus" style="margin-left:10px;"></span>
+
+          <div style="margin-top:20px;">
+            <label for="managerPhotoInput">Фото</label>
+            <div style="display:flex;align-items:center;gap:14px;">
+              <img id="managerPhotoPreview" src="" alt="" style="width:56px;height:56px;border-radius:14px;object-fit:cover;background:#f1f2f6;display:none;" />
+              <input type="file" id="managerPhotoInput" accept="image/jpeg,image/png,image/webp" />
+            </div>
+            <span class="empty" id="managerPhotoStatus" style="display:block;margin-top:8px;"></span>
+          </div>
         </div>
       </div>
 
@@ -230,8 +254,8 @@
       fetch('/api/cabinet/logout', { method: 'POST' }).then(function () { location.reload(); });
     });
 
-    var ALL_TABS = ['tabTickets', 'tabCompanies', 'tabProviders', 'tabPayments'];
-    var ALL_TAB_VIEWS = ['listView', 'companiesView', 'providersView', 'paymentsView'];
+    var ALL_TABS = ['tabTickets', 'tabCompanies', 'tabProviders', 'tabPayments', 'tabManager'];
+    var ALL_TAB_VIEWS = ['listView', 'companiesView', 'providersView', 'paymentsView', 'managerView'];
     function activateTab(tabId) {
       ALL_TABS.forEach(function (id) { document.getElementById(id).classList.toggle('active', id === tabId); });
       ALL_TAB_VIEWS.forEach(function (id) { document.getElementById(id).hidden = true; });
@@ -258,6 +282,11 @@
       activateTab('tabPayments');
       document.getElementById('paymentsView').hidden = false;
       loadPaymentSettings();
+    });
+    document.getElementById('tabManager').addEventListener('click', function () {
+      activateTab('tabManager');
+      document.getElementById('managerView').hidden = false;
+      loadManagerSettings();
     });
 
     function loadPaymentSettings() {
@@ -295,6 +324,56 @@
         })
         .catch(function () { statusEl.textContent = 'Не получилось сохранить.'; })
         .finally(function () { btn.disabled = false; });
+    });
+
+    function loadManagerSettings() {
+      fetch('/api/admin/manager')
+        .then(function (res) { return res.json(); })
+        .then(function (m) {
+          document.getElementById('managerName').value = m.name || '';
+          var preview = document.getElementById('managerPhotoPreview');
+          if (m.photoUrl) { preview.src = m.photoUrl; preview.style.display = ''; }
+          else { preview.style.display = 'none'; }
+        })
+        .catch(function () {});
+    }
+
+    document.getElementById('managerNameSaveBtn').addEventListener('click', function () {
+      var btn = this;
+      var statusEl = document.getElementById('managerNameStatus');
+      btn.disabled = true;
+      statusEl.textContent = 'Сохраняю…';
+      fetch('/api/admin/manager', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: document.getElementById('managerName').value }),
+      })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function () { statusEl.textContent = 'Сохранено.'; })
+        .catch(function () { statusEl.textContent = 'Не получилось сохранить.'; })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    // Uploads immediately on file pick — a photo has no separate "leave
+    // unchanged" state to weigh like the name field does, so there's nothing
+    // a second save step would add.
+    document.getElementById('managerPhotoInput').addEventListener('change', function () {
+      var file = this.files[0];
+      if (!file) return;
+      var statusEl = document.getElementById('managerPhotoStatus');
+      statusEl.textContent = 'Загружаю…';
+      var formData = new FormData();
+      formData.append('file', file);
+      fetch('/api/admin/manager/photo', { method: 'POST', body: formData })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+        .then(function (m) {
+          statusEl.textContent = 'Сохранено.';
+          var preview = document.getElementById('managerPhotoPreview');
+          preview.src = m.photoUrl;
+          preview.style.display = '';
+        })
+        .catch(function () { statusEl.textContent = 'Не получилось загрузить (JPEG/PNG/WebP, до 5 МБ).'; })
+        .finally(function () { document.getElementById('managerPhotoInput').value = ''; });
     });
 
     function loadProviders() {
