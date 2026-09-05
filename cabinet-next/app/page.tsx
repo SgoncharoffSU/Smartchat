@@ -662,9 +662,11 @@ function Training({ me }: { me: CabinetMe }) {
   // autoopen=1 only from here — the legacy cabinet embeds this same shared
   // page in a wider pane where auto-opening would recreate the exact
   // "second, nested chat window" bug this flag is meant to fix (see
-  // test-widget-preview.html's own comment); this box alone is capped
-  // narrow enough (.widget-preview, ≤460px) for widget.js's own mobile
-  // full-screen mode to make the box simply BE the open chat.
+  // test-widget-preview.html's own comment). This box matches the reference
+  // prototype's own 510px width (.widget-preview) — full-screen "the box IS
+  // the chat" behavior comes from widget.js's explicit data-force-fullscreen
+  // flag (set only when ?autoopen=1), not from staying under its mobile
+  // width breakpoint.
   const previewSrc = token ? `/cabinet/test-widget-preview.html?token=${encodeURIComponent(token)}&autoopen=1` : undefined;
   const copyLink = () => {
     if (!previewSrc) return;
