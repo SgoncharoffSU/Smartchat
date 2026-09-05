@@ -276,14 +276,16 @@ function StatusPill({ tone = "green", children }: { tone?: "green" | "blue" | "o
 }
 
 function PageHeader({ view, onPrimary, companyName }: { view: View; onPrimary?: (label: string) => void; companyName: string }) {
-  // crm and knowledge dropped from here — both now have their own real
-  // buttons (CRM(): "Новая сделка" -> POST /api/cabinet/deals; Knowledge():
-  // "Добавить знания" -> AddKnowledgeSheet, real POST to
-  // article/file/bulk/site); this generic header slot only ever opened the
-  // fake "demo state" dialog, so with both on screen at once the header's
-  // copy was a confusing, non-functional duplicate (found live, testing the
-  // real button: the header's fake one sits first in the DOM and shadows it).
-  const actions: Partial<Record<View, string>> = { dialogs: "Экспорт", integrations: "Добавить интеграцию", team: "Пригласить", support: "Новое обращение" };
+  // crm, knowledge, integrations and support dropped from here — all four
+  // now have their own real buttons (CRM(): "Новая сделка" -> POST
+  // /api/cabinet/deals; Knowledge(): "Добавить знания" -> AddKnowledgeSheet;
+  // Integrations(): "Добавить интеграцию" -> a real support-ticket form;
+  // Support(): its own inline form is the real thing now) — this generic
+  // header slot only ever opened the fake "demo state" dialog, so with the
+  // real one also on screen the header's copy was a confusing,
+  // non-functional duplicate (found live, testing the real button: the
+  // header's fake one sits first in the DOM and shadows it).
+  const actions: Partial<Record<View, string>> = { dialogs: "Экспорт", team: "Пригласить" };
   const action = actions[view];
   return <div className="page-header"><div><div className="crumb">{companyName} <span>/</span> {titles[view].title}</div><h1>{titles[view].title}</h1><p>{titles[view].desc}</p></div>{action && <Button className="primary-action" data-live onClick={() => onPrimary?.(action)}><Plus />{action}</Button>}</div>;
 }
@@ -1350,9 +1352,65 @@ function Installation() {
   return <div className="install-layout"><article className="panel install-main"><div className="install-icon"><Link2 /></div><span className="section-label">Одна строка кода</span><h2>Установите готового бота на сайт</h2><p>Скопируйте код и добавьте его перед закрывающим тегом <code>&lt;/body&gt;</code>. Бот появится на сайте сразу после публикации.</p><div className="code-box"><code>&lt;script src=&quot;https://chat.glavinstrument.com/widget.js&quot; data-bot=&quot;your-bot&quot;&gt;&lt;/script&gt;</code><button onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? <Check /> : <Copy />}{copied ? "Скопировано" : "Скопировать"}</button></div><div className="platforms"><span>Инструкции для:</span>{["Tilda", "WordPress", "Wix", "Другой сайт"].map(p => <button key={p}>{p}</button>)}</div></article><aside className="panel launch-help"><Headphones /><h3>Поможем с установкой</h3><p>Если не хотите разбираться с кодом, отправьте нам доступ или контакт разработчика.</p><Button variant="outline">Написать в поддержку</Button></aside></div>;
 }
 
+// "Добавить интеграцию" used to open the same generic dead-end demo dialog
+// as every other unwired button in this file — no way to actually ask for
+// one (found live: "Добавить интеграцию не работает"). Building real
+// Bitrix24/amoCRM-style OAuth-free connectors for arbitrary services isn't
+// realistic per-request, but SupportTicketsService already exists exactly
+// for "something needs a human to look at it" — reused as-is: the request
+// becomes a real ticket (POST /api/cabinet/support-tickets), Telegram-
+// alerted to the team immediately, answerable the normal way (see Support()
+// below), rather than inventing a second, parallel "integration request"
+// mechanism next to the one that already does this.
+function AddIntegrationSheet({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+
+  const reset = () => { setName(""); setDescription(""); setError(null); setSubmitting(false); setSent(false); };
+
+  const submit = () => {
+    const trimmedName = name.trim();
+    const trimmedDescription = description.trim();
+    if (!trimmedName || !trimmedDescription) return;
+    setSubmitting(true);
+    setError(null);
+    fetch("/api/cabinet/support-tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject: `Интеграция: ${trimmedName}`, message: trimmedDescription }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then(() => setSent(true))
+      .catch(() => setError("Не получилось отправить заявку — попробуйте ещё раз."))
+      .finally(() => setSubmitting(false));
+  };
+
+  return <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+    <SheetTrigger asChild>{children}</SheetTrigger>
+    <SheetContent className="knowledge-sheet">
+      <SheetHeader><SheetTitle>Добавить интеграцию</SheetTitle><SheetDescription>Опишите, с чем нужно подключить бота — мы свяжемся и попробуем настроить.</SheetDescription></SheetHeader>
+      {sent ? <div className="prototype-note" style={{ marginTop: 20 }}><ShieldCheck /><span>Заявка отправлена — ответим в разделе «Поддержка» и на почту.</span></div>
+        : <div className="prototype-form">
+          <label><span>Какая интеграция нужна</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Например, 1С, Google Sheets, WhatsApp" /></label>
+          <label><span>Что нужно сделать</span><textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Опишите сервис и что должно происходить — куда передавать заявки, что синхронизировать" /></label>
+          {error && <p className="form-error">{error}</p>}
+        </div>}
+      <SheetFooter>
+        {sent
+          ? <Button className="primary-action" onClick={() => setOpen(false)}>Закрыть</Button>
+          : <Button className="primary-action" disabled={submitting || !name.trim() || !description.trim()} onClick={submit}>{submitting ? "Отправляю…" : "Отправить заявку"}</Button>}
+      </SheetFooter>
+    </SheetContent>
+  </Sheet>;
+}
+
 function Integrations() {
   const [telegram, setTelegram] = useState(false); const [leads, setLeads] = useState(true);
-  return <div className="integrations-page"><div className="integration-grid"><article className="integration-card featured"><div className="integration-logo telegram"><Send /></div><StatusPill tone={telegram ? "green" : "gray"}>{telegram ? "Подключено" : "Не подключено"}</StatusPill><h3>Telegram</h3><p>Сложные вопросы, новые заявки и возможность быстро подключиться к разговору.</p><Button className="primary-action" data-live onClick={() => setTelegram(!telegram)}>{telegram ? "Открыть настройки" : "Подключить Telegram"}</Button></article><article className="integration-card"><div className="integration-logo bitrix">B24</div><StatusPill tone="gray">Не подключено</StatusPill><h3>Bitrix24</h3><p>Создавайте сделки автоматически и передавайте историю диалога.</p><Button variant="outline">Подключить</Button></article><article className="integration-card"><div className="integration-logo amo">amo</div><StatusPill tone="gray">Не подключено</StatusPill><h3>amoCRM</h3><p>Заявки, этапы воронки и обратная синхронизация статусов.</p><Button variant="outline">Подключить</Button></article></div><section className="panel notification-settings"><div className="panel-head"><div><span className="section-label">Уведомления</span><h2>Что отправлять в Telegram</h2></div></div><div className="switch-row"><div><Target /><span><b>Новые заявки</b><small>Контакт, запрос и ссылка на диалог</small></span></div><Switch checked={leads} onCheckedChange={setLeads} /></div><div className="switch-row"><div><AlertCircle /><span><b>Сложные вопросы</b><small>Когда бот не уверен в ответе</small></span></div><Switch defaultChecked /></div></section></div>;
+  return <div className="integrations-page"><div style={{ display: "flex", justifyContent: "flex-end" }}><AddIntegrationSheet><Button className="primary-action"><Plus />Добавить интеграцию</Button></AddIntegrationSheet></div><div className="integration-grid"><article className="integration-card featured"><div className="integration-logo telegram"><Send /></div><StatusPill tone={telegram ? "green" : "gray"}>{telegram ? "Подключено" : "Не подключено"}</StatusPill><h3>Telegram</h3><p>Сложные вопросы, новые заявки и возможность быстро подключиться к разговору.</p><Button className="primary-action" data-live onClick={() => setTelegram(!telegram)}>{telegram ? "Открыть настройки" : "Подключить Telegram"}</Button></article><article className="integration-card"><div className="integration-logo bitrix">B24</div><StatusPill tone="gray">Не подключено</StatusPill><h3>Bitrix24</h3><p>Создавайте сделки автоматически и передавайте историю диалога.</p><Button variant="outline">Подключить</Button></article><article className="integration-card"><div className="integration-logo amo">amo</div><StatusPill tone="gray">Не подключено</StatusPill><h3>amoCRM</h3><p>Заявки, этапы воронки и обратная синхронизация статусов.</p><Button variant="outline">Подключить</Button></article></div><section className="panel notification-settings"><div className="panel-head"><div><span className="section-label">Уведомления</span><h2>Что отправлять в Telegram</h2></div></div><div className="switch-row"><div><Target /><span><b>Новые заявки</b><small>Контакт, запрос и ссылка на диалог</small></span></div><Switch checked={leads} onCheckedChange={setLeads} /></div><div className="switch-row"><div><AlertCircle /><span><b>Сложные вопросы</b><small>Когда бот не уверен в ответе</small></span></div><Switch defaultChecked /></div></section></div>;
 }
 
 const leadItems = [
@@ -1743,8 +1801,140 @@ function Team() {
   return <div className="team-page"><div className="team-summary"><div><Users /><span><b>1 сотрудник</b><small>Доступ к кабинету и CRM</small></span></div><Button className="primary-action"><Plus />Пригласить</Button></div><div className="team-table"><div className="table-head"><span>Сотрудник</span><span>Роль</span><span>Доступ</span><span>Статус</span><span /></div><div className="team-row"><div><span className="user-avatar">О</span><span><b>Олег</b><small>Владелец аккаунта</small></span></div><StatusPill tone="blue">Руководитель</StatusPill><span>Все сделки и настройки</span><StatusPill>Активен</StatusPill><button className="icon-button"><MoreHorizontal /></button></div></div><article className="panel roles-panel"><h2>Роли без лишней сложности</h2><div><span><ShieldCheck /></span><p><b>Руководитель</b><small>Видит все сделки, аналитику и настройки бота.</small></p></div><div><span><Users /></span><p><b>Сотрудник</b><small>Работает только со своими сделками в CRM.</small></p></div></article></div>;
 }
 
+type SupportTicketSummary = { id: string; subject: string; status: string; updatedAt: string };
+type SupportTicketMessage = { id: string; senderRole: string; content: string; createdAt: string };
+type SupportTicketThread = SupportTicketSummary & { messages: SupportTicketMessage[]; resolutionReport: string | null };
+
+// Opened from Support()'s own ticket list — the same createTicket/
+// replyAsClient endpoints the integration-request form (AddIntegrationSheet)
+// and this page's own submit already use, just for continuing an existing
+// thread instead of starting one.
+function TicketThreadDialog({ ticketId, onClose }: { ticketId: string | null; onClose: () => void }) {
+  const [thread, setThread] = useState<SupportTicketThread | null>(null);
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
+
+  const load = () => {
+    if (!ticketId) return;
+    const id = ++requestId.current;
+    fetchJsonWithRetry<SupportTicketThread>(`/api/cabinet/support-tickets/${ticketId}`).then((data) => {
+      if (requestId.current === id) setThread(data);
+    });
+  };
+  useEffect(() => { setThread(null); setReply(""); setError(null); load(); }, [ticketId]);
+
+  if (!ticketId) return null;
+
+  const submitReply = () => {
+    const text = reply.trim();
+    if (!text) return;
+    setSending(true);
+    setError(null);
+    fetch(`/api/cabinet/support-tickets/${ticketId}/reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: text }),
+    })
+      .then((r) => (r.ok ? r : Promise.reject()))
+      .then(() => { setReply(""); load(); })
+      .catch(() => setError("Не получилось отправить сообщение."))
+      .finally(() => setSending(false));
+  };
+
+  return <Dialog open={Boolean(ticketId)} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <DialogContent className="prototype-dialog">
+      <DialogHeader>
+        <DialogTitle>{thread?.subject ?? "Обращение"}</DialogTitle>
+        <DialogDescription>{thread?.status === "resolved" ? "Решено" : "Открыто"}</DialogDescription>
+      </DialogHeader>
+      <div style={{ maxHeight: 320, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+        {!thread ? <small style={{ color: "#7d8992" }}>Загружаю…</small>
+          : thread.messages.map((m) => (
+            <div className={`message ${m.senderRole === "support" ? "bot-message" : "client-message"}`} key={m.id} style={{ margin: 0, maxWidth: "90%" }}>
+              <p style={{ margin: 0 }}>{m.content}</p>
+              <small>{fmtMessageTime(m.createdAt)} МСК</small>
+            </div>
+          ))}
+      </div>
+      {thread && thread.status !== "resolved" && <div className="prototype-form" style={{ marginTop: 12 }}>
+        <label><span>Ответить</span><textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={3} /></label>
+        {error && <p className="form-error">{error}</p>}
+      </div>}
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>Закрыть</Button>
+        {thread && thread.status !== "resolved" && <Button className="primary-action" disabled={sending || !reply.trim()} onClick={submitReply}>{sending ? "Отправляю…" : "Отправить"}</Button>}
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
+}
+
 function Support() {
-  return <div className="support-layout"><section className="support-main panel"><div className="support-icon"><LifeBuoy /></div><h2>Чем можем помочь?</h2><p>Опишите вопрос по кабинету, боту, оплате или подключению. Ответ появится здесь и придёт на почту.</p><div className="support-categories">{["Настройка бота", "Установка", "Интеграции", "Оплата"].map(x => <button key={x}>{x}</button>)}</div><label><span>Тема</span><input placeholder="Коротко опишите вопрос" /></label><label><span>Сообщение</span><textarea placeholder="Что произошло и какой результат вы ожидаете?" /></label><Button className="primary-action">Отправить обращение <Send /></Button></section><aside className="support-side"><article className="panel"><Headphones /><h3>Нужна помощь с запуском?</h3><p>Менеджер поможет настроить знания, протестировать ответы и установить виджет.</p><button>Связаться с менеджером <ArrowRight /></button></article><article className="panel"><CircleHelp /><h3>Быстрые ответы</h3><button>Как обучать бота? <ArrowRight /></button><button>Как установить виджет? <ArrowRight /></button><button>Как приходят заявки? <ArrowRight /></button></article></aside></div>;
+  const [tickets, setTickets] = useState<SupportTicketSummary[] | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [openTicketId, setOpenTicketId] = useState<string | null>(null);
+
+  const reload = () => fetchJsonWithRetry<SupportTicketSummary[]>("/api/cabinet/support-tickets").then((data) => setTickets(data ?? []));
+  useEffect(() => { reload(); }, []);
+
+  const pickCategory = (x: string) => {
+    setCategory(x);
+    // Only pre-fills — never overwrites a subject the owner already started
+    // typing themselves.
+    setSubject((prev) => prev || x);
+  };
+
+  const submit = () => {
+    const s = subject.trim();
+    const m = message.trim();
+    if (!s || !m) return;
+    setSubmitting(true);
+    setError(null);
+    fetch("/api/cabinet/support-tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject: s, message: m }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then(() => { setSubject(""); setMessage(""); setCategory(null); reload(); })
+      .catch(() => setError("Не получилось отправить обращение — попробуйте ещё раз."))
+      .finally(() => setSubmitting(false));
+  };
+
+  return <div className="support-layout">
+    <section className="support-main panel">
+      <div className="support-icon"><LifeBuoy /></div>
+      <h2>Чем можем помочь?</h2>
+      <p>Опишите вопрос по кабинету, боту, оплате или подключению. Ответ появится здесь и придёт на почту.</p>
+      <div className="support-categories">{["Настройка бота", "Установка", "Интеграции", "Оплата"].map(x => <button key={x} className={category === x ? "active" : ""} onClick={() => pickCategory(x)}>{x}</button>)}</div>
+      <label><span>Тема</span><input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Коротко опишите вопрос" /></label>
+      <label><span>Сообщение</span><textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Что произошло и какой результат вы ожидаете?" /></label>
+      {error && <p className="form-error">{error}</p>}
+      <Button className="primary-action" disabled={submitting || !subject.trim() || !message.trim()} onClick={submit}>{submitting ? "Отправляю…" : <>Отправить обращение <Send /></>}</Button>
+
+      {tickets && tickets.length > 0 && <div style={{ marginTop: 26 }}>
+        <span className="section-label">Ваши обращения</span>
+        <div className="notification-list" style={{ marginTop: 10 }}>
+          {tickets.map((t) => <button key={t.id} onClick={() => setOpenTicketId(t.id)}>
+            <span className={`event-icon ${t.status === "resolved" ? "green" : "orange"}`}><LifeBuoy /></span>
+            <p><b>{t.subject}</b><small>{t.status === "resolved" ? "Решено" : "Ждём ответа"}</small></p>
+            <time>{fmtDialogDate(t.updatedAt)}</time>
+            <ArrowRight />
+          </button>)}
+        </div>
+      </div>}
+    </section>
+    <aside className="support-side">
+      <article className="panel"><Headphones /><h3>Нужна помощь с запуском?</h3><p>Менеджер поможет настроить знания, протестировать ответы и установить виджет.</p><button onClick={() => pickCategory("Настройка бота")}>Связаться с менеджером <ArrowRight /></button></article>
+      <article className="panel"><CircleHelp /><h3>Быстрые ответы</h3><button onClick={() => pickCategory("Настройка бота")}>Как обучать бота? <ArrowRight /></button><button onClick={() => pickCategory("Установка")}>Как установить виджет? <ArrowRight /></button><button onClick={() => pickCategory("Настройка бота")}>Как приходят заявки? <ArrowRight /></button></article>
+    </aside>
+    <TicketThreadDialog ticketId={openTicketId} onClose={() => { setOpenTicketId(null); reload(); }} />
+  </div>;
 }
 
 function PrototypeActionDialog({ action, onClose }: { action: string | null; onClose: () => void }) {
