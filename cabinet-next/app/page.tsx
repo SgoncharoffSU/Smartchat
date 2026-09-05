@@ -180,6 +180,33 @@ function Brand() {
   return <div className="brand"><span className="brand-icon"><i /><i /><i /></span><span className="brand-text"><b>Умный Чат</b><small>Личный кабинет</small></span></div>;
 }
 
+// Collapsed-rail-only stand-in for the "Внедрение идёт / Готово N%" row
+// below — that row is plain text, which the shadcn sidebar's own
+// group-data-[collapsible=icon] convention doesn't know how to shrink to an
+// icon on its own (unlike SidebarMenuButton, this row was never one of its
+// components), so at icon width it used to just get clipped mid-glyph
+// instead of collapsing cleanly (found live: "иконки срезаются наполовину").
+// A ring reads as "progress" at a glance even with no room for the word
+// "Готово" or the percent sign next to it — same information, one glance,
+// no text.
+function ReadinessRing({ percent }: { percent: number }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const radius = 13;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - clamped / 100);
+  return (
+    <svg width="30" height="30" viewBox="0 0 30 30" role="img" aria-label={`Внедрение готово на ${clamped}%`}>
+      <circle cx="15" cy="15" r={radius} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="3" />
+      <circle
+        cx="15" cy="15" r={radius} fill="none" stroke="var(--lime)" strokeWidth="3" strokeLinecap="round"
+        strokeDasharray={circumference} strokeDashoffset={offset}
+        transform="rotate(-90 15 15)"
+      />
+      <text x="15" y="16" textAnchor="middle" dominantBaseline="middle" fontSize="8" fontWeight="800" fill="#fff">{clamped}</text>
+    </svg>
+  );
+}
+
 function StatusPill({ tone = "green", children }: { tone?: "green" | "blue" | "orange" | "gray"; children: React.ReactNode }) {
   return <span className={`status-pill ${tone}`}>{children}</span>;
 }
@@ -1420,5 +1447,5 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setAction("Выбор компании")}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово 75%</small></span></div><div className="sidebar-help-collapsed" title="Внедрение готово на 75%"><ReadinessRing percent={75} /></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen}/></main></SidebarInset></SidebarProvider></TooltipProvider></div>;
 }

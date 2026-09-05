@@ -37,6 +37,32 @@
 .company-switch>span,.sidebar-user>span{display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border-radius:9px;background:#253c52;color:#fff;font-size:11px;font-weight:800}
 .company-switch div,.sidebar-user div{display:flex;flex:1;min-width:0;flex-direction:column}.company-switch b,.sidebar-user b{font-size:12px;white-space:nowrap}.company-switch small,.sidebar-user small{font-size:10px;color:#8295a7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.company-switch>svg,.sidebar-user>svg{width:14px;color:#8295a7}
 .sidebar-help{display:flex;align-items:center;gap:9px;padding:10px;background:rgba(200,255,77,.09);border:1px solid rgba(200,255,77,.15);border-radius:12px;overflow:hidden;white-space:nowrap}.sidebar-help>svg{color:var(--lime)}.sidebar-help span{display:flex;flex-direction:column}.sidebar-help b{font-size:11px;color:#fff}.sidebar-help small{font-size:10px;color:#819588}
+/* Collapsed-rail (collapsible="icon") state for the 4 sidebar rows above
+   that are plain custom markup, not one of sidebar.tsx's own components —
+   shadcn's own group-data-[collapsible=icon] Tailwind convention can't be
+   used here: Tailwind v4's utility layer sits BELOW this plain, unlayered
+   stylesheet in the cascade, so a `group-data-[collapsible=icon]:hidden`
+   class would silently lose to the unlayered rules just above (found while
+   fixing "иконки срезаются наполовину" — the text/chevron/settings-icon
+   inside .company-switch/.sidebar-user/.sidebar-help never actually had
+   anywhere to go at the ~48px icon-rail width, so they just got clipped
+   mid-glyph instead of collapsing). data-collapsible="icon" lives on
+   sidebar.tsx's own OUTER wrapper (an ancestor of .app-sidebar, not the same
+   element — see its own comment on ReadinessRing), so this has to be a
+   plain descendant-combinator attribute selector, same convention this
+   stylesheet already uses elsewhere (.dialogs-shell[data-mobile-view=...]).
+   ReadinessRing itself (the % ring standing in for "Внедрение идёт" here)
+   is hidden by default and only shown in this same collapsed state. */
+.sidebar-help-collapsed{display:none;justify-content:center;padding:10px 0}
+[data-collapsible="icon"] .app-sidebar .brand-text,
+[data-collapsible="icon"] .app-sidebar .company-switch>div,
+[data-collapsible="icon"] .app-sidebar .company-switch>svg,
+[data-collapsible="icon"] .app-sidebar .sidebar-user>div,
+[data-collapsible="icon"] .app-sidebar .sidebar-user>svg,
+[data-collapsible="icon"] .app-sidebar .sidebar-help{display:none}
+[data-collapsible="icon"] .app-sidebar .company-switch,
+[data-collapsible="icon"] .app-sidebar .sidebar-user{justify-content:center;gap:0;padding:0}
+[data-collapsible="icon"] .app-sidebar .sidebar-help-collapsed{display:flex}
 
 /* App chrome */
 .app-inset{min-width:0;background:var(--canvas)}.topbar{position:sticky;top:0;z-index:20;min-height:70px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:10px clamp(18px,3vw,42px);background:rgba(242,244,242,.93);backdrop-filter:blur(16px);border-bottom:1px solid rgba(8,21,34,.07)}
