@@ -84,10 +84,12 @@
     document.body.appendChild(s);
 
     document.getElementById('scResetBtn').addEventListener('click', function () {
-      // Same key format widget.js itself uses (see its own sessionKey) —
-      // duplicated here rather than imported since widget.js exposes no
-      // public API, only reads this key inside its own closure on load.
-      if (botToken) localStorage.removeItem('smartchat_session_' + botToken);
+      // Same key format widget.js itself uses (see its own sessionKey,
+      // '_preview'-suffixed since this page always sets data-preview="true"
+      // above) — duplicated here rather than imported since widget.js
+      // exposes no public API, only reads this key inside its own closure
+      // on load.
+      if (botToken) localStorage.removeItem('smartchat_session_' + botToken + '_preview');
       location.reload();
     });
   </script>

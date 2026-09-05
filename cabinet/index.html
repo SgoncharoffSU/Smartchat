@@ -5015,8 +5015,12 @@
       // widget.js manages its own keys (same origin, so the parent page can
       // clear them directly) — must also drop the teaser-dismissed flag, or
       // "reset" would reopen a blank chat without ever re-showing the
-      // launcher + teaser bubble.
-      localStorage.removeItem('smartchat_session_' + botWidgetToken);
+      // launcher + teaser bubble. '_preview' suffix must match widget.js's
+      // own sessionKey exactly (this pane always loads it with
+      // data-preview="true") — without it, this clears a key that was never
+      // written, leaving the real (suffixed) session untouched and "Сброс"
+      // silently reusing the same old test dialog.
+      localStorage.removeItem('smartchat_session_' + botWidgetToken + '_preview');
       localStorage.removeItem('smartchat_teaser_dismissed_' + botWidgetToken);
       // Reassigning .src to the exact same URL it already has is not a
       // navigation as far as the browser is concerned — nothing reloads, so

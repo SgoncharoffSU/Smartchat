@@ -73,7 +73,9 @@
     document.body.appendChild(s);
 
     document.getElementById('resetPageBtn').addEventListener('click', function () {
-      localStorage.removeItem('smartchat_session_' + botToken);
+      // '_preview' suffix must match widget.js's own sessionKey exactly —
+      // this page always loads it with data-preview="true" above.
+      localStorage.removeItem('smartchat_session_' + botToken + '_preview');
       localStorage.removeItem('smartchat_teaser_dismissed_' + botToken);
       location.reload();
     });

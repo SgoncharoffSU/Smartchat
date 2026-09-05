@@ -22,7 +22,24 @@
   // Which screen corner the launcher/chat window/teaser all anchor to.
   var widgetSide = scriptTag.getAttribute('data-position') === 'bottom-left' ? 'left' : 'right';
 
-  var sessionKey = 'smartchat_session_' + botToken;
+  // Read here (not just at its other call site further down) so the preview
+  // flag is available before the session key is built below — a preview
+  // session (test-widget-preview.html in "Обучение бота", or the public
+  // test-chat.html demo link) MUST NEVER share a browser-storage key with a
+  // real, untagged embed. Both cases load this same widget.js off
+  // chat.glavinstrument.com — if the "real" site being tested also happens
+  // to be reached from that same origin (found live: an owner testing both
+  // "Обучение бота" and their own real widget from chat.glavinstrument.com
+  // in the same browser), an unsuffixed key would hand BOTH the exact same
+  // sessionId, and the backend's dialog lookup (findOrCreate, keyed only on
+  // botId+sessionId, blind to isPreview) would then treat them as one and
+  // the same conversation — a real visitor's dialog silently continuing as
+  // "training", or the owner's own test turns silently counting as real
+  // engagement/escalations, depending on which one happened to create the
+  // row first. Suffixing the key is enough to prevent that collision
+  // entirely, with no backend change needed.
+  var previewMode = scriptTag.getAttribute('data-preview') === 'true';
+  var sessionKey = 'smartchat_session_' + botToken + (previewMode ? '_preview' : '');
   var sessionId = localStorage.getItem(sessionKey);
   // Must be read before we possibly create a fresh sessionId below — this is
   // the only reliable client-side signal that "this browser has been here
@@ -95,16 +112,15 @@
   Object.assign(launcher.style, launcherStyle);
 
   var autoOpen = scriptTag.getAttribute('data-auto-open') === 'true';
-  // Plain attribute check — safe now that chat.js no longer has ANY admin-
-  // only UI gated behind this flag (the training/testing switch and the
-  // coach bar were removed from that shared file entirely, not just hidden
-  // better). This flag's only remaining job is telling the backend to
-  // exclude the dialog from real analytics (see isPreview on
-  // SendMessageDto) — used by test-chat.html's public prospect-demo link,
-  // which still legitimately wants that exclusion. The cabinet's own
-  // training/testing panes don't use this loader at all anymore; they embed
-  // chat-ui/index.html directly with their own fixed, explicit URL params.
-  var previewMode = scriptTag.getAttribute('data-preview') === 'true';
+  // previewMode itself is read further up (see the sessionKey comment there
+  // for why) — chat.js no longer has ANY admin-only UI gated behind this
+  // flag (the training/testing switch and the coach bar were removed from
+  // that shared file entirely, not just hidden better). Its remaining jobs:
+  // telling the backend to exclude the dialog from real analytics (see
+  // isPreview on SendMessageDto) — used by both test-chat.html's public
+  // prospect-demo link AND the cabinet's own "Обучение бота"
+  // (test-widget-preview.html, which loads this same widget.js) — and
+  // (below) gating ownerTestingMode.
   // Only ever set by the cabinet's OWN "Тестирование" pane (test-widget-
   // preview.html) — never by test-chat.html (the public prospect-facing demo
   // link), which sets data-preview alone. Just a UI hint forwarded to chat.js
