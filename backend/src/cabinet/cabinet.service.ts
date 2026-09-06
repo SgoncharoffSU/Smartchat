@@ -651,12 +651,41 @@ export class CabinetService {
    * (immediately, no funnel regeneration or redeploy needed).
    */
   async updateCompanyName(companyId: string, name: string) {
-    const trimmed = name.trim();
-    if (trimmed.length < 1 || trimmed.length > 80) {
-      throw new BadRequestException('Название компании должно быть от 1 до 80 символов');
-    }
+    const trimmed = this.validateDisplayName(name, 'Название компании');
     await this.prisma.company.update({ where: { id: companyId }, data: { name: trimmed } });
     return { companyName: trimmed };
+  }
+
+  /**
+   * Shared by updateCompanyName/updateUserName — neither route has a
+   * class-validator DTO (just an inline `{ name: string }` TS type, which
+   * the global ValidationPipe doesn't enforce at runtime), so a missing/
+   * non-string `name` would otherwise throw inside .trim() itself instead
+   * of the intended 400. One place for the check instead of a copy per
+   * caller that can (and did) drift out of sync.
+   */
+  private validateDisplayName(name: unknown, label: string, min = 1, max = 80): string {
+    // Folds the non-string case into the same length check (an empty string
+    // fails `length < min` the same way) instead of a second throw site —
+    // one message construction, not two.
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+    if (trimmed.length < min || trimmed.length > max) {
+      throw new BadRequestException(`${label} должно быть от ${min} до ${max} символов`);
+    }
+    return trimmed;
+  }
+
+  /**
+   * The logged-in user's own display name — shown in the sidebar/topbar
+   * account row. Used to have no editor at all: the profile button opened a
+   * dead dialog (never actually rendered anywhere) hardcoding a stranger's
+   * name ("Олег") that saved nothing (found live: "клик не открывает
+   * карточку авторизованного пользователя").
+   */
+  async updateUserName(userId: string, name: string) {
+    const trimmed = this.validateDisplayName(name, 'Имя');
+    await this.prisma.user.update({ where: { id: userId }, data: { name: trimmed } });
+    return { userName: trimmed };
   }
 
   async getAppearance(companyId: string, botId?: string) {

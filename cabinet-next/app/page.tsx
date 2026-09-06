@@ -36,7 +36,7 @@ type View = "dashboard" | "readiness" | "attention" | "dialogs" | "training" | "
 // separate auth wiring needed here). Both endpoints already existed before
 // this app did; nothing added on the backend for these two. Typed loosely
 // (not the full response shape) — only the fields this page actually reads.
-type BotSummary = { id: string; name: string; label: string | null; widgetToken: string; funnelGeneratedAt: string | null; sourceWebsite?: string | null };
+type BotSummary = { id: string; name: string; label: string | null; widgetToken: string; funnelGeneratedAt: string | null; sourceWebsite?: string | null; trialEndsAt?: string | null; subscriptionActive?: boolean };
 type CabinetMe = {
   companyName: string;
   // Deprecated singular alias (see CabinetService.getMe's own comment) — kept
@@ -46,7 +46,13 @@ type CabinetMe = {
   bot: { id: string; name: string; label: string; sourceWebsite: string | null; widgetToken: string } | null;
   bots: BotSummary[];
   userName: string;
+  userEmail: string | null;
   companyRole: string;
+  // True when a support agent is viewing this company via "Войти" (see
+  // CompaniesAdminController.impersonate) — req.userId stays the AGENT's
+  // own id in that mode, so anything that WRITES using it (see
+  // ProfileSheet's own name editor) must not offer to during impersonation.
+  impersonating?: boolean;
 } | null;
 
 type CabinetAnalytics = {
@@ -87,6 +93,18 @@ async function fetchJsonWithRetry<T>(url: string, attempts = 5): Promise<T | nul
     if (i < attempts - 1) await new Promise((resolve) => setTimeout(resolve, 500 * (i + 1)));
   }
   return null;
+}
+
+// Shared shape for the handful of "save a settings form" POSTs (profile
+// name, lead-notification settings, …) — one place for the fetch/parse/
+// error-message plumbing instead of each call site re-deriving its own
+// generic "Не получилось сохранить." with the server's actual reason
+// discarded.
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((data && typeof data.message === "string" && data.message) || "Не получилось сохранить.");
+  return data as T;
 }
 
 type AnalyticsPeriod = "yesterday" | "week" | "month" | "all";
@@ -134,7 +152,14 @@ function useCabinetData() {
     setPeriod(p);
     refetchAnalytics(p);
   };
+  // Guards against a slow refetchMe() (the fallback-retry path below, or one
+  // triggered by BotSwitcherDialog's onCreated) resolving AFTER a newer,
+  // faster one — including ProfileSheet's own optimistic setMe patch on a
+  // name save, which a stale in-flight refetch would otherwise silently
+  // revert (found via code-review).
+  const meRequestId = useRef(0);
   const refetchMe = () => {
+    const requestId = ++meRequestId.current;
     // No session cookie (a real logout, an expired session, or — confirmed
     // live — just opening this URL in a private/incognito window expecting
     // to already be signed in there, which is impossible by design) used to
@@ -151,7 +176,7 @@ function useCabinetData() {
         return;
       }
       return r.ok ? r.json() : fetchJsonWithRetry<CabinetMe>("/api/cabinet/me");
-    }).then((data) => { if (data) setMe(data); });
+    }).then((data) => { if (data && requestId === meRequestId.current) setMe(data); });
   };
   useEffect(() => {
     refetchMe();
@@ -184,7 +209,7 @@ function useCabinetData() {
     if (activeBotId) refetchAnalytics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBotId]);
-  return { me, analytics, refetchAnalytics, refetchMe, signedOut, period, changePeriod, activeBotId, setActiveBotId };
+  return { me, setMe, analytics, refetchAnalytics, refetchMe, signedOut, period, changePeriod, activeBotId, setActiveBotId };
 }
 
 // Real getAnalytics numbers are integers; ru-RU grouping matches the
@@ -342,12 +367,223 @@ function NotificationCenter({ analytics, onOpen }: { analytics: CabinetAnalytics
   return <Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><button className="icon-button" data-live aria-label="Уведомления"><Bell />{notices.length > 0 && <i />}</button></SheetTrigger><SheetContent className="notification-sheet"><SheetHeader><SheetTitle>Требует внимания</SheetTitle><SheetDescription>Только события, для которых нужно ваше действие.</SheetDescription></SheetHeader><div className="notification-list">{notices.length === 0 ? <p className="empty">Сейчас всё под контролем.</p> : notices.map(({key,icon:Icon,tone,title,text:copy,time}) => <button key={key} onClick={openAttention}><span className={`event-icon ${tone}`}><Icon /></span><p><b>{title}</b><small>{copy}</small></p><time>{fmtDialogDate(time)}</time><ArrowRight /></button>)}</div><div className="notification-rule"><Info/><p><b>Обычные диалоги сюда не попадают</b><small>Колокольчик показывает только ответы бота, которые нужно проверить или исправить.</small></p></div></SheetContent></Sheet>;
 }
 
-function Topbar({ onAction, onBotSwitch, botLabel, userName, userInitial, roleLabel, analytics, onOpenAttention }: { onAction: (label: string) => void; onBotSwitch: () => void; botLabel: string; userName: string; userInitial: string; roleLabel: string; analytics: CabinetAnalytics; onOpenAttention: () => void }) {
-  return <header className="topbar"><div className="topbar-left"><SidebarTrigger /><button className="bot-select" data-live onClick={onBotSwitch}><span className="bot-dot"><Bot /></span><span><small>Ваш бот</small><b>{botLabel}</b></span><ChevronDown /></button></div><div className="topbar-right"><NotificationCenter analytics={analytics} onOpen={onOpenAttention}/><button className="profile" data-live onClick={() => onAction("Профиль и настройки аккаунта")}><span>{userInitial}</span><div><b>{userName}</b><small>{roleLabel}</small></div><ChevronDown /></button></div></header>;
+// Used to open a dead dialog (PrototypeActionDialog, never actually
+// rendered anywhere — clicking either account button in the app silently
+// did nothing) hardcoding a stranger's name/email ("Олег" / oleg@example.ru)
+// that saved nothing (found live: "клик не открывает карточку
+// авторизованного пользователя"). Controlled from Home() (open/onOpenChange
+// lifted up, same convention as BotSwitcherDialog) since two different
+// buttons — the topbar's own and the sidebar footer's — open the same sheet.
+function ProfileSheet({
+  open,
+  onOpenChange,
+  rawUserName,
+  userEmail,
+  roleLabel,
+  companyName,
+  impersonating,
+  onNameSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  // The raw, possibly-null value from `me` — NOT the "…" placeholder every
+  // other display of the name falls back to while loading/missing. Seeding
+  // the editable field with that placeholder would let "Сохранить имя"
+  // silently persist the literal string "…" for any pre-migration account
+  // with no name set yet (User.name is nullable — see its own schema comment).
+  rawUserName: string | null;
+  userEmail: string | null;
+  roleLabel: string;
+  companyName: string;
+  // See CabinetController.updateProfile's own comment — writing a name
+  // through an impersonation session would rename the SUPPORT AGENT's own
+  // account, not the client's, so the editor disables itself proactively
+  // instead of only failing after a click (found via code-review).
+  // undefined = `me` hasn't loaded yet — treated as "assume impersonating"
+  // below (fail safe) rather than defaulting to false, since the sheet can
+  // be opened before that first load resolves (found via code-review).
+  impersonating: boolean | undefined;
+  onNameSaved: (name: string) => void;
+}) {
+  // Fail-safe: disabled unless we KNOW impersonating is false, not just
+  // whenever it isn't (yet) true — see the prop's own comment.
+  const blockedByImpersonation = impersonating !== false;
+  const [name, setName] = useState(rawUserName ?? "");
+  const [nameStatus, setNameStatus] = useState<string | null>(null);
+  const [savingName, setSavingName] = useState(false);
+  // Tracks whether the OWNER has actually typed something, as opposed to
+  // `rawUserName` simply arriving late — the sheet can be opened before
+  // `/api/cabinet/me` resolves (rawUserName still null at that instant), so
+  // resyncing only on the `open` transition left the field stuck blank for
+  // the rest of that visit once `me` finally loaded (found via code-review).
+  // Reset on open, flipped true by the field's own onChange; the resync
+  // below only applies an incoming rawUserName while this is still false,
+  // so it can catch a late `me` load without also clobbering an in-progress
+  // edit typed after a save (see the effect's own comment).
+  const nameEditedRef = useRef(false);
+
+  // Lead-notification settings are already real (/api/cabinet/lead-
+  // notifications, same endpoint the old cabinet uses) — fetched here
+  // instead of inventing a second, fake "weekly report" toggle like the old
+  // dead dialog had.
+  const [notifyTelegram, setNotifyTelegram] = useState(false);
+  const [notifyEmail, setNotifyEmail] = useState("");
+  const [telegramConnected, setTelegramConnected] = useState(false);
+  const [notifyStatus, setNotifyStatus] = useState<string | null>(null);
+  const [savingNotify, setSavingNotify] = useState(false);
+  // Gates the save button until the real GET below actually resolves —
+  // notifyTelegram/notifyEmail start at their empty defaults (false/""), so
+  // saving before this flips true would POST those defaults over real
+  // settings (a real notifyLeadsViaTelegram=true silently turned off) if the
+  // owner clicks fast on a slow connection (found via code-review).
+  const [notifyLoaded, setNotifyLoaded] = useState(false);
+  // requestId guards a fast close/reopen the same way Dialogs' own
+  // listRequestId does — otherwise a slower, stale fetch from a previous
+  // open could resolve after a newer one and clobber it with old settings.
+  const notifyRequestId = useRef(0);
+  useEffect(() => {
+    if (!open) return;
+    nameEditedRef.current = false;
+    setName(rawUserName ?? "");
+    setNameStatus(null);
+    setNotifyStatus(null);
+    setNotifyLoaded(false);
+    const requestId = ++notifyRequestId.current;
+    fetchJsonWithRetry<{ telegramConnected: boolean; notifyLeadsViaTelegram: boolean; notificationEmail: string | null }>("/api/cabinet/lead-notifications").then((data) => {
+      if (requestId !== notifyRequestId.current) return;
+      if (!data) {
+        // fetchJsonWithRetry exhausted every attempt — notifyLoaded stays
+        // false (correctly keeping Save disabled, per its own comment), but
+        // that used to leave the controls permanently greyed out with no
+        // explanation short of closing and reopening the sheet (found via
+        // code-review).
+        setNotifyStatus("Не удалось загрузить настройки — закройте и откройте окно ещё раз.");
+        return;
+      }
+      setTelegramConnected(data.telegramConnected);
+      setNotifyTelegram(data.notifyLeadsViaTelegram);
+      setNotifyEmail(data.notificationEmail ?? "");
+      setNotifyLoaded(true);
+    });
+  }, [open]);
+  // Separate effect so a late-arriving rawUserName (the sheet can open
+  // before /api/cabinet/me resolves) still lands — but ONLY while the owner
+  // hasn't started editing yet, so it can't clobber an in-progress edit
+  // typed after a save (see nameEditedRef's own comment).
+  useEffect(() => {
+    if (open && !nameEditedRef.current) setName(rawUserName ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawUserName]);
+
+  const saveName = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSavingName(true);
+    setNameStatus(null);
+    postJson<{ userName: string }>("/api/cabinet/profile", { name: trimmed })
+      .then((data) => { setName(data.userName); setNameStatus("Сохранено."); onNameSaved(data.userName); })
+      .catch((err) => setNameStatus(err instanceof Error ? err.message : "Не получилось сохранить."))
+      .finally(() => setSavingName(false));
+  };
+
+  const saveNotifications = () => {
+    setSavingNotify(true);
+    setNotifyStatus(null);
+    postJson("/api/cabinet/lead-notifications", { notifyLeadsViaTelegram: notifyTelegram, notificationEmail: notifyEmail })
+      .then(() => setNotifyStatus("Сохранено."))
+      .catch((err) => setNotifyStatus(err instanceof Error ? err.message : "Не получилось сохранить."))
+      .finally(() => setSavingNotify(false));
+  };
+
+  // Same real endpoint support-admin.html's own "Выйти" already uses —
+  // there was no way to sign out of cabinet-next at all before this.
+  const [loggingOut, setLoggingOut] = useState(false);
+  const logout = () => {
+    setLoggingOut(true);
+    fetch("/api/cabinet/logout", { method: "POST" })
+      .then((r) => { if (r.ok) window.location.href = "/cabinet/login.html"; else setLoggingOut(false); })
+      .catch(() => setLoggingOut(false));
+  };
+
+  return <Sheet open={open} onOpenChange={onOpenChange}><SheetContent className="profile-sheet">
+    <SheetHeader><SheetTitle>Профиль</SheetTitle><SheetDescription>{companyName} · {roleLabel}</SheetDescription></SheetHeader>
+    <div className="prototype-form">
+      {impersonating === true ? (
+        <p className="empty">Режим поддержки: изменение имени недоступно — это изменило бы имя вашего собственного аккаунта, а не клиента.</p>
+      ) : impersonating === undefined ? (
+        // Ordinary (non-impersonating) owner who opened the sheet before /api/cabinet/me
+        // resolved — blockedByImpersonation greys the field out the same fail-safe way,
+        // but with no message it looked broken/permissions-denied instead of loading
+        // (found via code-review).
+        <p className="empty">Загрузка…</p>
+      ) : null}
+      <label><span>Имя</span><input value={name} disabled={savingName || blockedByImpersonation} maxLength={80} onChange={(e) => { nameEditedRef.current = true; setName(e.target.value); }} /></label>
+      <label><span>Email</span><input value={userEmail ?? ""} disabled /></label>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Button className="primary-action" disabled={savingName || blockedByImpersonation || !name.trim()} onClick={saveName}>Сохранить имя</Button>
+        {nameStatus && <small>{nameStatus}</small>}
+      </div>
+    </div>
+    <div className="prototype-form" style={{ marginTop: 20 }}>
+      <div className="switch-row">
+        <div><Bell /><span><b>Уведомлять о заявках в Telegram</b><small>{telegramConnected ? "Telegram подключён" : notifyTelegram ? "Уведомления включены, но Telegram сейчас не подключён — подключите в «Установка»" : "Сначала подключите Telegram в разделе «Установка»"}</small></span></div>
+        {/* Not disabled on !telegramConnected — the setting itself is independent of connection state on the backend, and disabling it would leave a stale "on" value the owner can never turn off here again once Telegram gets disconnected. Disabled on !notifyLoaded instead — toggling before the real GET resolves would visually "take" then get silently overwritten back when it does (found via code-review). */}
+        <Switch checked={notifyTelegram} disabled={!notifyLoaded} onCheckedChange={setNotifyTelegram} />
+      </div>
+      <label><span>Email для уведомлений о заявках</span><input value={notifyEmail} disabled={!notifyLoaded} onChange={(e) => setNotifyEmail(e.target.value)} placeholder="Необязательно" /></label>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Button variant="outline" disabled={savingNotify || !notifyLoaded} onClick={saveNotifications}>Сохранить уведомления</Button>
+        {notifyStatus && <small>{notifyStatus}</small>}
+      </div>
+    </div>
+    <SheetFooter><Button variant="outline" disabled={loggingOut} onClick={logout}>{loggingOut ? "Выхожу…" : "Выйти"}</Button></SheetFooter>
+  </SheetContent></Sheet>;
 }
 
-function TrialBar({ onBilling }: { onBilling: () => void }) {
-  return <div className="trial-bar"><div><Sparkles /><span><b>Пробный период активен</b><small>Осталось 15 дней</small></span></div><div className="trial-progress"><i style={{ width: "42%" }} /></div><button data-live onClick={onBilling}>Выбрать тариф <ArrowRight /></button></div>;
+function Topbar({ onBotSwitch, botLabel, userName, userInitial, roleLabel, analytics, onOpenAttention, onOpenProfile }: { onBotSwitch: () => void; botLabel: string; userName: string; userInitial: string; roleLabel: string; analytics: CabinetAnalytics; onOpenAttention: () => void; onOpenProfile: () => void }) {
+  return <header className="topbar"><div className="topbar-left"><SidebarTrigger /><button className="bot-select" data-live onClick={onBotSwitch}><span className="bot-dot"><Bot /></span><span><small>Ваш бот</small><b>{botLabel}</b></span><ChevronDown /></button></div><div className="topbar-right"><NotificationCenter analytics={analytics} onOpen={onOpenAttention}/><button className="profile" data-live onClick={onOpenProfile}><span>{userInitial}</span><div><b>{userName}</b><small>{roleLabel}</small></div><ChevronDown /></button></div></header>;
+}
+
+// Same 15-day window ProvisioningService actually grants every new bot
+// (`15 * 24 * 60 * 60 * 1000`) — used here only to size the progress bar,
+// not to decide access (the backend's own trialEndsAt check in
+// WidgetService.sendMessage is the real gate).
+// Same constant AND same formula as the old cabinet's own renderTrialBanner
+// (cabinet/index.html) — ported rather than re-derived, so the two cabinets
+// never show conflicting math for the same bot again. Notably the percent
+// is REMAINING (fuller bar = more runway), not "used": a bar computed as
+// "used" against this fixed 15-day denominator would go negative-then-
+// clamped-to-0 for any trial a support agent manually extended past 15
+// days, which was tried and cut in review (found via code-review) — the
+// remaining-based version degrades sanely (full bar) for that same case.
+const TRIAL_TOTAL_DAYS = 15;
+
+// Used to be "Осталось 15 дней" + a fixed 42%-wide bar on every account,
+// always, regardless of the bot's actual trialEndsAt (found live: "почему
+// лента прогресса показывает половину, а срок написан 15 дней?" — the two
+// numbers were never related to each other or to reality in the first
+// place). trialEndsAt: null means no expiry at all (see BotSummary's own
+// backend mapping — that's how "Умный Чат"'s own account stays on an
+// eternal trial while every provisioned client bot gets a real 15-day one:
+// WidgetService's block check is `trialEndsAt && trialEndsAt < now`, so a
+// null value can never trip it) — nothing to show a countdown for there.
+function TrialBar({ onBilling, trialEndsAt, subscriptionActive }: { onBilling: () => void; trialEndsAt: string | null | undefined; subscriptionActive: boolean | undefined }) {
+  if (trialEndsAt === undefined) return null; // still loading `me` — nothing real to show yet
+
+  if (subscriptionActive) {
+    return <div className="trial-bar active"><div><Sparkles /><span><b>Подписка активна</b><small>Спасибо, что вы с нами!</small></span></div></div>;
+  }
+  if (trialEndsAt === null) return null;
+
+  const daysLeft = Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  const expired = daysLeft <= 0;
+  const percentLeft = Math.max(0, Math.min(100, (daysLeft / TRIAL_TOTAL_DAYS) * 100));
+
+  return <div className={`trial-bar ${expired ? "expired" : ""}`}>
+    <div><Sparkles /><span><b>{expired ? "Пробный период закончился" : "Пробный период активен"}</b><small>{expired ? "Свяжитесь с нами, чтобы продолжить пользоваться сервисом" : `Осталось ${daysLeft} дн. из ${TRIAL_TOTAL_DAYS}`}</small></span></div>
+    {!expired && <div className="trial-progress"><i style={{ width: `${percentLeft}%` }} /></div>}
+    <button data-live onClick={onBilling}>{expired ? "Связаться с нами" : "Выбрать тариф"} <ArrowRight /></button>
+  </div>;
 }
 
 function Metric({ label, value, note, tone, icon: Icon }: { label: string; value: string; note: string; tone: string; icon: React.ElementType }) {
@@ -2063,11 +2299,9 @@ function Support() {
 
 function PrototypeActionDialog({ action, onClose }: { action: string | null; onClose: () => void }) {
   const isHistory = action?.includes("история активности");
-  const isProfile = action?.includes("Профиль");
   const isExport = action?.includes("Экспорт");
-  const isConnection = action?.includes("интеграц") || action?.includes("Подключить");
   const title = action || "Действие";
-  return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isProfile ? <div className="prototype-form"><label><span>Имя</span><input defaultValue="Олег"/></label><label><span>Email</span><input defaultValue="oleg@example.ru"/></label><div className="switch-row"><div><Bell/><span><b>Еженедельный отчёт</b><small>По понедельникам на почту</small></span></div><Switch defaultChecked/></div></div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : isConnection ? <div className="prototype-form"><div className="prototype-steps"><span className="done"><Check/></span><p><b>Выберите сервис</b><small>Telegram, Bitrix24 или amoCRM</small></p><span>2</span><p><b>Разрешите доступ</b><small>Только к заявкам и нужным полям</small></p><span>3</span><p><b>Проверьте тестовую передачу</b><small>Покажем результат до включения</small></p></div></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
+  return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
 }
 
 function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen, readiness }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void; readiness: ReadinessData | null }) {
@@ -2163,8 +2397,9 @@ export default function Home() {
   // "Открыть лид" (Диалоги) -> CRM's deal panel — a cross-view handoff, so it
   // lives up here alongside view/setView rather than inside either page.
   const [crmDealToOpen, setCrmDealToOpen] = useState<string | null>(null);
-  const { me, analytics, refetchAnalytics, refetchMe, signedOut, period, changePeriod, activeBotId, setActiveBotId } = useCabinetData();
+  const { me, setMe, analytics, refetchAnalytics, refetchMe, signedOut, period, changePeriod, activeBotId, setActiveBotId } = useCabinetData();
   const [botSwitcherOpen, setBotSwitcherOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   // The real active bot (see useCabinetData's own activeBotId comment), not
   // just bots[0] — a company with more than one bot expects switching here
   // to actually change what the rest of the cabinet shows (found live: "по
@@ -2216,7 +2451,8 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div><button className="sidebar-user" data-live onClick={() => setProfileOpen(true)}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")} onOpenProfile={() => setProfileOpen(true)}/><TrialBar onBilling={() => setView("billing")} trialEndsAt={activeBot ? activeBot.trialEndsAt ?? null : undefined} subscriptionActive={activeBot?.subscriptionActive}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
     <BotSwitcherDialog open={botSwitcherOpen} onClose={() => setBotSwitcherOpen(false)} bots={me?.bots ?? []} activeBotId={activeBot?.id ?? null} onSelect={(id) => { setActiveBotId(id); setBotSwitcherOpen(false); }} onCreated={(bot) => { refetchMe(); setActiveBotId(bot.id); setBotSwitcherOpen(false); }} />
+    <ProfileSheet open={profileOpen} onOpenChange={setProfileOpen} rawUserName={me?.userName ?? null} userEmail={me?.userEmail ?? null} roleLabel={roleLabel} companyName={companyName} impersonating={me?.impersonating} onNameSaved={(name) => setMe((prev) => (prev ? { ...prev, userName: name } : prev))} />
   </div>;
 }

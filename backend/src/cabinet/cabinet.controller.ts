@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { CabinetService } from './cabinet.service';
@@ -393,5 +393,25 @@ export class CabinetController {
   @UseGuards(AuthGuard)
   updateCompanyName(@Req() req: AuthedRequest, @Body() body: { name: string }) {
     return this.cabinet.updateCompanyName(req.companyId, body.name);
+  }
+
+  // The real profile card (name + email + role + logout) — see
+  // CabinetService.updateUserName's own comment for what this replaces.
+  //
+  // req.userId during impersonation is deliberately still the SUPPORT
+  // AGENT's own id, never the client's (see AuthService's own
+  // CabinetSessionPayload comment) — getMe already had this as a read-only
+  // quirk (the "logged-in name" shown while impersonating is the agent's
+  // own), but a WRITE through that same id would silently rename the
+  // agent's own account instead of the client's, with the sheet showing the
+  // impersonated company's name right above it (found via code-review).
+  // Blocked outright rather than silently mis-attributed.
+  @Post('profile')
+  @UseGuards(AuthGuard)
+  updateProfile(@Req() req: AuthedRequest, @Body() body: { name: string }) {
+    if (req.impersonating) {
+      throw new ForbiddenException('Нельзя изменить профиль в режиме поддержки');
+    }
+    return this.cabinet.updateUserName(req.userId, body.name);
   }
 }
