@@ -288,18 +288,62 @@ function PageHeader({ view, onPrimary, companyName }: { view: View; onPrimary?: 
   return <div className="page-header"><div><div className="crumb">{companyName} <span>/</span> {titles[view].title}</div><h1>{titles[view].title}</h1><p>{titles[view].desc}</p></div>{action && <Button className="primary-action" data-live onClick={() => onPrimary?.(action)}><Plus />{action}</Button>}</div>;
 }
 
-function NotificationCenter() {
+// Reason -> icon/tone for a pending escalation, same three real
+// EscalationReason values PendingEscalationRow already branches on — titles
+// come from that same component's own ESCALATION_REASON_LABELS (below)
+// instead of a second, easily-drifting copy of the same three strings.
+const ESCALATION_REASON_ICON: Record<string, { icon: React.ElementType; tone: string }> = {
+  unanswered: { icon: Target, tone: "orange" },
+  dissatisfaction: { icon: AlertCircle, tone: "violet" },
+  disliked: { icon: AlertCircle, tone: "violet" },
+};
+// Most recent first, capped — same reasoning as getAnalytics' own capped
+// recentVerified/processedEscalations lists: pending/needsVerification
+// themselves have no row limit, and a neglected backlog shouldn't blow out
+// the bell dropdown (see .notification-list's own max-height/overflow-y).
+const MAX_NOTIFICATIONS = 8;
+
+// Used to be three hardcoded notices with a fictional lead ("Анна оставила
+// телефон") and fixed times ("12:41", "вчера") that never matched today's
+// date (found live: "нет даты"), and clicking one did nothing but close the
+// sheet (found live: "не открывает ничего, а сворачивает уведомления").
+// Real escalations now — same analytics.escalations Attention() already
+// renders (and the nav's own "Требует внимания" badge already counts), with
+// real createdAt/answeredAt, opening the Attention page on click instead of
+// just dismissing.
+function NotificationCenter({ analytics, onOpen }: { analytics: CabinetAnalytics; onOpen: () => void }) {
   const [open, setOpen] = useState(false);
-  const notices = [
-    { icon: Target, tone: "orange", title: "Новая заявка без ответа", text: "Анна оставила телефон 18 минут назад", time: "12:41" },
-    { icon: AlertCircle, tone: "violet", title: "Бот не уверен в ответе", text: "Вопрос о доставке за пределы региона", time: "11:08" },
-    { icon: CreditCard, tone: "blue", title: "Пробный период закончится через 3 дня", text: "Выберите модель оплаты, чтобы бот не остановился", time: "вчера" },
-  ];
-  return <Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><button className="icon-button" data-live aria-label="Уведомления"><Bell /><i /></button></SheetTrigger><SheetContent className="notification-sheet"><SheetHeader><SheetTitle>Требует внимания</SheetTitle><SheetDescription>Только события, для которых нужно ваше действие.</SheetDescription></SheetHeader><div className="notification-list">{notices.map(({icon:Icon,tone,title,text:copy,time}) => <button key={title} onClick={() => setOpen(false)}><span className={`event-icon ${tone}`}><Icon /></span><p><b>{title}</b><small>{copy}</small></p><time>{time}</time><ArrowRight /></button>)}</div><div className="notification-rule"><Info/><p><b>Обычные диалоги сюда не попадают</b><small>Колокольчик показывает только лиды, ошибки, лимиты и проблемы интеграций.</small></p></div></SheetContent></Sheet>;
+  // Both source lists have no row cap on the backend — a neglected backlog
+  // (hundreds of unanswered escalations) shouldn't get re-sorted on every
+  // Topbar re-render for the sake of the 8 rows actually shown.
+  const notices = useMemo(() => {
+    if (!analytics) return [];
+    return [
+      ...analytics.escalations.pending.map((e) => ({
+        key: e.id,
+        ...(ESCALATION_REASON_ICON[e.reason] ?? ESCALATION_REASON_ICON.unanswered),
+        title: ESCALATION_REASON_LABELS[e.reason] || "Нет ответа",
+        text: e.question,
+        time: e.createdAt,
+      })),
+      ...analytics.escalations.needsVerification.map((e) => ({
+        key: e.id,
+        icon: Clock3,
+        tone: "blue",
+        title: "Ответили — нужна проверка",
+        text: e.question,
+        time: e.answeredAt,
+      })),
+    ]
+      .sort((a, b) => (a.time === b.time ? 0 : a.time < b.time ? 1 : -1))
+      .slice(0, MAX_NOTIFICATIONS);
+  }, [analytics]);
+  const openAttention = () => { setOpen(false); onOpen(); };
+  return <Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><button className="icon-button" data-live aria-label="Уведомления"><Bell />{notices.length > 0 && <i />}</button></SheetTrigger><SheetContent className="notification-sheet"><SheetHeader><SheetTitle>Требует внимания</SheetTitle><SheetDescription>Только события, для которых нужно ваше действие.</SheetDescription></SheetHeader><div className="notification-list">{notices.length === 0 ? <p className="empty">Сейчас всё под контролем.</p> : notices.map(({key,icon:Icon,tone,title,text:copy,time}) => <button key={key} onClick={openAttention}><span className={`event-icon ${tone}`}><Icon /></span><p><b>{title}</b><small>{copy}</small></p><time>{fmtDialogDate(time)}</time><ArrowRight /></button>)}</div><div className="notification-rule"><Info/><p><b>Обычные диалоги сюда не попадают</b><small>Колокольчик показывает только ответы бота, которые нужно проверить или исправить.</small></p></div></SheetContent></Sheet>;
 }
 
-function Topbar({ onAction, onBotSwitch, botLabel, userName, userInitial, roleLabel }: { onAction: (label: string) => void; onBotSwitch: () => void; botLabel: string; userName: string; userInitial: string; roleLabel: string }) {
-  return <header className="topbar"><div className="topbar-left"><SidebarTrigger /><button className="bot-select" data-live onClick={onBotSwitch}><span className="bot-dot"><Bot /></span><span><small>Ваш бот</small><b>{botLabel}</b></span><ChevronDown /></button></div><div className="topbar-right"><NotificationCenter/><button className="profile" data-live onClick={() => onAction("Профиль и настройки аккаунта")}><span>{userInitial}</span><div><b>{userName}</b><small>{roleLabel}</small></div><ChevronDown /></button></div></header>;
+function Topbar({ onAction, onBotSwitch, botLabel, userName, userInitial, roleLabel, analytics, onOpenAttention }: { onAction: (label: string) => void; onBotSwitch: () => void; botLabel: string; userName: string; userInitial: string; roleLabel: string; analytics: CabinetAnalytics; onOpenAttention: () => void }) {
+  return <header className="topbar"><div className="topbar-left"><SidebarTrigger /><button className="bot-select" data-live onClick={onBotSwitch}><span className="bot-dot"><Bot /></span><span><small>Ваш бот</small><b>{botLabel}</b></span><ChevronDown /></button></div><div className="topbar-right"><NotificationCenter analytics={analytics} onOpen={onOpenAttention}/><button className="profile" data-live onClick={() => onAction("Профиль и настройки аккаунта")}><span>{userInitial}</span><div><b>{userName}</b><small>{roleLabel}</small></div><ChevronDown /></button></div></header>;
 }
 
 function TrialBar({ onBilling }: { onBilling: () => void }) {
@@ -2172,7 +2216,7 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div><button className="sidebar-user" data-live onClick={() => setAction("Профиль и настройки аккаунта")}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onAction={setAction} onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")}/><TrialBar onBilling={() => setView("billing")}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
     <BotSwitcherDialog open={botSwitcherOpen} onClose={() => setBotSwitcherOpen(false)} bots={me?.bots ?? []} activeBotId={activeBot?.id ?? null} onSelect={(id) => { setActiveBotId(id); setBotSwitcherOpen(false); }} onCreated={(bot) => { refetchMe(); setActiveBotId(bot.id); setBotSwitcherOpen(false); }} />
   </div>;
 }
