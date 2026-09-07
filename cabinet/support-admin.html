@@ -158,12 +158,15 @@
           <h2>Внедрение — заметки о клиентах</h2>
           <p class="sub" style="margin-bottom:14px;">
             Сам «Статус внедрения» (сайт, база знаний, цель бота, Telegram, тест, установка) считается
-            автоматически и клиент видит его в своём кабинете. Здесь — только внутренняя заметка о задачах
-            бизнеса с созвона «Знакомство с менеджером», клиенту не показывается.
+            автоматически и клиент видит его в своём кабинете. Заметка о задачах бизнеса — внутренняя,
+            клиенту не показывается. «Взять в работу» ставит на паузу самостоятельные правки владельца
+            (внешний вид, цель, приветствия, подключение CRM) — база знаний, ответы на заявки и сделки
+            остаются доступны ему всегда. Отметки «плохой ответ» от владельца, пока бот в работе, идут на
+            проверку в «База знаний» (раздел «На проверке») вместо мгновенного применения.
           </p>
           <div class="table-scroll">
             <table id="onboardingTable" style="display:none">
-              <thead><tr><th>Компания</th><th>Бот</th><th>Заметка о задачах бизнеса</th><th></th></tr></thead>
+              <thead><tr><th>Компания</th><th>Бот</th><th>Заметка о задачах бизнеса</th><th>В работе</th><th></th></tr></thead>
               <tbody id="onboardingRows"></tbody>
             </table>
           </div>
@@ -436,6 +439,32 @@
         noteInput.placeholder = 'Заметка ещё не заполнена';
         noteTd.appendChild(noteInput);
         tr.appendChild(noteTd);
+
+        var lockTd = document.createElement('td');
+        var lockBtn = document.createElement('button');
+        lockBtn.type = 'button';
+        lockBtn.className = 'btn-inline';
+        var lockStatus = document.createElement('span');
+        lockStatus.className = 'empty';
+        lockStatus.style.marginLeft = '8px';
+        function renderLockState(locked) {
+          lockBtn.textContent = locked ? 'Закончить' : 'Взять в работу';
+          lockBtn.className = locked ? 'btn-primary btn-inline' : 'btn-inline';
+        }
+        renderLockState(b.locked);
+        lockBtn.addEventListener('click', function () {
+          var willLock = lockBtn.textContent === 'Взять в работу';
+          lockBtn.disabled = true;
+          lockStatus.textContent = '';
+          fetch('/api/admin/manager-notes/' + b.botId + '/' + (willLock ? 'lock' : 'unlock'), { method: 'POST' })
+            .then(function (res) { if (!res.ok) throw new Error(); return res.json(); })
+            .then(function () { renderLockState(willLock); })
+            .catch(function () { lockStatus.textContent = 'Не получилось.'; })
+            .finally(function () { lockBtn.disabled = false; });
+        });
+        lockTd.appendChild(lockBtn);
+        lockTd.appendChild(lockStatus);
+        tr.appendChild(lockTd);
 
         var actionTd = document.createElement('td');
         var saveBtn = document.createElement('button');

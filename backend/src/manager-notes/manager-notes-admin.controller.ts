@@ -17,4 +17,14 @@ export class ManagerNotesAdminController {
   update(@Param('botId') botId: string, @Body() body: { note?: string }) {
     return this.notes.updateNote(botId, body?.note ?? '');
   }
+
+  @Post(':botId/lock')
+  lock(@Param('botId') botId: string) {
+    return this.notes.lock(botId);
+  }
+
+  @Post(':botId/unlock')
+  unlock(@Param('botId') botId: string) {
+    return this.notes.unlock(botId);
+  }
 }

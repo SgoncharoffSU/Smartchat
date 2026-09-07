@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, AlertCircle, ArrowRight, Bell, BookOpen, Bot, Check,
   Banknote, BrainCircuit, Building2, ChevronDown, CircleHelp, ClipboardCheck, Clock3, Copy, CreditCard, Database, Download, ExternalLink, Eye,
-  FileUp, Flame, Globe2, GraduationCap, Headphones, History, Inbox, Info, LayoutDashboard, LifeBuoy, Link2, ListFilter,
+  FileUp, Flame, Globe2, GraduationCap, Headphones, History, Inbox, Info, LayoutDashboard, LifeBuoy, Link2, ListFilter, Lock,
   MessageSquareText, MoreHorizontal, MousePointerClick, Plus, Rocket, Search, Send, Settings2,
   ShieldCheck, SlidersHorizontal, Sparkles, Target, TestTube2, Trash2, Users, WandSparkles,
   ArrowLeft, Phone, Wallet, Workflow, X, Zap,
@@ -36,7 +36,7 @@ type View = "dashboard" | "readiness" | "attention" | "dialogs" | "training" | "
 // separate auth wiring needed here). Both endpoints already existed before
 // this app did; nothing added on the backend for these two. Typed loosely
 // (not the full response shape) — only the fields this page actually reads.
-type BotSummary = { id: string; name: string; label: string | null; widgetToken: string; funnelGeneratedAt: string | null; sourceWebsite?: string | null; trialEndsAt?: string | null; subscriptionActive?: boolean };
+type BotSummary = { id: string; name: string; label: string | null; widgetToken: string; funnelGeneratedAt: string | null; sourceWebsite?: string | null; trialEndsAt?: string | null; subscriptionActive?: boolean; managerLocked?: boolean; managerLockAckNeeded?: boolean };
 type CabinetMe = {
   companyName: string;
   // Deprecated singular alias (see CabinetService.getMe's own comment) — kept
@@ -591,6 +591,41 @@ function TrialBar({ onBilling, trialEndsAt, subscriptionActive }: { onBilling: (
   </div>;
 }
 
+// The manager "взял бота в работу" (see support-admin.html's own «Внедрение»
+// tab) — the owner's own edits to appearance/goal/greetings/CRM connection
+// are paused server-side (see bot-lock.util.ts) for the duration; this is
+// just the visible half of that so an owner isn't left guessing why a save
+// suddenly 403s. Found live: "может ли пользователь мешать настроить
+// бота?... блокировка нужна, когда назначается ответственный менеджер".
+function ManagerLockBar({ locked }: { locked: boolean | undefined }) {
+  if (!locked) return null;
+  return <div className="trial-bar locked">
+    <div><Lock /><span><b>Бота настраивает ваш менеджер</b><small>Внешний вид, цель, приветствия и подключение CRM временно недоступны — база знаний и ответы клиентам открыты как обычно</small></span></div>
+  </div>;
+}
+
+// One-time "я осознаю, что могу ухудшить результат" — shown on the first
+// visit after the manager releases the lock (managerLockAckNeeded), not on
+// every single edit afterward. Blocking (no outside-click dismiss) on
+// purpose: this is meant to actually be read once, not reflexively closed.
+function AckManagerLockDialog({ open, botId, onAcknowledge }: { open: boolean; botId: string | null; onAcknowledge: () => void }) {
+  const [acking, setAcking] = useState(false);
+  const acknowledge = () => {
+    setAcking(true);
+    // botId matters here — without it acknowledgeManagerLock falls back to
+    // findOwnedBot's "this company's OLDEST bot", clearing the wrong bot's
+    // flag for any company with more than one (found via code-review).
+    fetch(`/api/cabinet/bot-lock/acknowledge${botId ? `?botId=${botId}` : ""}`, { method: "POST" })
+      .then(() => onAcknowledge())
+      .finally(() => setAcking(false));
+  };
+  return <Dialog open={open} onOpenChange={() => {}}><DialogContent className="prototype-dialog" showCloseButton={false} onEscapeKeyDown={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
+    <DialogHeader><DialogTitle>Менеджер закончил настройку</DialogTitle><DialogDescription>Теперь вы снова можете сами вносить правки.</DialogDescription></DialogHeader>
+    <div className="prototype-note"><ShieldCheck /><span>Я осознаю, что, внося изменения самостоятельно, могу ухудшить результат текущих настроек. Если не уверены — лучше обратиться к менеджеру внедрения.</span></div>
+    <DialogFooter><Button className="primary-action" disabled={acking} onClick={acknowledge}>Понимаю, продолжить</Button></DialogFooter>
+  </DialogContent></Dialog>;
+}
+
 function Metric({ label, value, note, tone, icon: Icon }: { label: string; value: string; note: string; tone: string; icon: React.ElementType }) {
   return <article className="metric-card"><div className={`metric-icon ${tone}`}><Icon /></div><div className="metric-top"><span>{label}</span><MoreHorizontal /></div><strong>{value}</strong><small>{note}</small></article>;
 }
@@ -769,6 +804,12 @@ function DislikeControl({ messageId, initiallyDisliked, initiallyDone }: { messa
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [done, setDone] = useState(initiallyDone);
+  // True when the manager has this bot locked — the resolve response then
+  // says so (pending: true) and the correction sits in "База знаний → На
+  // проверке" for the manager's own checkmark instead of going live
+  // immediately (found live: "менеджер, если считает их ответ хорошим,
+  // нажмет галочку подтверждения").
+  const [pending, setPending] = useState(false);
 
   const setNoteAndPersist = (value: string) => {
     setNote(value);
@@ -794,8 +835,9 @@ function DislikeControl({ messageId, initiallyDisliked, initiallyDone }: { messa
       body: JSON.stringify({ note: trimmed }),
     })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then(() => {
+      .then((data) => {
         try { localStorage.removeItem(draftKey); } catch { /* private mode etc */ }
+        setPending(Boolean(data?.pending));
         setDone(true);
       })
       .catch(() => setSaveError(true))
@@ -819,7 +861,7 @@ function DislikeControl({ messageId, initiallyDisliked, initiallyDone }: { messa
       .finally(() => setPreviewing(false));
   };
 
-  if (done) return <small className="dislike-done">Запомнено.</small>;
+  if (done) return <small className="dislike-done">{pending ? "Отправлено на проверку менеджеру." : "Запомнено."}</small>;
 
   if (!flagged) {
     return <button type="button" className="dislike-flag-btn" disabled={flagging} onClick={flag}>👎 Плохой ответ</button>;
@@ -891,6 +933,9 @@ function PendingEscalationRow({
   const [teachSubmitting, setTeachSubmitting] = useState(false);
   const [teachError, setTeachError] = useState<string | null>(null);
   const [taughtAs, setTaughtAs] = useState<string | null>(null);
+  // See DislikeControl's own comment — same pending-review treatment while
+  // the manager has this bot locked.
+  const [taughtPending, setTaughtPending] = useState(false);
   const TEACH_TYPE_LABELS: Record<string, string> = { fact: "факт о бизнесе", instruction: "правило поведения", correction: "коррекция для похожей ситуации" };
   const submitTeach = () => {
     const trimmed = note.trim();
@@ -903,7 +948,7 @@ function PendingEscalationRow({
       body: JSON.stringify({ note: trimmed }),
     })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => { setTaughtAs(data?.type ?? "correction"); onAnswered(); })
+      .then((data) => { setTaughtAs(data?.type ?? "correction"); setTaughtPending(Boolean(data?.pending)); onAnswered(); })
       .catch(() => setTeachError("Не получилось сохранить — попробуйте ещё раз."))
       .finally(() => setTeachSubmitting(false));
   };
@@ -1006,7 +1051,9 @@ function PendingEscalationRow({
 
       {taughtAs && (
         <p style={{ color: "#237a52", fontSize: 12, margin: 0, paddingLeft: 34 }}>
-          Сохранено как {TEACH_TYPE_LABELS[taughtAs] ?? taughtAs} — бот учтёт это в похожих ситуациях. Карточка обработана.
+          {taughtPending
+            ? `Отправлено менеджеру на проверку (${TEACH_TYPE_LABELS[taughtAs] ?? taughtAs}) — вступит в силу после подтверждения. Карточка обработана.`
+            : `Сохранено как ${TEACH_TYPE_LABELS[taughtAs] ?? taughtAs} — бот учтёт это в похожих ситуациях. Карточка обработана.`}
         </p>
       )}
 
@@ -1715,12 +1762,33 @@ function WidgetSettings({ me, activeBotId, analytics, refetchAnalytics }: { me: 
       // must never be reported in a way that implies the (already-committed)
       // appearance POST didn't save either — that would send the owner
       // re-submitting data that's already saved.
-      .then(([appearanceRes, companyRes]) => {
+      .then(async ([appearanceRes, companyRes]) => {
         const failed: string[] = [];
-        if (!appearanceRes.ok) failed.push('внешний вид/имя бота');
+        // A 403 (the manager has this bot locked — see bot-lock.util.ts)
+        // carries its own clear reason; surface that verbatim instead of
+        // the generic "проверьте значение" that fits a validation error
+        // but reads as nonsense for "недоступно, бот в работе у менеджера".
+        // Doesn't return early on it (found via code-review) — a concurrent
+        // companyRes failure still needs reporting, or the owner wrongly
+        // assumes the company-name half of this save succeeded.
+        let lockMessage: string | null = null;
+        if (!appearanceRes.ok) {
+          if (appearanceRes.status === 403) {
+            const body = await appearanceRes.json().catch(() => null);
+            lockMessage = body?.message || 'Недоступно сейчас.';
+          } else {
+            failed.push('внешний вид/имя бота');
+          }
+        }
         if (companyRes && !companyRes.ok) failed.push('название компании');
-        if (failed.length > 0) {
-          setSaveError(`Не сохранилось: ${failed.join(', ')} — проверьте значение${failed.length > 1 ? 'я' : ''}. ${failed.length < 2 ? 'Остальное уже сохранено.' : ''}`.trim());
+        if (lockMessage || failed.length > 0) {
+          setSaveError(
+            [lockMessage, failed.length > 0
+              ? `Не сохранилось: ${failed.join(', ')} — проверьте значение${failed.length > 1 ? 'я' : ''}. ${failed.length < 2 && !lockMessage ? 'Остальное уже сохранено.' : ''}`.trim()
+              : null]
+              .filter(Boolean)
+              .join(' '),
+          );
           return;
         }
         setSaved(true);
@@ -1748,13 +1816,17 @@ function WidgetSettings({ me, activeBotId, analytics, refetchAnalytics }: { me: 
     }
     setAddingVariant(true);
     fetch(`/api/cabinet/variants${botQuery}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) })
-      .then((r) => {
-        if (!r.ok) throw new Error('add variant failed');
+      .then((r) => (r.ok ? r.json() : r.json().catch(() => null).then((body) => Promise.reject(new Error(body?.message)))))
+      .then(() => {
         setPendingVariants((p) => [...p, text]);
         setNewVariant("");
         refetchAnalytics();
       })
-      .catch(() => setVariantError("Не получилось добавить вариант — текст должен быть не короче 3 символов."))
+      // Surfaces the backend's own reason (a 403 while the manager has the
+      // bot locked reads nothing like "текст должен быть не короче 3
+      // символов" — found via code-review) instead of one hardcoded
+      // message regardless of cause.
+      .catch((e) => setVariantError(typeof e?.message === "string" && e.message ? e.message : "Не получилось добавить вариант — текст должен быть не короче 3 символов."))
       .finally(() => setAddingVariant(false));
   };
 
@@ -2578,8 +2650,9 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div><button className="sidebar-user" data-live onClick={() => setProfileOpen(true)}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")} onOpenProfile={() => setProfileOpen(true)}/><TrialBar onBilling={() => setView("billing")} trialEndsAt={activeBot ? activeBot.trialEndsAt ?? null : undefined} subscriptionActive={activeBot?.subscriptionActive}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div><button className="sidebar-user" data-live onClick={() => setProfileOpen(true)}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")} onOpenProfile={() => setProfileOpen(true)}/><TrialBar onBilling={() => setView("billing")} trialEndsAt={activeBot ? activeBot.trialEndsAt ?? null : undefined} subscriptionActive={activeBot?.subscriptionActive}/><ManagerLockBar locked={activeBot?.managerLocked}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
     <BotSwitcherDialog open={botSwitcherOpen} onClose={() => setBotSwitcherOpen(false)} bots={me?.bots ?? []} activeBotId={activeBot?.id ?? null} onSelect={(id) => { setActiveBotId(id); setBotSwitcherOpen(false); }} onCreated={(bot) => { refetchMe(); setActiveBotId(bot.id); setBotSwitcherOpen(false); }} />
     <ProfileSheet open={profileOpen} onOpenChange={setProfileOpen} rawUserName={me?.userName ?? null} userEmail={me?.userEmail ?? null} roleLabel={roleLabel} companyName={companyName} impersonating={me?.impersonating} onNameSaved={(name) => setMe((prev) => (prev ? { ...prev, userName: name } : prev))} />
+    <AckManagerLockDialog open={Boolean(activeBot?.managerLockAckNeeded)} botId={activeBot?.id ?? null} onAcknowledge={() => setMe((prev) => (prev && activeBot ? { ...prev, bots: prev.bots.map((b) => (b.id === activeBot.id ? { ...b, managerLockAckNeeded: false } : b)) } : prev))} />
   </div>;
 }

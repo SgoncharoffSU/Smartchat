@@ -60,8 +60,20 @@ export class DislikesService {
    * the owner never has to know the difference between "инструкция" and
    * "коррекция" to use this, and never sees a "limit reached" message
    * either (see KnowledgeService.createInstruction) — this always succeeds.
+   *
+   * When the manager has this bot locked (see bot-lock.util.ts) — and the
+   * caller isn't the manager's own impersonation session — this is
+   * deliberately NOT hard-blocked like appearance/goal/CRM-connect are.
+   * Correction entries already only ever start 'pending' regardless (see
+   * KnowledgeService.createCorrection's own comment); this just extends
+   * that same "one human glance before it goes live" review to the fact/
+   * instruction branches too, and skips live-delivering an unreviewed
+   * answer into the visitor's dialog. Found live: "может, то, что напишет
+   * пользователь, без утверждения менеджером просто не сработает... менеджер,
+   * если считает их ответ хорошим, нажмет галочку подтверждения" — that
+   * galochka is the EXISTING pending/approve review in "База знаний".
    */
-  async resolve(companyId: string, messageId: string, note: string) {
+  async resolve(companyId: string, messageId: string, note: string, impersonating = false) {
     const trimmedNote = note.trim();
     if (!trimmedNote) throw new BadRequestException('Note cannot be empty');
 
@@ -105,43 +117,56 @@ export class DislikesService {
     );
 
     const botId = message.dialog.botId;
+    const forcePending = message.dialog.bot.managerLockedAt !== null && !impersonating;
+    const moderationStatus = forcePending ? 'pending' : 'approved';
 
     if (classification.type === 'fact') {
       await this.knowledge.createForBot(botId, companyId, situationContext?.content ?? null, trimmedNote, 'test_chat', {
-        moderationStatus: 'approved',
+        moderationStatus,
       });
     } else if (classification.type === 'instruction') {
-      await this.knowledge.createInstruction(companyId, trimmedNote, botId);
+      await this.knowledge.createInstruction(companyId, trimmedNote, botId, moderationStatus);
     } else {
       await this.knowledge.createCorrection(companyId, situationForCorrection, message.content, trimmedNote, botId);
     }
 
     await this.messages.resolveDislike(messageId, trimmedNote, classification.type);
 
-    // If this dislike also has a linked Escalation (see
-    // MessagesService.markDisliked — only the public test-chat 👎 creates
-    // one), close it out too so it drops off "Требует внимания". Goes
-    // straight to verified rather than through the pending-Telegram-answer
-    // step: the owner already saw a live preview of this exact text before
-    // confirming, same bar CabinetService.verifyEscalation exists to enforce
-    // for a bare Telegram reply. Deliberately NOT calling verifyEscalation
-    // itself — that mirrors the answer into KnowledgeEntry a second time,
-    // and the correction/fact/instruction above already did that.
-    // Fetched before the update so we still know each one's dialogId —
-    // updateMany itself doesn't return rows. Same live-delivery treatment as
-    // TelegramService.handleReplyAnswer's confirm branch: the owner already
-    // saw a preview of this exact text, so it's just as safe to drop
-    // straight into the visitor's own chat (if that session is still on
-    // record) as it is to mirror into the knowledge base above.
-    const linkedEscalations = await this.prisma.escalation.findMany({ where: { dislikedMessageId: messageId } });
-    await this.prisma.escalation.updateMany({
-      where: { dislikedMessageId: messageId },
-      data: { answer: trimmedNote, answeredAt: new Date(), verifiedAt: new Date() },
-    });
-    for (const esc of linkedEscalations) {
-      if (esc.dialogId) await this.messages.append(esc.dialogId, MessageRole.assistant, trimmedNote);
+    // Skipped entirely while pending manager review — an unreviewed answer
+    // has no business being auto-delivered into a real visitor's chat (see
+    // this method's own comment on forcePending). If this dislike also has
+    // a linked Escalation (see MessagesService.markDisliked — only the
+    // public test-chat 👎 creates one), close it out too so it drops off
+    // "Требует внимания". Goes straight to verified rather than through the
+    // pending-Telegram-answer step: the owner already saw a live preview of
+    // this exact text before confirming, same bar CabinetService
+    // .verifyEscalation exists to enforce for a bare Telegram reply.
+    // Deliberately NOT calling verifyEscalation itself — that mirrors the
+    // answer into KnowledgeEntry a second time, and the correction/fact/
+    // instruction above already did that. Fetched before the update so we
+    // still know each one's dialogId — updateMany itself doesn't return
+    // rows. Same live-delivery treatment as TelegramService
+    // .handleReplyAnswer's confirm branch: the owner already saw a preview
+    // of this exact text, so it's just as safe to drop straight into the
+    // visitor's own chat (if that session is still on record) as it is to
+    // mirror into the knowledge base above.
+    if (!forcePending) {
+      const linkedEscalations = await this.prisma.escalation.findMany({ where: { dislikedMessageId: messageId } });
+      await this.prisma.escalation.updateMany({
+        where: { dislikedMessageId: messageId },
+        data: { answer: trimmedNote, answeredAt: new Date(), verifiedAt: new Date() },
+      });
+      for (const esc of linkedEscalations) {
+        if (esc.dialogId) await this.messages.append(esc.dialogId, MessageRole.assistant, trimmedNote);
+      }
     }
 
-    return { ok: true, resolution: classification.type };
+    // 'correction' entries always start 'pending' regardless of forcePending
+    // (see createCorrection's own comment — "one human glance before it
+    // goes live" was already the rule for these, unrelated to the manager
+    // lock) — the flag the cabinet shows must say so too, or an unlocked
+    // correction reads as already-live when it's actually sitting in "База
+    // знаний → На проверке" the same as a locked one (found via code-review).
+    return { ok: true, resolution: classification.type, pending: forcePending || classification.type === 'correction' };
   }
 }

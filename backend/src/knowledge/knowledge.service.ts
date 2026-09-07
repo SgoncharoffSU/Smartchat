@@ -241,6 +241,12 @@ export class KnowledgeService {
     companyId: string,
     text: string,
     botId?: string,
+    // Overridable for one caller: while a manager has the bot locked (see
+    // bot-lock.util.ts), DislikesService/CabinetService.resolveDissatisfaction
+    // route the OWNER's own dislike-driven instructions to 'pending' instead
+    // of live — same "one human glance before it goes live" review this
+    // already gives site-scraped content, just gated on a different trigger.
+    moderationStatus: 'approved' | 'pending' = 'approved',
   ): Promise<{ ok: boolean; reason?: string; count?: number }> {
     const bot = await this.findOwnedBot(companyId, botId);
     const trimmed = text.trim();
@@ -272,6 +278,17 @@ export class KnowledgeService {
       await this.prisma.knowledgeEntry.deleteMany({ where: { id: { in: existing.map((e) => e.id) } } });
       for (const instructionText of merged) {
         const vector = await this.embeddings.embedDocument(instructionText);
+        // Always 'approved' here regardless of the caller's requested
+        // moderationStatus — `existing` (being deleted+recreated) is mostly
+        // already-approved, already-live instructions being re-merged, not
+        // new unreviewed content; applying a locked-bot's 'pending' to this
+        // batch would instantly demote every one of the bot's always-on
+        // behavioral instructions out of getInstructionsForPrompt until a
+        // manager re-approves the merge — a full behavior regression from
+        // one unrelated dislike note hitting the count ceiling (found via
+        // code-review). The narrower tradeoff: the new note itself skips
+        // review in this specific (rare — 25+ existing instructions AND
+        // locked) case, rather than the existing 25 losing review status.
         await this.createForBot(bot.id, companyId, null, instructionText, 'instruction', {
           moderationStatus: 'approved',
           embedding: vector ?? null,
@@ -281,7 +298,7 @@ export class KnowledgeService {
     }
 
     await this.createForBot(bot.id, companyId, null, trimmed, 'instruction', {
-      moderationStatus: 'approved',
+      moderationStatus,
       embedding: embedResult ?? null,
     });
     return { ok: true, count: existing.length + 1 };

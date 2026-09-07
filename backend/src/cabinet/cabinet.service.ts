@@ -11,6 +11,7 @@ import { MessagesService } from '../messages/messages.service';
 import { FunnelStage } from '../yandex-gpt/yandex-gpt.types';
 import { DEFAULT_FUNNEL_TEMPLATE } from '../yandex-gpt/default-funnel-template';
 import { GENERAL_SALES_PERSONA_RULES } from '../yandex-gpt/persona-rules';
+import { assertBotUnlockedForOwner } from '../bots/bot-lock.util';
 
 // Fixed presets shown in the cabinet's "Цель бота" picker — a custom
 // free-text goal is also accepted (preset key "custom"). Each preset's
@@ -375,6 +376,11 @@ export class CabinetService {
       planExpiresAt: b.planExpiresAt,
       tokenBalanceRub: b.tokenBalanceRub,
       autoPayEnabled: b.autoPayEnabled,
+      // "Взять в работу" — see bot-lock.util.ts's own comment. ackNeeded is
+      // the one-time "правки могут ухудшить результат" warning the cabinet
+      // shows on the first edit attempt after the manager releases the lock.
+      managerLocked: b.managerLockedAt !== null,
+      managerLockAckNeeded: b.managerLockAckNeeded,
     }));
     // Legacy top-level aliases (trialEndsAt/subscriptionActive/tariffPlan/...)
     // mirror the OLDEST bot's own billing state — the pre-multi-bot cabinet
@@ -454,6 +460,20 @@ export class CabinetService {
       : await this.prisma.bot.findFirst({ where: { companyId }, orderBy: { createdAt: 'asc' } });
     if (!bot) throw new NotFoundException('No bot found for this company');
     return bot;
+  }
+
+  /**
+   * The owner's one-time "я осознаю, что могу ухудшить результат" — shown
+   * once on their first edit attempt after the manager releases the lock
+   * (managerLockAckNeeded), never again until the NEXT lock/unlock cycle.
+   * Not itself gated by the lock (there'd be nothing left to acknowledge if
+   * it were) — just clears the flag so bot-lock.util.ts's own check keeps
+   * working as normal from here on.
+   */
+  async acknowledgeManagerLock(companyId: string, botId?: string) {
+    const bot = await this.findOwnedBot(companyId, botId);
+    await this.prisma.bot.update({ where: { id: bot.id }, data: { managerLockAckNeeded: false } });
+    return { ok: true };
   }
 
   /**
@@ -703,8 +723,10 @@ export class CabinetService {
     companyId: string,
     input: { name?: string; label?: string; gender?: string; color?: string; position?: string },
     botId?: string,
+    impersonating = false,
   ) {
     const bot = await this.findOwnedBot(companyId, botId);
+    assertBotUnlockedForOwner(bot.managerLockedAt, impersonating);
 
     const data: { name?: string; label?: string | null; gender?: string; widgetColor?: string; widgetPosition?: string } = {};
     if (input.name !== undefined) {
@@ -1302,7 +1324,7 @@ export class CabinetService {
    * the "Обработано" checkbox above, so it drops off the pending list either
    * way.
    */
-  async resolveDissatisfaction(companyId: string, escalationId: string, note: string) {
+  async resolveDissatisfaction(companyId: string, escalationId: string, note: string, impersonating = false) {
     const escalation = await this.prisma.escalation.findUnique({ where: { id: escalationId } });
     if (!escalation || escalation.companyId !== companyId) throw new NotFoundException('Escalation not found');
     if (escalation.reason !== 'dissatisfaction') {
@@ -1311,22 +1333,30 @@ export class CabinetService {
     const trimmedNote = note.trim();
     if (!trimmedNote) throw new BadRequestException('Note cannot be empty');
 
+    // Same pending-review treatment as DislikesService.resolve while the
+    // bot is locked — see that method's own comment.
+    const bot = await this.prisma.bot.findUnique({ where: { id: escalation.botId }, select: { managerLockedAt: true } });
+    const forcePending = Boolean(bot?.managerLockedAt) && !impersonating;
+    const moderationStatus = forcePending ? 'pending' : 'approved';
+
     const situationContext = escalation.visitorQuestion ?? escalation.question;
     const badReply = escalation.botReply ?? '';
     const classification = await this.yandexGpt.classifyDislikeNote(situationContext, badReply, trimmedNote);
 
     if (classification.type === 'fact') {
       await this.knowledge.createForBot(escalation.botId, companyId, situationContext, trimmedNote, 'test_chat', {
-        moderationStatus: 'approved',
+        moderationStatus,
       });
     } else if (classification.type === 'instruction') {
-      await this.knowledge.createInstruction(companyId, trimmedNote, escalation.botId);
+      await this.knowledge.createInstruction(companyId, trimmedNote, escalation.botId, moderationStatus);
     } else {
       await this.knowledge.createCorrection(companyId, situationContext, badReply, trimmedNote, escalation.botId);
     }
 
     await this.prisma.escalation.update({ where: { id: escalationId }, data: { processedAt: new Date() } });
-    return { ok: true, type: classification.type };
+    // Same "correction always starts pending regardless of the lock" fix as
+    // DislikesService.resolve — see its own comment.
+    return { ok: true, type: classification.type, pending: forcePending || classification.type === 'correction' };
   }
 
   /**
@@ -1337,8 +1367,9 @@ export class CabinetService {
    * variant, and its own show/dialog/conversion numbers show up in the same
    * A/B/C/D report.
    */
-  async addGreetingVariant(companyId: string, text: string, botId?: string) {
+  async addGreetingVariant(companyId: string, text: string, botId?: string, impersonating = false) {
     const bot = await this.findOwnedBot(companyId, botId);
+    assertBotUnlockedForOwner(bot.managerLockedAt, impersonating);
 
     const stages = Array.isArray(bot.funnelConfig) ? (bot.funnelConfig as unknown as FunnelStage[]) : [];
     const greetingIdx = stages.findIndex((s) => s.stageId === 'greeting');
@@ -1375,8 +1406,9 @@ export class CabinetService {
     };
   }
 
-  async setGoal(companyId: string, preset: string, customText?: string, botId?: string) {
+  async setGoal(companyId: string, preset: string, customText?: string, botId?: string, impersonating = false) {
     const bot = await this.findOwnedBot(companyId, botId);
+    assertBotUnlockedForOwner(bot.managerLockedAt, impersonating);
 
     let label: string;
     let instruction: string;
@@ -1482,8 +1514,9 @@ export class CabinetService {
     return { ok: true };
   }
 
-  async saveBitrix24(companyId: string, webhookUrl: string, botId?: string) {
+  async saveBitrix24(companyId: string, webhookUrl: string, botId?: string, impersonating = false) {
     const bot = await this.findOwnedBot(companyId, botId);
+    assertBotUnlockedForOwner(bot.managerLockedAt, impersonating);
     const trimmed = webhookUrl.trim();
     if (trimmed && !/^https:\/\/[^/]+\.bitrix24\.[a-z.]+\/rest\/\d+\/[A-Za-z0-9]+\/?$/.test(trimmed)) {
       throw new BadRequestException(
@@ -1507,8 +1540,9 @@ export class CabinetService {
     return { ok: true };
   }
 
-  async saveAmoCrm(companyId: string, subdomain: string, accessToken: string, botId?: string) {
+  async saveAmoCrm(companyId: string, subdomain: string, accessToken: string, botId?: string, impersonating = false) {
     const bot = await this.findOwnedBot(companyId, botId);
+    assertBotUnlockedForOwner(bot.managerLockedAt, impersonating);
     const trimmedSubdomain = subdomain.trim().toLowerCase();
     const trimmedToken = accessToken.trim();
     if (trimmedSubdomain && !/^[a-z0-9-]+$/.test(trimmedSubdomain)) {

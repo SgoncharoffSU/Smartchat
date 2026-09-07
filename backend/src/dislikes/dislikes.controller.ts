@@ -5,6 +5,7 @@ import { AuthGuard } from '../auth/auth.guard';
 
 interface AuthedRequest extends Request {
   companyId: string;
+  impersonating?: boolean;
 }
 
 @Controller('api/cabinet/dislikes')
@@ -19,7 +20,7 @@ export class DislikesController {
 
   @Post(':messageId/resolve')
   resolve(@Req() req: AuthedRequest, @Param('messageId') messageId: string, @Body() body: { note: string }) {
-    return this.dislikes.resolve(req.companyId, messageId, body.note ?? '');
+    return this.dislikes.resolve(req.companyId, messageId, body.note ?? '', req.impersonating);
   }
 
   @Post(':messageId/mark')

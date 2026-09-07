@@ -281,11 +281,18 @@ export class WidgetService {
     // load at all, so anyone who views page source can read it. Found live —
     // a bot's Telegram notifications got reconnected to someone else's chat
     // this way.
+    // Carried into processTrainingMessage below (found via code-review: the
+    // real value was being checked and then discarded here, and a "no
+    // session reaches this deep" comment further down was papering over
+    // that by hardcoding impersonating: true — which let the OWNER's own
+    // session bypass their manager's lock too, not just exempt the manager).
+    let trainingImpersonating = false;
     if (dto.trainingMode) {
       const payload = sessionToken ? this.auth.verifySession(sessionToken) : null;
       if (!payload || payload.companyId !== bot.companyId) {
         throw new UnauthorizedException('Training mode requires signing in as this bot\'s owner');
       }
+      trainingImpersonating = payload.impersonating === true;
     }
 
     // Own fields now (trial/subscription moved from Company to Bot — one
@@ -328,7 +335,7 @@ export class WidgetService {
     // exist?" check always sees the first call's write — without it, both can
     // read "no message yet" concurrently and each generate their own opener.
     try {
-      return await this.withDialogLock(dialog.id, () => this.processMessage(dto, bot, dialog, visitorText, visitorIp, signal));
+      return await this.withDialogLock(dialog.id, () => this.processMessage(dto, bot, dialog, visitorText, visitorIp, signal, trainingImpersonating));
     } catch (error) {
       // Client already disconnected (see chat.js's revealAbort) — nothing
       // reads this response either way. Swallowed here, not left to the
@@ -348,6 +355,10 @@ export class WidgetService {
     visitorText: string | undefined,
     visitorIp?: string,
     signal?: AbortSignal,
+    // Real session impersonation status for dto.trainingMode — see
+    // sendMessage's own trainingImpersonating comment. Always false when
+    // trainingMode is off (visitor chat has no session to check).
+    trainingImpersonating = false,
   ) {
     // Fetched once and threaded through isBlocked/chargeConfirmedLead/
     // chargeTokenUsage below — all three used to run this same bot+
@@ -379,7 +390,7 @@ export class WidgetService {
     const existingMessages = await this.messages.listByDialog(dialog.id);
 
     if (dto.trainingMode) {
-      return this.processTrainingMessage(dto, bot, dialog, visitorText, existingMessages);
+      return this.processTrainingMessage(dto, bot, dialog, visitorText, existingMessages, trainingImpersonating);
     }
 
     if (dto.isInit) {
@@ -1737,6 +1748,12 @@ export class WidgetService {
     dialog: Awaited<ReturnType<DialogsService['findOrCreate']>>,
     visitorText: string | undefined,
     existingMessages: Awaited<ReturnType<MessagesService['listByDialog']>>,
+    // The real session's impersonating flag (sendMessage already verified
+    // it above) — NOT a blanket bypass. The manager's own impersonation
+    // session is exempt from their own lock (that's the point of "взять в
+    // работу"); the owner's own training-chat session is not (found via
+    // code-review — this used to be hardcoded true for both).
+    impersonating: boolean,
   ) {
     if (dto.isInit || dto.isReveal) {
       const firstAssistant = existingMessages.find((m) => m.role === MessageRole.assistant);
@@ -1789,7 +1806,7 @@ export class WidgetService {
     }
     const pickedGoalPreset = dto.buttonPayload ? GOAL_LABEL_TO_PRESET[dto.buttonPayload] : undefined;
     if (pickedGoalPreset) {
-      await this.cabinet.setGoal(bot.companyId, pickedGoalPreset, undefined, bot.id);
+      await this.cabinet.setGoal(bot.companyId, pickedGoalPreset, undefined, bot.id, impersonating);
       const followup = GOAL_FOLLOWUP_QUESTIONS[pickedGoalPreset] ?? 'Отлично! Есть что-то ещё важное, что стоит уточнить?';
       return this.trainingAskFor(dialog, bot, 'kb', followup);
     }
@@ -1852,12 +1869,12 @@ export class WidgetService {
               : `Изучил(а) страницу, добавил(а) записей: ${result.count}.`;
           nextLastAction = { type: 'kb', ids: result.ids };
         } else if (pendingAction === 'variant') {
-          await this.cabinet.addGreetingVariant(bot.companyId, visitorText, bot.id);
+          await this.cabinet.addGreetingVariant(bot.companyId, visitorText, bot.id, impersonating);
           confirmation = 'Добавил(а) в A/B/C/D тест приветствия!';
           nextLastAction = { type: 'variant' };
         } else if (pendingAction === 'goal_pick') {
           // Free-text goal, typed instead of picking one of the preset buttons.
-          const result = await this.cabinet.setGoal(bot.companyId, 'custom', visitorText, bot.id);
+          const result = await this.cabinet.setGoal(bot.companyId, 'custom', visitorText, bot.id, impersonating);
           confirmation = `Цель настроена: «${result.goalLabel}».`;
           nextLastAction = { type: 'goal' };
         } else {

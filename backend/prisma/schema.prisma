@@ -486,6 +486,18 @@ model Bot {
   // owner-actionable signals). Found live: "а задачи бизнеса где фиксируем?
   // Это цель или что?" — just a place to write it down, nothing scored.
   managerNote             String?   @map("manager_note")
+  // The manager "берёт бота в работу" while actively setting it up — pauses
+  // the owner's own configuration edits for the duration (see
+  // assertBotUnlockedForOwner), bypassed entirely for the manager's own
+  // impersonation session. Null = not currently claimed. Found live: "может
+  // ли пользователь мешать настроить бота... блокировка нужна, когда
+  // назначается ответственный менеджер (берет в работу)".
+  managerLockedAt      DateTime? @map("manager_locked_at")
+  // Set true the moment the manager releases the lock, cleared the first
+  // time the owner acknowledges the "правки могут ухудшить результат"
+  // warning (see ManagerNotesController.acknowledgeLock) — gates ONE
+  // confirmation per lock cycle, not every single edit afterward.
+  managerLockAckNeeded Boolean   @default(false) @map("manager_lock_ack_needed")
   // CRM lead-forwarding, v1 — deliberately the simplest thing that works
   // (an incoming-webhook URL / a private-integration token the owner
   // generates themselves in their own CRM), not a full OAuth app listed in

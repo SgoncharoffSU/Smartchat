@@ -247,7 +247,7 @@ export class CabinetController {
   @Post('escalations/:id/resolve-dissatisfaction')
   @UseGuards(AuthGuard)
   resolveDissatisfaction(@Req() req: AuthedRequest, @Param('id') id: string, @Body() body: { note: string }) {
-    return this.cabinet.resolveDissatisfaction(req.companyId, id, body?.note ?? '');
+    return this.cabinet.resolveDissatisfaction(req.companyId, id, body?.note ?? '', req.impersonating);
   }
 
   // The "Требует внимания" table only ever showed the one question/reply
@@ -306,7 +306,7 @@ export class CabinetController {
   @Post('variants')
   @UseGuards(AuthGuard)
   addGreetingVariant(@Body() dto: AddVariantDto, @Req() req: AuthedRequest, @Query('botId') botId?: string) {
-    return this.cabinet.addGreetingVariant(req.companyId, dto.text, botId);
+    return this.cabinet.addGreetingVariant(req.companyId, dto.text, botId, req.impersonating);
   }
 
   @Get('goal')
@@ -322,7 +322,7 @@ export class CabinetController {
   @Post('goal')
   @UseGuards(AuthGuard)
   setGoal(@Body() body: { preset: string; customText?: string }, @Req() req: AuthedRequest, @Query('botId') botId?: string) {
-    return this.cabinet.setGoal(req.companyId, body.preset, body.customText, botId);
+    return this.cabinet.setGoal(req.companyId, body.preset, body.customText, botId, req.impersonating);
   }
 
   @Get('integrations/crm')
@@ -362,7 +362,7 @@ export class CabinetController {
   @Post('integrations/crm/bitrix24')
   @UseGuards(AuthGuard)
   saveBitrix24(@Body() body: { webhookUrl: string }, @Req() req: AuthedRequest, @Query('botId') botId?: string) {
-    return this.cabinet.saveBitrix24(req.companyId, body.webhookUrl ?? '', botId);
+    return this.cabinet.saveBitrix24(req.companyId, body.webhookUrl ?? '', botId, req.impersonating);
   }
 
   @Post('integrations/crm/amocrm')
@@ -372,7 +372,7 @@ export class CabinetController {
     @Req() req: AuthedRequest,
     @Query('botId') botId?: string,
   ) {
-    return this.cabinet.saveAmoCrm(req.companyId, body.subdomain ?? '', body.accessToken ?? '', botId);
+    return this.cabinet.saveAmoCrm(req.companyId, body.subdomain ?? '', body.accessToken ?? '', botId, req.impersonating);
   }
 
   @Get('appearance')
@@ -388,7 +388,7 @@ export class CabinetController {
     @Body() body: { name?: string; label?: string; gender?: string; color?: string; position?: string },
     @Query('botId') botId?: string,
   ) {
-    return this.cabinet.updateAppearance(req.companyId, body, botId);
+    return this.cabinet.updateAppearance(req.companyId, body, botId, req.impersonating);
   }
 
   // Separate from /appearance: that's per-bot (persona name/color/etc.), this
@@ -414,5 +414,16 @@ export class CabinetController {
   @UseGuards(AuthGuard, BlockDuringImpersonationGuard)
   updateProfile(@Req() req: AuthedRequest, @Body() body: { name: string }) {
     return this.cabinet.updateUserName(req.userId, body.name);
+  }
+
+  // Clears the one-time "правки могут ухудшить результат" warning after the
+  // manager releases a lock — see CabinetService.acknowledgeManagerLock.
+  // Blocked during impersonation too (found via code-review): a support
+  // agent clicking through their own auto-opened dialog would consume the
+  // REAL owner's one-time warning before they ever saw it.
+  @Post('bot-lock/acknowledge')
+  @UseGuards(AuthGuard, BlockDuringImpersonationGuard)
+  acknowledgeManagerLock(@Req() req: AuthedRequest, @Query('botId') botId?: string) {
+    return this.cabinet.acknowledgeManagerLock(req.companyId, botId);
   }
 }
