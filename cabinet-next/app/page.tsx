@@ -525,14 +525,19 @@ function ProfileSheet({
       </div>
     </div>
     <div className="prototype-form" style={{ marginTop: 20 }}>
+      {impersonating === true ? (
+        <p className="empty">Режим поддержки: настройки уведомлений — данные аккаунта клиента, недоступны для изменения.</p>
+      ) : impersonating === undefined ? (
+        <p className="empty">Загрузка…</p>
+      ) : null}
       <div className="switch-row">
         <div><Bell /><span><b>Уведомлять о заявках в Telegram</b><small>{telegramConnected ? "Telegram подключён" : notifyTelegram ? "Уведомления включены, но Telegram сейчас не подключён — подключите в «Установка»" : "Сначала подключите Telegram в разделе «Установка»"}</small></span></div>
-        {/* Not disabled on !telegramConnected — the setting itself is independent of connection state on the backend, and disabling it would leave a stale "on" value the owner can never turn off here again once Telegram gets disconnected. Disabled on !notifyLoaded instead — toggling before the real GET resolves would visually "take" then get silently overwritten back when it does (found via code-review). */}
-        <Switch checked={notifyTelegram} disabled={!notifyLoaded} onCheckedChange={setNotifyTelegram} />
+        {/* Not disabled on !telegramConnected — the setting itself is independent of connection state on the backend, and disabling it would leave a stale "on" value the owner can never turn off here again once Telegram gets disconnected. Disabled on !notifyLoaded instead — toggling before the real GET resolves would visually "take" then get silently overwritten back when it does (found via code-review). Also blocked during impersonation, same account-data boundary as the name field above. */}
+        <Switch checked={notifyTelegram} disabled={!notifyLoaded || blockedByImpersonation} onCheckedChange={setNotifyTelegram} />
       </div>
-      <label><span>Email для уведомлений о заявках</span><input value={notifyEmail} disabled={!notifyLoaded} onChange={(e) => setNotifyEmail(e.target.value)} placeholder="Необязательно" /></label>
+      <label><span>Email для уведомлений о заявках</span><input value={notifyEmail} disabled={!notifyLoaded || blockedByImpersonation} onChange={(e) => setNotifyEmail(e.target.value)} placeholder="Необязательно" /></label>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <Button variant="outline" disabled={savingNotify || !notifyLoaded} onClick={saveNotifications}>Сохранить уведомления</Button>
+        <Button variant="outline" disabled={savingNotify || !notifyLoaded || blockedByImpersonation} onClick={saveNotifications}>Сохранить уведомления</Button>
         {notifyStatus && <small>{notifyStatus}</small>}
       </div>
     </div>

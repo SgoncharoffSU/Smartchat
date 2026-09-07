@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
+import { BlockDuringImpersonationGuard } from '../auth/block-during-impersonation.guard';
 import { BillingService } from './billing.service';
 
 interface AuthedRequest extends Request {
@@ -24,7 +25,10 @@ export class PaymentsController {
     return this.billing.listPlans();
   }
 
+  // Billing is account/financial data, not bot configuration — blocked
+  // during support impersonation.
   @Post(':id/checkout')
+  @UseGuards(BlockDuringImpersonationGuard)
   checkout(@Req() req: AuthedRequest, @Param('id') id: string, @Body() body: { botId?: string }) {
     return this.billing.createCheckout(req.companyId, body?.botId, id);
   }
@@ -35,6 +39,7 @@ export class PaymentsController {
   }
 
   @Post('autopay')
+  @UseGuards(BlockDuringImpersonationGuard)
   autopay(@Req() req: AuthedRequest, @Body() body: { botId?: string; enabled?: boolean }) {
     return this.billing.setAutoPay(req.companyId, body?.botId, Boolean(body?.enabled));
   }

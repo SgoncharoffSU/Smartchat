@@ -1,8 +1,9 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { CabinetService } from './cabinet.service';
 import { AuthGuard } from '../auth/auth.guard';
+import { BlockDuringImpersonationGuard } from '../auth/block-during-impersonation.guard';
 import { AuthService } from '../auth/auth.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { AddVariantDto } from './dto/add-variant.dto';
@@ -109,15 +110,17 @@ export class CabinetController {
     return this.cabinet.listTeam(req.companyId, req.companyRole ?? 'owner');
   }
 
+  // Team membership is account data, not bot configuration — blocked during
+  // support impersonation (see BlockDuringImpersonationGuard's own comment).
   @Post('team/invite')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, BlockDuringImpersonationGuard)
   async inviteTeammate(@Req() req: AuthedRequest, @Body() body: { email: string; name: string; companyRole: string }) {
     const result = await this.cabinet.inviteTeammate(req.companyId, req.companyRole ?? 'owner', body.email, body.name, body.companyRole);
     return { ok: true, email: result.email };
   }
 
   @Post('team/:userId/role')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, BlockDuringImpersonationGuard)
   async updateTeammateRole(@Req() req: AuthedRequest, @Param('userId') userId: string, @Body() body: { companyRole: string }) {
     await this.cabinet.updateTeammateRole(req.companyId, req.companyRole ?? 'owner', userId, body.companyRole);
     return { ok: true };
@@ -337,8 +340,10 @@ export class CabinetController {
     return this.cabinet.getLeadNotificationSettings(req.companyId);
   }
 
+  // Account contact settings, not bot configuration — blocked during
+  // support impersonation.
   @Post('lead-notifications')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, BlockDuringImpersonationGuard)
   setLeadNotificationSettings(
     @Req() req: AuthedRequest,
     @Body() body: { notifyLeadsViaTelegram?: boolean; notificationEmail?: string | null },
@@ -388,30 +393,26 @@ export class CabinetController {
 
   // Separate from /appearance: that's per-bot (persona name/color/etc.), this
   // is per-company and shared across every one of the company's bots — see
-  // CabinetService.updateCompanyName for why it exists at all.
+  // CabinetService.updateCompanyName for why it exists at all. Company name
+  // is dual-purpose (it also feeds the bot's own system prompt), but it's
+  // still the client's account identity — blocked during support
+  // impersonation regardless (found live: "сотрудник поддержки не должен
+  // иметь возможность менять данные аккаунта клиента").
   @Post('company')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, BlockDuringImpersonationGuard)
   updateCompanyName(@Req() req: AuthedRequest, @Body() body: { name: string }) {
     return this.cabinet.updateCompanyName(req.companyId, body.name);
   }
 
   // The real profile card (name + email + role + logout) — see
   // CabinetService.updateUserName's own comment for what this replaces.
-  //
-  // req.userId during impersonation is deliberately still the SUPPORT
-  // AGENT's own id, never the client's (see AuthService's own
-  // CabinetSessionPayload comment) — getMe already had this as a read-only
-  // quirk (the "logged-in name" shown while impersonating is the agent's
-  // own), but a WRITE through that same id would silently rename the
-  // agent's own account instead of the client's, with the sheet showing the
-  // impersonated company's name right above it (found via code-review).
-  // Blocked outright rather than silently mis-attributed.
+  // Also genuinely broken during impersonation on top of being account
+  // data: req.userId then is deliberately still the SUPPORT AGENT's own id,
+  // never the client's (see AuthService's own CabinetSessionPayload
+  // comment), so a write through it would rename the agent's own account.
   @Post('profile')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, BlockDuringImpersonationGuard)
   updateProfile(@Req() req: AuthedRequest, @Body() body: { name: string }) {
-    if (req.impersonating) {
-      throw new ForbiddenException('Нельзя изменить профиль в режиме поддержки');
-    }
     return this.cabinet.updateUserName(req.userId, body.name);
   }
 }
