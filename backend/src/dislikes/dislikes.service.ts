@@ -67,6 +67,13 @@ export class DislikesService {
 
     const message = await this.messages.findDislikedMessage(companyId, messageId);
     if (!message) throw new NotFoundException('Disliked message not found');
+    // findDislikedMessage only checks dislikedAt, not dislikeResolvedAt — an
+    // already-resolved message still passes it. Without this guard a second
+    // call (e.g. the cabinet's dialog viewer re-showing the correction form
+    // for an already-fixed message — found via code-review) would create a
+    // SECOND KnowledgeEntry and append a SECOND duplicate reply into the
+    // visitor's live dialog (see the append loop below).
+    if (message.dislikeResolvedAt) throw new BadRequestException('Уже сохранено');
 
     const situationContext = await this.prisma.message.findFirst({
       where: { dialogId: message.dialogId, role: 'visitor', createdAt: { lt: message.createdAt } },

@@ -741,6 +741,119 @@ function Attention({ analytics, onProcessed }: { analytics: CabinetAnalytics; on
   </div>;
 }
 
+// Per-message "👎 Плохой ответ" — ported from the old cabinet's own
+// renderDialogViewDislikeControl/buildCorrectionForm (cabinet/index.html),
+// which cabinet-next never got. Same three real endpoints: mark (flags the
+// message, no note needed), preview (drafts a candidate reply from a note,
+// writes nothing), resolve (the only step that actually saves — either the
+// owner's own final text via "Сохранить как есть", or the edited preview
+// via "Ответ подходит — запомнить"). initiallyDisliked skips straight to
+// the correction form — the whole point of a "disliked" escalation
+// existing is that someone already flagged this exact reply. initiallyDone
+// covers the case where it was ALSO already resolved (dislikeResolvedAt) —
+// findDislikedMessage on the backend only checks dislikedAt, not that, so
+// without this the form would reappear for an already-fixed message and a
+// second submit would create a duplicate KnowledgeEntry AND append a
+// duplicate reply into the visitor's live dialog (found via code-review;
+// also fixed with a same-shape guard on DislikesService.resolve itself).
+function DislikeControl({ messageId, initiallyDisliked, initiallyDone }: { messageId: string; initiallyDisliked: boolean; initiallyDone: boolean }) {
+  const [flagged, setFlagged] = useState(initiallyDisliked);
+  const [flagging, setFlagging] = useState(false);
+  const draftKey = `smartchat_correction_draft_${messageId}`;
+  const [note, setNote] = useState(() => {
+    try { return localStorage.getItem(draftKey) ?? ""; } catch { return ""; }
+  });
+  const [previewText, setPreviewText] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const [done, setDone] = useState(initiallyDone);
+
+  const setNoteAndPersist = (value: string) => {
+    setNote(value);
+    try { localStorage.setItem(draftKey, value); } catch { /* private mode etc — just not persisted */ }
+  };
+
+  const flag = () => {
+    setFlagging(true);
+    fetch(`/api/cabinet/dislikes/${messageId}/mark`, { method: "POST" })
+      .then((r) => { if (r.ok) setFlagged(true); })
+      .catch(() => {})
+      .finally(() => setFlagging(false));
+  };
+
+  const resolve = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setSaveError(false);
+    fetch(`/api/cabinet/dislikes/${messageId}/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: trimmed }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then(() => {
+        try { localStorage.removeItem(draftKey); } catch { /* private mode etc */ }
+        setDone(true);
+      })
+      .catch(() => setSaveError(true))
+      .finally(() => setSaving(false));
+  };
+
+  const requestPreview = () => {
+    const trimmed = note.trim();
+    if (!trimmed) return;
+    setPreviewing(true);
+    setPreviewText(null);
+    setPreviewError(false);
+    fetch(`/api/cabinet/dislikes/${messageId}/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: trimmed }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => setPreviewText(data.candidateReply ?? ""))
+      .catch(() => setPreviewError(true))
+      .finally(() => setPreviewing(false));
+  };
+
+  if (done) return <small className="dislike-done">Запомнено.</small>;
+
+  if (!flagged) {
+    return <button type="button" className="dislike-flag-btn" disabled={flagging} onClick={flag}>👎 Плохой ответ</button>;
+  }
+
+  return (
+    <div className="dislike-correction" onClick={(ev) => ev.stopPropagation()}>
+      <small className="dislike-hint">Если уже написали готовый правильный ответ — жмите «Сохранить как есть». Если написали только замечание (что не так) — жмите «Показать вариант ответа», бот сам составит полный ответ с учётом этого, и его можно будет поправить перед сохранением.</small>
+      <textarea
+        value={note}
+        onChange={(ev) => setNoteAndPersist(ev.target.value)}
+        placeholder="Что не так и/или как правильно?"
+        rows={2}
+      />
+      <div className="dislike-actions">
+        <Button variant="outline" size="sm" disabled={saving || !note.trim()} onClick={() => resolve(note)}>Сохранить как есть</Button>
+        <Button variant="outline" size="sm" disabled={previewing || !note.trim()} onClick={requestPreview}>{previewing ? "Генерирую…" : "Показать вариант ответа"}</Button>
+      </div>
+      {saveError && <small className="dislike-error">Не получилось сохранить, попробуйте ещё раз.</small>}
+      {previewError && <small className="dislike-error">Не получилось подготовить вариант, попробуйте ещё раз.</small>}
+      {previewText !== null && (
+        <div className="dislike-preview">
+          <small>Новый вариант ответа — можно поправить перед сохранением:</small>
+          <textarea value={previewText} onChange={(ev) => setPreviewText(ev.target.value)} rows={3} />
+          <div className="dislike-actions">
+            <Button variant="outline" size="sm" onClick={() => setPreviewText(null)}>Попробовать ещё раз</Button>
+            <Button size="sm" disabled={saving || !previewText.trim()} onClick={() => resolve(previewText)}>Ответ подходит — запомнить</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Draft-then-confirm answer flow for one pending escalation: preview never
 // writes anything (POST .../answer/preview, with the owner's own draft text
 // or empty to have the bot suggest one from the business's own systemPrompt),
@@ -803,7 +916,7 @@ function PendingEscalationRow({
   // as the "Диалоги" AI-резюме: a real LLM/DB cost per open, only paid for
   // rows the owner actually expands.
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMessages, setDialogMessages] = useState<Array<{ id: string; role: string; content: string; createdAt: string }> | null>(null);
+  const [dialogMessages, setDialogMessages] = useState<Array<{ id: string; role: string; content: string; createdAt: string; dislikedAt: string | null; dislikeResolvedAt: string | null }> | null>(null);
   const [dialogLoading, setDialogLoading] = useState(false);
   const toggleDialog = () => {
     if (dialogOpen) { setDialogOpen(false); return; }
@@ -814,7 +927,7 @@ function PendingEscalationRow({
     // cached as a permanent "Переписка недоступна." — a null result here
     // means "fetch genuinely failed", left as null so the NEXT click retries
     // instead of re-showing the same stale failure forever.
-    fetchJsonWithRetry<{ messages: Array<{ id: string; role: string; content: string; createdAt: string }> }>(`/api/cabinet/escalations/${e.id}/dialog`)
+    fetchJsonWithRetry<{ messages: Array<{ id: string; role: string; content: string; createdAt: string; dislikedAt: string | null; dislikeResolvedAt: string | null }> }>(`/api/cabinet/escalations/${e.id}/dialog`)
       .then((data) => setDialogMessages(data?.messages ?? (data === null ? null : [])))
       .finally(() => setDialogLoading(false));
   };
@@ -922,6 +1035,15 @@ function PendingEscalationRow({
               <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} key={m.id} style={{ margin: 0, maxWidth: "90%" }}>
                 <p style={{ margin: 0 }}>{m.content}</p>
                 <small>{fmtMessageTime(m.createdAt)} МСК</small>
+                {/* Point at a SPECIFIC bad reply right here, not just an
+                   overall verdict on the whole escalation — same backend
+                   endpoint the test-chat's own 👎 already uses (see
+                   DislikesService.markDisliked's own comment: "Lets the
+                   owner flag a bad reply from anywhere it's shown in the
+                   cabinet (e.g. the "Требует внимания" dialog viewer)" —
+                   that wiring never actually happened in this cabinet
+                   until now, found live). */}
+                {m.role === "assistant" && <DislikeControl messageId={m.id} initiallyDisliked={Boolean(m.dislikedAt)} initiallyDone={Boolean(m.dislikeResolvedAt)} />}
               </div>
             ))}
         </div>

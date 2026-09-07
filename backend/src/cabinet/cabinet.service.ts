@@ -1587,6 +1587,7 @@ export class CabinetService {
         content: this.redactPii(m.content),
         createdAt: m.createdAt,
         dislikedAt: m.dislikedAt,
+        dislikeResolvedAt: m.dislikeResolvedAt,
       })),
     };
   }
