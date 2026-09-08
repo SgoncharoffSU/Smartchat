@@ -472,8 +472,36 @@ model Bot {
   // data-position (see getEmbedSnippet) — a real client site only picks up a
   // change once it re-copies the snippet, same tradeoff as every other
   // data-* attribute the loader already reads.
+  // widgetColor drives the chat header/launcher specifically (cabinet label:
+  // "Цвет шапки") — chatBackgroundColor and sendButtonColor are independent,
+  // added when the owner asked to stop them all being tied to one "Акцентный
+  // цвет" ("при изменении цвета шапки кнопка отправки не должна обязательно
+  // оставаться салатовой"). All three ship in the same embed snippet/live-
+  // config path widgetColor already used — see getEmbedSnippet and
+  // WidgetService.getPublicConfig.
   widgetColor     String   @default("#4f46e5") @map("widget_color")
+  chatBackgroundColor String @default("#ffffff") @map("chat_background_color")
+  sendButtonColor String   @default("#4f46e5") @map("send_button_color")
   widgetPosition  String   @default("bottom-right") @map("widget_position")
+  // The proactive "Приглашение в чат" card in "Внешний вид" — the outside
+  // teaser bubble (widget.js's showTeaser) used to ONLY ever show the AI's
+  // own generated opening line, with no owner control beyond the rarely-used
+  // data-teaser script attribute. teaserEnabled defaults true and teaserText
+  // defaults empty so every existing bot keeps its current AI-generated
+  // teaser unchanged until the owner actually opens this card — only a
+  // non-empty teaserText switches to the owner's own fixed wording, and only
+  // an explicit teaserEnabled=false turns the popup off entirely.
+  teaserEnabled   Boolean  @default(true) @map("teaser_enabled")
+  teaserText      String?  @map("teaser_text")
+  teaserDelaySeconds Int   @default(4) @map("teaser_delay_seconds")
+  // Reply options ("4 метра"/"6 метров"/...) — same shape/role as a funnel
+  // stage's own suggestedButtons (see yandex-gpt.types.ts's FunnelStage), just
+  // owner-authored for this one specific outside popup rather than generated
+  // per turn. A string array, stored as Json for the same reason
+  // Message.buttons already is (no first-class Postgres array elsewhere here).
+  teaserButtons   Json?    @map("teaser_buttons")
+  teaserBgColor   String   @default("#ffffff") @map("teaser_bg_color")
+  teaserButtonColor String @default("#f5f5f7") @map("teaser_button_color")
   // Uploaded (a real photo, resized to a square) or AI-generated (RouterAI's
   // /v1/images/generations — same provider already used for chat, see
   // CabinetService.generateAvatar) — shown instead of the initials-in-a-

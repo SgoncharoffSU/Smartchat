@@ -1716,7 +1716,21 @@ export class WidgetService {
   async getPublicConfig(botToken: string) {
     const bot = await this.bots.findActiveByWidgetToken(botToken);
     if (!bot) throw new NotFoundException('Unknown or inactive bot token');
-    return { color: bot.widgetColor, position: bot.widgetPosition };
+    return {
+      color: bot.widgetColor,
+      chatBackgroundColor: bot.chatBackgroundColor,
+      sendButtonColor: bot.sendButtonColor,
+      position: bot.widgetPosition,
+      // Only the teaser fields actually needed client-side to render the
+      // popup — not exposing anything else about the bot here, this is a
+      // public, unauthenticated, by-token-only endpoint.
+      teaserEnabled: bot.teaserEnabled,
+      teaserText: bot.teaserText,
+      teaserDelaySeconds: bot.teaserDelaySeconds,
+      teaserButtons: Array.isArray(bot.teaserButtons) ? (bot.teaserButtons as string[]) : [],
+      teaserBgColor: bot.teaserBgColor,
+      teaserButtonColor: bot.teaserButtonColor,
+    };
   }
 
   async getHistory(botToken: string, sessionId: string) {

@@ -25,9 +25,30 @@
     var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
     return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 79, g: 70, b: 229 };
   }
+  // Same simple perceptual-luminance heuristic chat.js already uses for its
+  // own --primary-contrast — reused here for the teaser bubble, the one
+  // piece of the outside chrome with owner-configurable background but no
+  // access to chat.js's own CSS.
+  function contrastText(hex) {
+    var rgb = hexToRgb(hex);
+    var luminance = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b;
+    return luminance < 140 ? '#fff' : '#1a1a1a';
+  }
   var widgetRgb = hexToRgb(widgetColor);
   // Which screen corner the launcher/chat window/teaser all anchor to.
   var widgetSide = scriptTag.getAttribute('data-position') === 'bottom-left' ? 'left' : 'right';
+  // Chat background and send-button color are NOT baked into the snippet as
+  // data-* attributes at all (unlike widgetColor/widgetSide above) — there's
+  // no first-paint moment that needs them before configPromise below has a
+  // real chance to resolve (the chat iframe itself is never the very first
+  // thing painted), so they start equal to widgetColor/its own schema
+  // default and get corrected the moment config arrives, same mechanism as
+  // everything else in applyLiveConfig. Splitting these out at all is the
+  // direct answer to "при изменении цвета шапки кнопка отправки не должна
+  // обязательно оставаться салатовой" — three independent colors instead of
+  // one shared "Акцентный цвет".
+  var chatBackgroundColor = '#f7f8f7';
+  var sendButtonColor = widgetColor;
   // Fired immediately, in parallel with everything else below — never blocks
   // first paint (that still comes from the data-* attributes above). Public,
   // unauthenticated, by botToken only (see WidgetService.getPublicConfig).
@@ -213,6 +234,10 @@
       (forceFullScreen || window.innerWidth <= 480 ? 'fullscreen' : 'floating') +
       '&color=' +
       encodeURIComponent(widgetColor) +
+      '&chatBg=' +
+      encodeURIComponent(chatBackgroundColor) +
+      '&sendColor=' +
+      encodeURIComponent(sendButtonColor) +
       (previewMode ? '&preview=1' : '') +
       (ownerTestingMode ? '&ownerPreview=1' : '') +
       // See chat.js — the iframe's document/script load early (this same
@@ -341,7 +366,10 @@
       // configPromise color change that lands AFTER the iframe started
       // loading but BEFORE chat.js's listener was actually registered would
       // otherwise just be lost (postMessage never buffers).
-      iframe.contentWindow.postMessage({ type: 'smartchat:set-color', color: widgetColor }, '*');
+      iframe.contentWindow.postMessage(
+        { type: 'smartchat:set-color', color: widgetColor, chatBg: chatBackgroundColor, sendColor: sendButtonColor },
+        '*',
+      );
       if (startRequested) {
         iframe.contentWindow.postMessage({ type: 'smartchat:start', quickReply: pendingQuickReply }, '*');
         pendingQuickReply = undefined;
@@ -758,7 +786,7 @@
           // Now behaves exactly like a normal (non-hero) embed from this
           // point on — same teaser and returning-visitor timers a visitor
           // who never saw the hero at all would get.
-          heroSetTimeout(showTeaser, teaserDelay);
+          scheduleTeaser(heroSetTimeout);
           heroSetTimeout(checkAndShowReturningNudge, RETURNING_NUDGE_DELAY_MS);
         }, HERO_FADE_MS + 30);
       }
@@ -875,9 +903,17 @@
   // do open it, chat-ui shows that same hook plus a follow-up "reveal" message
   // (self-introduction + first real question) that only fires on open.
   var teaserDismissedKey = 'smartchat_teaser_dismissed_' + botToken;
-  var teaserOverride = scriptTag.getAttribute('data-teaser');
+  // data-teaser/data-teaser-delay-ms: only the cabinet's own test panes still
+  // set these directly on the script tag (a fixed test framing) — a real
+  // embed never does, and now has a proper cabinet UI for the exact same
+  // thing ("Приглашение в чат"), delivered live via configPromise instead of
+  // baked into the snippet. Attribute wins if BOTH are somehow present (test
+  // panes need a deterministic, config-independent script under test).
+  var teaserAttrOverride = scriptTag.getAttribute('data-teaser');
   var teaserFallback = 'Я тот самый ИИ-продавец с картинки выше 👆 Проверим на деле?';
-  var teaserDelay = Number(scriptTag.getAttribute('data-teaser-delay-ms')) || 3500;
+  var teaserDelayAttrMs = Number(scriptTag.getAttribute('data-teaser-delay-ms')) || 0;
+  var teaserBgColor = '#ffffff';
+  var teaserButtonColor = '#f5f5f7';
   var teaserEl = null;
 
   function fetchOpeningReply() {
@@ -926,13 +962,37 @@
   async function showTeaser() {
     if (isOpen || (!ownerTestingMode && localStorage.getItem(teaserDismissedKey))) return;
 
-    var teaserText = teaserOverride || teaserFallback;
-    // Choice buttons from the greeting stage's own suggestedButtons (set in
-    // the cabinet's Scenario editor) — e.g. "Какой размер бани
-    // рассматриваете? 6х3м, 6х4м..." — shown right on the outside hook so a
-    // visitor can answer before ever opening the chat. Only for the real
-    // fetched hook, never the static data-teaser override, same as teaserText.
-    var teaserButtons = [];
+    // configPromise is almost always already resolved by the time this fires
+    // (it's fetched at parse time; showTeaser only runs after the owner's own
+    // delay, several seconds later at minimum) — awaiting it here just covers
+    // the rare slow-network case instead of racing it.
+    var config = await configPromise;
+    // Explicit false, not falsy/missing — an owner who's never touched the
+    // "Приглашение в чат" card gets the schema default (true) from the
+    // backend, so this only actually skips the popup when they deliberately
+    // turned "Показывать приглашение" off.
+    if (config && config.teaserEnabled === false) return;
+    if (isOpen || (!ownerTestingMode && localStorage.getItem(teaserDismissedKey))) return;
+
+    // The owner's own fixed wording (config.teaserText, set in "Приглашение
+    // в чат") takes over exactly like the test-only data-teaser attribute
+    // already did — same reasoning: fetchOpeningReply() below still runs for
+    // its side effect (persisting message #1 server-side, see its own
+    // comment), its RETURNED text/buttons are just ignored in favor of what
+    // the owner actually typed. No text set (or explicitly disabled from
+    // that angle by leaving it empty) falls through to the bot's own
+    // AI-generated opening line, unchanged from before this card existed.
+    var manualText = teaserAttrOverride || (config && config.teaserText) || null;
+    // Only the config-driven case carries buttons — the test-only attribute
+    // override never did (test panes have no way to set them) and keeps that.
+    var manualButtons = !teaserAttrOverride && config && config.teaserButtons ? config.teaserButtons : [];
+    if (config) {
+      teaserBgColor = config.teaserBgColor || teaserBgColor;
+      teaserButtonColor = config.teaserButtonColor || teaserButtonColor;
+    }
+
+    var teaserText = manualText || teaserFallback;
+    var teaserButtons = manualButtons;
     // Always call isInit — even with a fixed override text — so message #1
     // is actually persisted server-side. Skipping this when an override is
     // set (e.g. the cabinet's own test-chat framing) used to mean the chat
@@ -941,7 +1001,7 @@
     // scratch — five-plus messages before the visitor had said a word.
     try {
       var fetched = await fetchOpeningReply();
-      if (!teaserOverride && fetched) {
+      if (!manualText && fetched) {
         if (fetched.reply) teaserText = fetched.reply;
         teaserButtons = fetched.buttons || [];
       }
@@ -962,8 +1022,8 @@
       marginRight: widgetSide === 'right' ? '0' : 'auto',
       maxWidth: 'min(280px, calc(100vw - 40px))',
       width: 'fit-content',
-      background: '#fff',
-      color: '#1a1a1a',
+      background: teaserBgColor,
+      color: contrastText(teaserBgColor),
       padding: '14px 34px 14px 16px',
       borderRadius: '14px',
       boxShadow: '0 10px 34px rgba(0,0,0,.25)',
@@ -996,8 +1056,8 @@
           border: '1px solid rgba(0,0,0,.12)',
           borderRadius: '999px',
           padding: '6px 12px',
-          background: '#f5f5f7',
-          color: '#1a1a1a',
+          background: teaserButtonColor,
+          color: contrastText(teaserButtonColor),
           fontSize: '12.5px',
           fontWeight: '500',
           cursor: 'pointer',
@@ -1052,10 +1112,26 @@
     ensureIframeLoaded();
   }
 
+  // Delay comes from config (the "Показать через … секунд" field in
+  // "Приглашение в чат"), not a snippet attribute — waits for configPromise
+  // before starting the timer at all, so the actual scheduled delay is
+  // always the owner's real current setting rather than a guess made before
+  // it arrived. data-teaser-delay-ms (test panes only) still wins outright,
+  // same override precedence as the text itself.
+  // scheduler defaults to plain setTimeout; the hero-dock call site passes
+  // its own heroSetTimeout instead, so a re-expand before this fires still
+  // cancels it the same way every other hero-scheduled timer does.
+  function scheduleTeaser(scheduler) {
+    configPromise.then(function (config) {
+      var seconds = config && typeof config.teaserDelaySeconds === 'number' ? config.teaserDelaySeconds : null;
+      var delayMs = teaserDelayAttrMs || (seconds != null ? seconds * 1000 : 3500);
+      (scheduler || setTimeout)(showTeaser, delayMs);
+    });
+  }
   // While hero-docked, the chat is already open in the hero — showing a
   // floating teaser bubble on top of that would be redundant. collapseHeroChat
   // schedules this same call itself, once the hero actually collapses.
-  if (!heroTarget) setTimeout(showTeaser, teaserDelay);
+  if (!heroTarget) scheduleTeaser();
 
   // Returning-visitor nudge: this browser has been here before (sessionId
   // already existed). Used to trigger off just that plus "teaser was ever
@@ -1176,10 +1252,22 @@
       widgetRgb = hexToRgb(widgetColor);
       changedColor = true;
     }
+    // Independent of widgetColor — these only ever reach the chat iframe
+    // (header/launcher have no use for them), so they don't touch
+    // applyLauncherIcon/applyPulseStyle at all, just the message below.
+    var changedInnerColor = false;
+    if (config.chatBackgroundColor && /^#[0-9a-fA-F]{6}$/.test(config.chatBackgroundColor) && config.chatBackgroundColor !== chatBackgroundColor) {
+      chatBackgroundColor = config.chatBackgroundColor;
+      changedInnerColor = true;
+    }
+    if (config.sendButtonColor && /^#[0-9a-fA-F]{6}$/.test(config.sendButtonColor) && config.sendButtonColor !== sendButtonColor) {
+      sendButtonColor = config.sendButtonColor;
+      changedInnerColor = true;
+    }
     var newSide = config.position === 'bottom-left' ? 'left' : 'right';
     var changedSide = newSide !== widgetSide;
     if (changedSide) widgetSide = newSide;
-    if (!changedColor && !changedSide) return;
+    if (!changedColor && !changedInnerColor && !changedSide) return;
 
     if (changedColor) {
       applyLauncherIcon();
@@ -1187,7 +1275,7 @@
     }
     applyLauncherPosition();
     // Rebuilt so the NEXT time the iframe loads fresh (was never preloaded
-    // yet) it gets the current color baked in from the start — no flash, no
+    // yet) it gets the current colors baked in from the start — no flash, no
     // message needed. An iframe that's ALREADY loaded gets a live
     // smartchat:set-color message instead of being re-navigated: messaging
     // works whether it's merely preloaded or the visitor is mid-conversation
@@ -1197,10 +1285,13 @@
     // header/bubbles/send button had no such path at all before).
     // Only if already ready — postMessage never buffers, and if it's not
     // ready yet the 'smartchat:ready' handler above always sends the
-    // current widgetColor itself the moment it fires, so there's nothing
-    // further to do here for that case.
-    if (changedColor && iframeLoaded && iframeReady) {
-      iframe.contentWindow.postMessage({ type: 'smartchat:set-color', color: widgetColor }, '*');
+    // current colors itself the moment it fires, so there's nothing further
+    // to do here for that case.
+    if ((changedColor || changedInnerColor) && iframeLoaded && iframeReady) {
+      iframe.contentWindow.postMessage(
+        { type: 'smartchat:set-color', color: widgetColor, chatBg: chatBackgroundColor, sendColor: sendButtonColor },
+        '*',
+      );
     }
     chatUiUrl = buildChatUiUrl();
     applyIframeLayout();

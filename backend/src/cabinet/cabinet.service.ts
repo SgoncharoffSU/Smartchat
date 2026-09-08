@@ -719,21 +719,43 @@ export class CabinetService {
       label: bot.label,
       gender: bot.gender,
       color: bot.widgetColor,
+      chatBackgroundColor: bot.chatBackgroundColor,
+      sendButtonColor: bot.sendButtonColor,
       position: bot.widgetPosition,
       avatarUrl: bot.avatarUrl,
+      teaserEnabled: bot.teaserEnabled,
+      teaserText: bot.teaserText,
+      teaserDelaySeconds: bot.teaserDelaySeconds,
+      teaserButtons: Array.isArray(bot.teaserButtons) ? (bot.teaserButtons as string[]) : [],
+      teaserBgColor: bot.teaserBgColor,
+      teaserButtonColor: bot.teaserButtonColor,
     };
   }
 
   async updateAppearance(
     companyId: string,
-    input: { name?: string; label?: string; gender?: string; color?: string; position?: string },
+    input: {
+      name?: string;
+      label?: string;
+      gender?: string;
+      color?: string;
+      chatBackgroundColor?: string;
+      sendButtonColor?: string;
+      position?: string;
+      teaserEnabled?: boolean;
+      teaserText?: string;
+      teaserDelaySeconds?: number;
+      teaserButtons?: string[];
+      teaserBgColor?: string;
+      teaserButtonColor?: string;
+    },
     botId?: string,
     impersonating = false,
   ) {
     const bot = await this.findOwnedBot(companyId, botId);
     assertBotUnlockedForOwner(bot.managerLockedAt, impersonating);
 
-    const data: { name?: string; label?: string | null; gender?: string; widgetColor?: string; widgetPosition?: string } = {};
+    const data: Prisma.BotUpdateInput = {};
     if (input.name !== undefined) {
       const trimmed = input.name.trim();
       if (trimmed.length < 1 || trimmed.length > 40) {
@@ -754,12 +776,50 @@ export class CabinetService {
       data.gender = input.gender;
     }
     if (input.color !== undefined) {
-      if (!HEX_COLOR_PATTERN.test(input.color)) throw new BadRequestException('Цвет должен быть в формате #RRGGBB');
+      if (!HEX_COLOR_PATTERN.test(input.color)) throw new BadRequestException('Цвет шапки должен быть в формате #RRGGBB');
       data.widgetColor = input.color;
+    }
+    if (input.chatBackgroundColor !== undefined) {
+      if (!HEX_COLOR_PATTERN.test(input.chatBackgroundColor)) throw new BadRequestException('Фон чата должен быть в формате #RRGGBB');
+      data.chatBackgroundColor = input.chatBackgroundColor;
+    }
+    if (input.sendButtonColor !== undefined) {
+      if (!HEX_COLOR_PATTERN.test(input.sendButtonColor)) throw new BadRequestException('Цвет кнопки отправки должен быть в формате #RRGGBB');
+      data.sendButtonColor = input.sendButtonColor;
     }
     if (input.position !== undefined) {
       if (!WIDGET_POSITIONS.includes(input.position)) throw new BadRequestException('Некорректное расположение чата');
       data.widgetPosition = input.position;
+    }
+    if (input.teaserEnabled !== undefined) data.teaserEnabled = Boolean(input.teaserEnabled);
+    if (input.teaserText !== undefined) {
+      const trimmed = input.teaserText.trim();
+      if (trimmed.length > 300) throw new BadRequestException('Текст приглашения слишком длинный');
+      // Empty clears back to the AI-generated default (see the field's own
+      // schema comment) rather than saving an empty string as "the text".
+      data.teaserText = trimmed.length > 0 ? trimmed : null;
+    }
+    if (input.teaserDelaySeconds !== undefined) {
+      if (!Number.isFinite(input.teaserDelaySeconds) || input.teaserDelaySeconds < 0 || input.teaserDelaySeconds > 120) {
+        throw new BadRequestException('Задержка приглашения должна быть от 0 до 120 секунд');
+      }
+      data.teaserDelaySeconds = Math.round(input.teaserDelaySeconds);
+    }
+    if (input.teaserButtons !== undefined) {
+      if (!Array.isArray(input.teaserButtons) || input.teaserButtons.some((b) => typeof b !== 'string')) {
+        throw new BadRequestException('Некорректный список вариантов ответа');
+      }
+      const cleaned = input.teaserButtons.map((b) => b.trim()).filter(Boolean).slice(0, 6);
+      if (cleaned.some((b) => b.length > 40)) throw new BadRequestException('Вариант ответа слишком длинный');
+      data.teaserButtons = cleaned;
+    }
+    if (input.teaserBgColor !== undefined) {
+      if (!HEX_COLOR_PATTERN.test(input.teaserBgColor)) throw new BadRequestException('Цвет фона приглашения должен быть в формате #RRGGBB');
+      data.teaserBgColor = input.teaserBgColor;
+    }
+    if (input.teaserButtonColor !== undefined) {
+      if (!HEX_COLOR_PATTERN.test(input.teaserButtonColor)) throw new BadRequestException('Цвет кнопок приглашения должен быть в формате #RRGGBB');
+      data.teaserButtonColor = input.teaserButtonColor;
     }
 
     await this.prisma.bot.update({ where: { id: bot.id }, data });

@@ -412,7 +412,22 @@ export class CabinetController {
   @UseGuards(AuthGuard)
   updateAppearance(
     @Req() req: AuthedRequest,
-    @Body() body: { name?: string; label?: string; gender?: string; color?: string; position?: string },
+    @Body()
+    body: {
+      name?: string;
+      label?: string;
+      gender?: string;
+      color?: string;
+      chatBackgroundColor?: string;
+      sendButtonColor?: string;
+      position?: string;
+      teaserEnabled?: boolean;
+      teaserText?: string;
+      teaserDelaySeconds?: number;
+      teaserButtons?: string[];
+      teaserBgColor?: string;
+      teaserButtonColor?: string;
+    },
     @Query('botId') botId?: string,
   ) {
     return this.cabinet.updateAppearance(req.companyId, body, botId, req.impersonating);

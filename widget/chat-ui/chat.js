@@ -57,28 +57,45 @@
   if (params.get('mode') === 'fullscreen') {
     document.body.classList.add('fullscreen');
   }
-  // Owner-configurable in the cabinet's "Внешний вид" — the loader
-  // (widget.js) and the cabinet's own pane URLs both pass this through; chat.css
-  // reads it via the --primary custom property instead of a hardcoded hex.
-  // A function, not inline, so a LATER smartchat:set-color message (see the
-  // bottom of this file — widget.js's own live-config patch, for a color
-  // change made in the cabinet after this iframe already loaded) reruns the
-  // exact same logic instead of a second, easily-drifting copy of it.
-  function applyPrimaryColor(color) {
-    document.documentElement.style.setProperty('--primary', color);
-    // Text/icon color for anything sitting ON TOP of --primary (the visitor's
-    // own bubble, the navigate-page CTA button, the send button) — a light
-    // accent (picked via the cabinet's swatches or eyedropper) needs dark
-    // text, not the permanently-white text those elements used to hardcode.
-    // Same simple luminance heuristic as the cabinet's own live preview.
+  // Owner-configurable in the cabinet's "Внешний вид" — three INDEPENDENT
+  // colors now, not one shared "Акцентный цвет" (found live: "при изменении
+  // цвета шапки кнопка отправки не должна обязательно оставаться
+  // салатовой"): --header-color (the header bar), --chat-bg (behind the
+  // message list), --primary (send button + visitor's own bubble + the
+  // navigate-page CTA — chat.css's own long-standing var, kept as-is rather
+  // than renamed). widget.js passes all three as their own query params;
+  // chat.css reads each via its own custom property. Functions, not inline,
+  // so a LATER smartchat:set-color message (see the bottom of this file —
+  // widget.js's own live-config patch, for a color changed in the cabinet
+  // after this iframe already loaded) reruns the exact same logic instead of
+  // a second, easily-drifting copy of it.
+  function luminanceOf(color) {
     var r = parseInt(color.slice(1, 3), 16);
     var g = parseInt(color.slice(3, 5), 16);
     var b = parseInt(color.slice(5, 7), 16);
-    var luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-    document.documentElement.style.setProperty('--primary-contrast', luminance < 140 ? '#fff' : '#1a1a1a');
+    return 0.299 * r + 0.587 * g + 0.114 * b;
+  }
+  // Text/icon color for anything sitting ON TOP of --primary — a light
+  // accent (picked via the cabinet's swatches or eyedropper) needs dark
+  // text, not the permanently-white text those elements used to hardcode.
+  // Same simple luminance heuristic as the cabinet's own live preview.
+  function applyPrimaryColor(color) {
+    document.documentElement.style.setProperty('--primary', color);
+    document.documentElement.style.setProperty('--primary-contrast', luminanceOf(color) < 140 ? '#fff' : '#1a1a1a');
+  }
+  function applyHeaderColor(color) {
+    document.documentElement.style.setProperty('--header-color', color);
+    document.documentElement.style.setProperty('--header-contrast', luminanceOf(color) < 140 ? '#fff' : '#1a1a1a');
+  }
+  function applyChatBg(color) {
+    document.documentElement.style.setProperty('--chat-bg', color);
   }
   var colorParam = params.get('color');
-  if (colorParam && /^#[0-9a-fA-F]{6}$/.test(colorParam)) applyPrimaryColor(colorParam);
+  if (colorParam && /^#[0-9a-fA-F]{6}$/.test(colorParam)) applyHeaderColor(colorParam);
+  var chatBgParam = params.get('chatBg');
+  if (chatBgParam && /^#[0-9a-fA-F]{6}$/.test(chatBgParam)) applyChatBg(chatBgParam);
+  var sendColorParam = params.get('sendColor');
+  if (sendColorParam && /^#[0-9a-fA-F]{6}$/.test(sendColorParam)) applyPrimaryColor(sendColorParam);
   // widget.js now preloads this iframe (network fetch, JS parse/compile) the
   // moment the outside teaser bubble becomes visible, well before the visitor
   // actually clicks — but must NOT also trigger loadHistory()'s real
@@ -1165,8 +1182,10 @@
   // (its OTHER option) — never disrupts a conversation already in progress.
   window.addEventListener('message', function (e) {
     if (e.source !== window.parent || !e.data) return;
-    if (e.data.type === 'smartchat:set-color' && typeof e.data.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(e.data.color)) {
-      applyPrimaryColor(e.data.color);
+    if (e.data.type === 'smartchat:set-color') {
+      if (typeof e.data.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(e.data.color)) applyHeaderColor(e.data.color);
+      if (typeof e.data.chatBg === 'string' && /^#[0-9a-fA-F]{6}$/.test(e.data.chatBg)) applyChatBg(e.data.chatBg);
+      if (typeof e.data.sendColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(e.data.sendColor)) applyPrimaryColor(e.data.sendColor);
     }
   });
 

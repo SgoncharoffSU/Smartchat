@@ -154,7 +154,7 @@
    real embedded iframe's height:100% needs a definite number to resolve
    against at all, hence the explicit value here rather than none. */
 .widget-preview{max-width:510px;width:100%;margin:0 auto;height:min(510px,calc(100vh - 260px));background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgba(8,21,34,.11);overflow:hidden}.widget-head{display:flex;align-items:center;gap:9px;padding:14px 16px;background:var(--ink);color:#fff}.widget-head>button{margin-left:auto;border:0;background:transparent;color:#8fa0ae}.bot-avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:var(--lime);color:var(--ink);font-weight:800;overflow:hidden}.bot-avatar img{width:100%;height:100%;object-fit:cover}.widget-head div{display:flex;flex-direction:column}.widget-head b{font-size:11px}.widget-head small{font-size:9px;color:#95a6b5}.widget-head small i{display:inline-block;width:5px;height:5px;border-radius:50%;background:#69d793}.widget-messages{min-height:390px;padding:18px;background:#f7f8f7}.widget-messages p{max-width:80%;padding:10px 12px;margin-bottom:10px;border-radius:12px;font-size:10px;line-height:1.5}.widget-bot{background:#fff;border:1px solid var(--line)}.widget-user{margin-left:auto;background:#e7ebff}.improve{display:flex;align-items:center;gap:5px;margin:2px 0 0 12px;border:0;background:transparent;color:#596dcc;font-size:9px}.improve svg{width:12px}
-.widget-input{display:flex;align-items:center;gap:8px;padding:11px;border-top:1px solid var(--line);background:#fff}.widget-input input,.widget-input span{flex:1;border:0;outline:0;color:#98a2a8;font-size:10px}.widget-input button{display:grid;place-items:center;width:31px;height:31px;border:0;border-radius:9px;background:var(--lime);color:var(--ink)}.widget-input button svg{width:14px}
+.widget-input{display:flex;align-items:center;gap:8px;padding:11px;border-top:1px solid var(--line);background:#fff}.widget-input input,.widget-input span{flex:1;border:0;outline:0;color:#98a2a8;font-size:10px}.widget-input button{display:grid;place-items:center;width:31px;height:31px;border:0;border-radius:9px;background:var(--widget-send,var(--lime));color:var(--widget-send-contrast,var(--ink))}.widget-input button svg{width:14px}
 
 /* Data pages */
 .knowledge-page,.integrations-page,.crm-page,.team-page{display:flex;flex-direction:column;gap:14px}.knowledge-summary,.team-summary{display:flex;align-items:center;gap:16px;padding:18px 20px;background:var(--ink);color:#fff;border-radius:15px}.knowledge-summary>div:first-child,.team-summary>div:first-child{display:flex;align-items:center;gap:10px}.knowledge-summary>div:first-child>svg,.team-summary svg{color:var(--lime)}.knowledge-summary span,.team-summary span{display:flex;flex-direction:column}.knowledge-summary b,.team-summary b{font-size:12px}.knowledge-summary small,.team-summary small{font-size:9px;color:#8ea0ae}.summary-segment{flex:1;max-width:340px}.summary-segment span{height:5px;border-radius:6px;background:var(--lime)}.summary-segment small{margin-top:6px}.knowledge-summary .primary-action,.team-summary .primary-action{margin-left:auto;background:var(--lime)!important;color:var(--ink)!important;box-shadow:none!important}
@@ -193,6 +193,34 @@
    местоположение должно было отзеркалиться". Mirrors right->left same as
    the real widget's own loader/widget.js does for its floating window. */
 .floating-widget-left{right:auto;left:18px}
+
+/* Preview mode switch + the two states .floating-widget never covered —
+   "Закрытая кнопка" (just the round launcher, no card) and "Приглашение"
+   (the launcher plus the outside teaser card above it) — mirrors what
+   widget.js's own showTeaser/launcher actually render on a real site. */
+.preview-mode-switch{display:flex;gap:6px;margin-bottom:10px}
+.preview-mode-switch button{flex:1;padding:7px 6px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:9.5px;font-weight:700;color:#586774;cursor:pointer}
+.preview-mode-switch button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.preview-launcher{position:absolute;right:18px;bottom:18px;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;color:#fff;box-shadow:0 10px 24px rgba(8,21,34,.25)}
+.preview-launcher svg{width:22px}
+.preview-launcher-left{right:auto;left:18px}
+.preview-teaser{position:absolute;right:18px;bottom:80px;max-width:210px;border-radius:14px;padding:12px 26px 12px 14px;font-size:11px;line-height:1.45;font-weight:500;box-shadow:0 10px 30px rgba(8,21,34,.18)}
+.preview-teaser-left{right:auto;left:18px}
+.preview-teaser-close{position:absolute;top:7px;right:8px;color:#94a3b8;opacity:.8}
+.preview-teaser-btns{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.preview-teaser-btns button{border:1px solid rgba(0,0,0,.1);border-radius:999px;padding:4px 9px;font-size:9.5px;font-weight:600;cursor:default}
+
+/* "Приглашение в чат" — variant list (add/edit/delete), same row shape as
+   every other small-list editor in this file (knowledge categories, deal
+   custom fields). */
+.teaser-variants{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.teaser-variant-row{display:flex;align-items:center;gap:6px}
+.teaser-variant-row input{flex:1}
+.teaser-variant-row button{flex:none;display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#a4372f}
+.teaser-variant-row button svg{width:13px}
+.teaser-variant-add{display:flex;gap:6px}
+.teaser-variant-add input{flex:1}
+.teaser-variant-add button{flex:none}
 
 /* Installation, integrations, CRM, team, support */
 .install-main{text-align:center;padding:50px 7%}.install-icon,.support-icon{display:grid;place-items:center;width:55px;height:55px;margin:0 auto 18px;border-radius:15px;background:var(--lime);color:var(--ink)}.install-main>p{max-width:620px;margin:12px auto 22px;color:var(--muted);line-height:1.6}.code-box{display:flex;align-items:center;gap:12px;padding:10px 10px 10px 14px;border:1px solid var(--line);border-radius:12px;background:#f7f8f7;text-align:left}.code-box code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#344554;font-size:10px}.code-box button{display:flex;align-items:center;gap:5px;padding:8px 10px;border:0;border-radius:8px;background:var(--ink);color:#fff;font-size:9px}.platforms{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:18px;color:#7d8992;font-size:9px}.platforms button{border:1px solid var(--line);border-radius:8px;background:#fff;padding:7px 9px;color:#46545f}.launch-help,.support-side article{height:max-content}.launch-help>svg,.support-side article>svg{color:#5065ca}.launch-help p,.support-side p{margin:9px 0 16px;color:var(--muted);font-size:11px;line-height:1.55}
