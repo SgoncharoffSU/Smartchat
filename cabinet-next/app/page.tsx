@@ -1178,6 +1178,29 @@ type DialogDetail = {
 // Always Europe/Moscow, regardless of the viewer's own browser timezone —
 // business requirement ("по МСК"): a message time should read the same for
 // everyone looking at this dialog, not shift per viewer.
+// "Если в реальном диалоге позже находится новая ошибка, этот диалог можно
+// добавить в автотесты, чтобы она больше не повторялась" — replays the
+// visitor's own real lines verbatim on every future run (see
+// AutoTestsService.promoteDialog's own comment), not a re-improvised
+// simulation of them.
+function PromoteToAutoTestButton({ dialogId }: { dialogId: string }) {
+  const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const promote = () => {
+    setStatus("saving");
+    fetch(`/api/cabinet/auto-tests/scenarios/from-dialog/${dialogId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: `Из диалога · ${new Date().toLocaleDateString("ru-RU")}` }),
+    })
+      .then((r) => (r.ok ? setStatus("done") : Promise.reject()))
+      .catch(() => setStatus("error"));
+  };
+  if (status === "done") return <span className="empty">Добавлено в автотесты.</span>;
+  return <Button variant="outline" disabled={status === "saving"} onClick={promote}>
+    {status === "saving" ? "Добавляю…" : status === "error" ? "Не получилось, повторить" : <><TestTube2 />В автотесты</>}
+  </Button>;
+}
+
 function fmtMessageTime(iso: string): string {
   return new Date(iso).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
@@ -1316,6 +1339,7 @@ function Dialogs({ setView, onOpenDeal, activeBotId }: { setView: (v: View) => v
           <div><ClipboardCheck /><span><b>AI-резюме</b>
             <small>{summary ?? (summaryLoading ? "Готовлю резюме…" : "Резюме недоступно.")}</small>
           </span></div>
+          <PromoteToAutoTestButton key={active.id} dialogId={active.id} />
           {(active.lead || active.dealTitle) && <Button variant="outline" onClick={() => { if (active.dealId) onOpenDeal(active.dealId); setView("crm"); }}>Открыть лид <ArrowRight /></Button>}
         </div>
       </>}
@@ -1365,19 +1389,207 @@ function Training({ me, activeBotId }: { me: CabinetMe; activeBotId: string | nu
   </div>;
 }
 
-const testGroups: Array<[string, string, number, number, React.ElementType]> = [
-  ["Продажи", "Цены, подбор и следующий шаг", 8, 8, Target],
-  ["Возражения", "Дорого, сравнение и сомнения", 7, 6, MessageSquareText],
-  ["Знания", "Доставка, гарантия и оплата", 9, 8, BookOpen],
-  ["Сложные ситуации", "Не по теме, грубость и попытка взлома", 6, 6, ShieldCheck],
-  ["Сбор заявки", "Контакты, согласие и неполные данные", 8, 7, Inbox],
-  ["Виджет", "Приветствие и быстрые подсказки", 10, 9, SlidersHorizontal],
-];
+type TestScenarioRow = { id: string; title: string; mode: "simulated" | "replay"; customerBrief: string | null; isCritical: boolean; createdAt: string };
+type TestResultRow = {
+  id: string;
+  scenarioId: string;
+  scenarioTitle: string;
+  isCritical: boolean;
+  transcript: Array<{ role: "visitor" | "assistant"; content: string }>;
+  verdict: "pass" | "issue" | "critical";
+  whatWasWrong: string | null;
+  expectedAnswer: string | null;
+};
+type TestRunSummary = { id: string; startedAt: string; finishedAt: string | null; total: number; passed: number; issues: number; critical: number; readyToPublish: boolean; results: TestResultRow[] };
 
-function AutoTests() {
+// The real thing — "92% · 44 из 48" used to be hardcoded for every account,
+// the button just span a spinner for 1.8s and did nothing (found live, full
+// spec given: "автотесты проверяют работу бота до того, как изменения
+// увидят реальные посетители сайта"). Every run drives the bot's OWN real
+// reply pipeline (see AutoTestsService's own comment) — an AI plays the
+// customer, another AI grades the transcript against the bot's real
+// approved knowledge, critical failures block a second+ greeting variant
+// from going live (see CabinetService.addGreetingVariant).
+function AutoTests({ setView, activeBotId }: { setView: (v: View) => void; activeBotId: string | null }) {
+  const [scenarios, setScenarios] = useState<TestScenarioRow[] | null>(null);
+  const [run, setRun] = useState<TestRunSummary | null>(null);
+  const [totalScenarios, setTotalScenarios] = useState(0);
   const [running, setRunning] = useState(false);
-  return <div className="tests-page"><section className="test-overview panel"><div className="test-gauge"><svg viewBox="0 0 108 108"><circle cx="54" cy="54" r="45"/><circle className="score" cx="54" cy="54" r="45"/></svg><strong>92%</strong><small>качество</small></div><div><span className="section-label">Последняя проверка · сегодня, 12:18</span><h2>44 из 48 сценариев пройдены</h2><p>Бот готов к реальному трафику. Три ответа стоит уточнить, один сценарий требует исправления до запуска.</p><div className="test-summary"><StatusPill>44 пройдено</StatusPill><StatusPill tone="orange">3 уточнить</StatusPill><StatusPill tone="gray">1 исправить</StatusPill></div></div><Button className="primary-action" onClick={() => { setRunning(true); setTimeout(() => setRunning(false), 1800); }}>{running ? <><Activity />Проверяем…</> : <><TestTube2 />Запустить 48 тестов</>}</Button></section>
-  <div className="test-layout"><section className="test-groups">{testGroups.map(([name,desc,total,passed,Icon]) => <article className="test-group" key={String(name)}><span className="test-group-icon"><Icon /></span><div><b>{name}</b><small>{desc}</small><Progress value={Number(passed)/Number(total)*100}/></div><strong>{String(passed)}/{String(total)}</strong><button><ArrowRight /></button></article>)}</section><aside className="test-issues panel"><span className="section-label">Приоритет исправления</span><h2>Что мешает качеству</h2><article><span className="issue-index critical">1</span><div><b>Доставка за пределы региона</b><small>В базе нет правила расчёта стоимости.</small><button>Добавить знание</button></div></article><article><span className="issue-index">2</span><div><b>Возражение «у конкурентов дешевле»</b><small>Ответ слишком общий и не раскрывает ценность.</small><button>Улучшить ответ</button></div></article><article><span className="issue-index">3</span><div><b>Невалидный номер телефона</b><small>Бот не просит проверить одну цифру.</small><button>Настроить правило</button></div></article></aside></div></div>;
+  const [retestingId, setRetestingId] = useState<string | null>(null);
+  const [openTranscript, setOpenTranscript] = useState<TestResultRow | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  // Shared by reload/runAll/retest — a reload triggered by a bot switch
+  // mid-run, or a fast retest-A-then-retest-B click, must not let an OLDER
+  // in-flight response overwrite a newer one's results (found via
+  // code-review; same requestId-guard idiom used throughout this file).
+  const requestId = useRef(0);
+  const botQuery = activeBotId ? `?botId=${activeBotId}` : "";
+
+  const reload = () => {
+    const id = ++requestId.current;
+    Promise.all([
+      fetchJsonWithRetry<TestScenarioRow[]>(`/api/cabinet/auto-tests/scenarios${botQuery}`),
+      fetchJsonWithRetry<{ run: TestRunSummary | null; totalScenarios: number }>(`/api/cabinet/auto-tests/latest${botQuery}`),
+    ]).then(([scenariosData, latestData]) => {
+      if (id !== requestId.current) return;
+      setScenarios(scenariosData ?? []);
+      setRun(latestData?.run ?? null);
+      setTotalScenarios(latestData?.totalScenarios ?? 0);
+    });
+  };
+  useEffect(reload, [activeBotId]);
+
+  const runAll = () => {
+    const id = ++requestId.current;
+    setRunning(true);
+    setRunError(null);
+    fetch(`/api/cabinet/auto-tests/run${botQuery}`, { method: "POST" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data: TestRunSummary) => { if (id === requestId.current) setRun(data); })
+      .catch(() => { if (id === requestId.current) setRunError("Не получилось запустить тесты — попробуйте ещё раз."); })
+      .finally(() => setRunning(false));
+  };
+
+  // The backend's own runOne already returns the full merged picture — every
+  // active scenario's own most recent result, not just this one (see
+  // AutoTestsService.runOne's own comment) — so this can just replace `run`
+  // outright instead of merging client-side.
+  const retest = (scenarioId: string) => {
+    const id = ++requestId.current;
+    setRetestingId(scenarioId);
+    setRunError(null);
+    fetch(`/api/cabinet/auto-tests/scenarios/${scenarioId}/run`, { method: "POST" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data: TestRunSummary) => { if (id === requestId.current) setRun(data); })
+      .catch(() => { if (id === requestId.current) setRunError("Не получилось повторить тест — попробуйте ещё раз."); })
+      .finally(() => setRetestingId(null));
+  };
+
+  const deleteScenario = (scenarioId: string) => {
+    if (!window.confirm("Удалить сценарий?")) return;
+    fetch(`/api/cabinet/auto-tests/scenarios/${scenarioId}`, { method: "DELETE" })
+      .then((r) => { if (r.ok) reload(); })
+      .catch(() => {});
+  };
+
+  const problems = (run?.results ?? []).filter((r) => r.verdict !== "pass").sort((a, b) => (a.verdict === b.verdict ? 0 : a.verdict === "critical" ? -1 : 1));
+  const score = run && run.total > 0 ? Math.round((run.passed / run.total) * 100) : 0;
+
+  return <div className="tests-page">
+    <section className="test-overview panel">
+      <div className="test-gauge"><svg viewBox="0 0 108 108"><circle cx="54" cy="54" r="45"/><circle className="score" cx="54" cy="54" r="45" style={{ strokeDashoffset: 283 - (283 * score) / 100 }}/></svg><strong>{run ? `${score}%` : "—"}</strong><small>качество</small></div>
+      <div>
+        <span className="section-label">{run ? `Последняя проверка · ${fmtDialogDate(run.startedAt)}` : "Проверок ещё не было"}</span>
+        <h2>{run ? `${run.passed} из ${run.total} сценариев пройдены` : `${totalScenarios} сценариев готовы к запуску`}</h2>
+        <p>
+          {!run
+            ? "Запустите проверку, чтобы увидеть, как бот справляется с реальными вопросами."
+            : run.critical > 0
+              ? `Найдены критические ошибки — до исправления второй вариант приветствия (A/B-тест) запустить нельзя.`
+              : run.issues > 0
+                ? "Критических ошибок нет, но есть на что обратить внимание."
+                : "Бот готов к реальному трафику."}
+        </p>
+        <div className="test-summary">
+          <StatusPill tone="green">{run?.passed ?? 0} пройдено</StatusPill>
+          {(run?.issues ?? 0) > 0 && <StatusPill tone="orange">{run?.issues} уточнить</StatusPill>}
+          {(run?.critical ?? 0) > 0 && <StatusPill tone="gray">{run?.critical} критично</StatusPill>}
+        </div>
+      </div>
+      <div>
+        <Button className="primary-action" disabled={running || totalScenarios === 0} onClick={runAll}>{running ? <><Activity />Проверяем…</> : <><TestTube2 />Запустить {totalScenarios || ""} тестов</>}</Button>
+        {runError && <p className="form-error" style={{ marginTop: 8 }}>{runError}</p>}
+      </div>
+    </section>
+
+    <div className="test-layout">
+      <section className="test-groups">
+        {scenarios === null ? <div className="dialogs-empty-conv" style={{ padding: 20 }}>Загружаю…</div>
+          : scenarios.length === 0 ? <div className="dialogs-empty-conv" style={{ padding: 20 }}>Сценариев пока нет — добавьте первый или попросите менеджера настроить основной набор при внедрении.</div>
+          : scenarios.map((s) => {
+            const result = run?.results.find((r) => r.scenarioId === s.id);
+            return <article className="test-group" key={s.id}>
+              <span className="test-group-icon">{s.mode === "replay" ? <History /> : <TestTube2 />}</span>
+              <div><b>{s.title}</b><small>{s.isCritical ? "Критично при ошибке" : "Обычная проверка"}{result ? ` · ${result.verdict === "pass" ? "пройден" : result.verdict === "critical" ? "критическая ошибка" : "есть замечание"}` : " · ещё не запускался"}</small></div>
+              <strong>{result ? (result.verdict === "pass" ? <Check style={{ color: "#2f9e5b" }}/> : <AlertCircle style={{ color: result.verdict === "critical" ? "#a4372f" : "#b8811a" }}/>) : "—"}</strong>
+              <button disabled={retestingId === s.id} onClick={() => retest(s.id)} title="Повторить тест">{retestingId === s.id ? <Activity/> : <ArrowRight />}</button>
+              <button onClick={() => deleteScenario(s.id)} title="Удалить сценарий"><Trash2 /></button>
+            </article>;
+          })}
+        <button className="test-group-add" onClick={() => setAddOpen(true)}><Plus/> Добавить сценарий</button>
+      </section>
+
+      <aside className="test-issues panel">
+        <span className="section-label">Приоритет исправления</span>
+        <h2>Что мешает качеству</h2>
+        {problems.length === 0
+          ? <p style={{ color: "#7d8992", fontSize: 11 }}>{run ? "Проблем не найдено." : "Запустите тесты, чтобы увидеть проблемы."}</p>
+          : problems.map((r, i) => <article key={r.id}>
+            <span className={`issue-index ${r.verdict === "critical" ? "critical" : ""}`}>{i + 1}</span>
+            <div>
+              <b>{r.scenarioTitle}</b>
+              <small>{r.whatWasWrong ?? "Требует внимания."}</small>
+              {r.expectedAnswer && <small>Как должен был ответить: {r.expectedAnswer}</small>}
+              <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                <button onClick={() => setOpenTranscript(r)}>Посмотреть диалог</button>
+                <button onClick={() => setView("knowledge")}>Исправить</button>
+                <button disabled={retestingId === r.scenarioId} onClick={() => retest(r.scenarioId)}>{retestingId === r.scenarioId ? "Проверяю…" : "Повторить тест"}</button>
+              </div>
+            </div>
+          </article>)}
+      </aside>
+    </div>
+
+    <Dialog open={Boolean(openTranscript)} onOpenChange={(v) => { if (!v) setOpenTranscript(null); }}>
+      <DialogContent className="prototype-dialog">
+        <DialogHeader><DialogTitle>{openTranscript?.scenarioTitle}</DialogTitle><DialogDescription>Тестовый диалог целиком — реальные ответы бота.</DialogDescription></DialogHeader>
+        <div style={{ maxHeight: 360, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+          {openTranscript?.transcript.map((m, i) => <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} key={i} style={{ margin: 0, maxWidth: "90%" }}><p style={{ margin: 0 }}>{m.content}</p></div>)}
+        </div>
+        <DialogFooter><Button variant="outline" onClick={() => setOpenTranscript(null)}>Закрыть</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <AddTestScenarioSheet open={addOpen} onClose={() => setAddOpen(false)} botId={activeBotId} onAdded={reload} />
+  </div>;
+}
+
+function AddTestScenarioSheet({ open, onClose, botId, onAdded }: { open: boolean; onClose: () => void; botId: string | null; onAdded: () => void }) {
+  const [title, setTitle] = useState("");
+  const [brief, setBrief] = useState("");
+  const [isCritical, setIsCritical] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reset = () => { setTitle(""); setBrief(""); setIsCritical(false); setError(null); };
+  const save = () => {
+    if (!title.trim() || !brief.trim()) { setError("Заполните название и описание ситуации."); return; }
+    setSaving(true);
+    setError(null);
+    fetch(`/api/cabinet/auto-tests/scenarios${botId ? `?botId=${botId}` : ""}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: title.trim(), mode: "simulated", customerBrief: brief.trim(), isCritical }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then(() => { reset(); onAdded(); onClose(); })
+      .catch(() => setError("Не получилось сохранить — попробуйте ещё раз."))
+      .finally(() => setSaving(false));
+  };
+
+  return <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <DialogContent className="prototype-dialog">
+      <DialogHeader><DialogTitle>Новый сценарий</DialogTitle><DialogDescription>ИИ сыграет клиента по этому описанию и пройдёт диалог с реальным ботом.</DialogDescription></DialogHeader>
+      <div className="prototype-form">
+        <label><span>Название</span><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Например: Возражение «дорого»" /></label>
+        <label><span>Роль и ситуация клиента</span><textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={4} placeholder="Опишите, кто клиент и что он хочет проверить: обычный вопрос, сомнения, возражение, попытка оставить заявку..." /></label>
+        <div className="switch-row"><div><ShieldCheck/><span><b>Критичный сценарий</b><small>Ошибка здесь заблокирует запуск A/B-теста приветствий</small></span></div><Switch checked={isCritical} onCheckedChange={setIsCritical} /></div>
+        {error && <p className="form-error">{error}</p>}
+      </div>
+      <DialogFooter><Button variant="outline" onClick={() => { reset(); onClose(); }}>Отмена</Button><Button className="primary-action" disabled={saving} onClick={save}>{saving ? "Сохраняю…" : "Добавить"}</Button></DialogFooter>
+    </DialogContent>
+  </Dialog>;
 }
 
 // Real data from /api/cabinet/knowledge (see KnowledgeService.list) — this
@@ -2505,7 +2717,7 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
 
 function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen, readiness }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void; readiness: ReadinessData | null }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} readiness={readiness} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} readiness={readiness} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests setView={setView} activeBotId={activeBotId} />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
   }), [setView, onAction, analytics, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen, readiness]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }

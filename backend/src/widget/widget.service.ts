@@ -32,6 +32,16 @@ const URL_IN_TEXT_PATTERN = /(https?:\/\/[^\s,]+|(?:[a-zA-Zа-яёА-ЯЁ0-9-]+\
 const BARE_GREETING_PATTERN =
   /^(привет|здравствуй(?:те)?|добрый\s*(?:день|вечер|ночи)|доброе\s*утро|хай|хеллоу|hello|hi)[!.,\s]*$/i;
 
+// Exported so AutoTestsService can tell "the bot is billing-blocked" apart
+// from an actual bad reply — grading either of these fixed canned messages
+// against real knowledge facts would judge a billing state as a quality
+// failure (found via code-review). `stage: 'trial_expired'` alone isn't
+// enough to detect the SECOND one (BillingService.isBlocked's own branch,
+// below) — it deliberately reuses the dialog's current stage instead of a
+// distinct one, so text matching is the only reliable signal here.
+export const TRIAL_EXPIRED_REPLY = 'Пробный период этого бота закончился. Свяжитесь с нами, чтобы продолжить пользоваться сервисом.';
+export const BILLING_BLOCKED_REPLY = 'Сервис временно приостановлен — оплата не подтверждена или закончился баланс. Свяжитесь с администратором аккаунта.';
+
 // Anchored, same reasoning as BARE_GREETING_PATTERN above — only fires when
 // the visitor's ENTIRE message is a bare "yes"/"let's go", not when a real
 // sentence happens to start with one of these words.
@@ -269,6 +279,20 @@ export class WidgetService {
   }
 
   async sendMessage(dto: SendMessageDto, visitorIp?: string, sessionToken?: string, signal?: AbortSignal) {
+    // isAutoTest ALWAYS implies isPreview, enforced here rather than trusted
+    // from the caller — this DTO is bound straight off the public POST
+    // /api/widget/send-message body with no ownership check on botToken
+    // (see the comment right below), so anyone could otherwise send
+    // isAutoTest:true without isPreview:true on real visitor traffic: the
+    // dialog would be created as a REAL (non-preview) one at line ~340
+    // below, while the lead-capture block further down still skips
+    // creating a Lead for it (keyed on isAutoTest alone) — a genuine
+    // consenting visitor's contact info would be silently dropped forever
+    // (found via code-review). AutoTestsService already sends isPreview:
+    // true itself; this just makes that the guaranteed case, not a
+    // convention every future caller has to remember.
+    if (dto.isAutoTest) dto.isPreview = true;
+
     const bot = await this.bots.findActiveByWidgetToken(dto.botToken);
     if (!bot) throw new NotFoundException('Unknown or inactive bot token');
 
@@ -299,7 +323,7 @@ export class WidgetService {
     // subscription per bot, see Bot's own schema comment), not bot.company.*.
     if (!bot.subscriptionActive && bot.trialEndsAt && bot.trialEndsAt < new Date()) {
       return {
-        reply: 'Пробный период этого бота закончился. Свяжитесь с нами, чтобы продолжить пользоваться сервисом.',
+        reply: TRIAL_EXPIRED_REPLY,
         buttons: [],
         stage: 'trial_expired',
         dialogStatus: DialogStatus.closed,
@@ -374,7 +398,7 @@ export class WidgetService {
     // itself malfunctioning). No-op for anyone still just on the free trial
     // or with no tariffPlan chosen yet (see BillingService.isBlocked).
     if (await this.billing.isBlocked(bot.id, billingBot)) {
-      const blockedReply = 'Сервис временно приостановлен — оплата не подтверждена или закончился баланс. Свяжитесь с администратором аккаунта.';
+      const blockedReply = BILLING_BLOCKED_REPLY;
       const saved = await this.messages.append(dialog.id, MessageRole.assistant, blockedReply, []);
       return {
         reply: blockedReply,
@@ -1560,8 +1584,11 @@ export class WidgetService {
     // "не сохранять данные без необходимого согласия"). Preview dialogs DO
     // still go through this (long-standing, pre-dates this branch — main
     // never gated leads.upsert on isPreview either) so the owner sees their
-    // own test lead in "Заявки" while testing in "Обучение бота".
-    if (structuredReply.leadCaptured && hasRealLeadData && visitorMeta.pdConsent === true) {
+    // own test lead in "Заявки" while testing in "Обучение бота" — but
+    // isAutoTest dialogs never do (see SendMessageDto.isAutoTest's own
+    // comment): those can replay a REAL promoted customer's own consent,
+    // and run repeatedly/automatically, unlike a person manually testing.
+    if (structuredReply.leadCaptured && hasRealLeadData && visitorMeta.pdConsent === true && !dto.isAutoTest) {
       // isNew comes back from the SAME atomic upsert (see leads.service.ts's
       // own comment) so a 'lead'-plan company is charged exactly once per
       // real lead — not again on every later turn that just fills in more
@@ -1904,7 +1931,16 @@ export class WidgetService {
         }
       } catch (error) {
         this.logger.warn(`Training-mode action failed (pendingAction=${pendingAction}): ${String(error)}`);
-        confirmation = 'Не получилось это обработать — попробуйте ещё раз или другой вариант.';
+        // A BadRequestException (e.g. addGreetingVariant's own autotest
+        // gate — "Автотесты нашли критические ошибки...") has a real,
+        // actionable reason the owner needs to actually see — the generic
+        // fallback below used to swallow it, leaving them retrying the
+        // exact same input against a wall with no idea why (found via
+        // code-review).
+        confirmation =
+          error instanceof BadRequestException
+            ? (error.getResponse() as { message?: string })?.message || error.message
+            : 'Не получилось это обработать — попробуйте ещё раз или другой вариант.';
         // Nothing actually changed — nextLastAction (initialized above to the
         // prior value) is left as-is.
       }

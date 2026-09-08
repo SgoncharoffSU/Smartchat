@@ -12,6 +12,7 @@ import { FunnelStage } from '../yandex-gpt/yandex-gpt.types';
 import { DEFAULT_FUNNEL_TEMPLATE } from '../yandex-gpt/default-funnel-template';
 import { GENERAL_SALES_PERSONA_RULES } from '../yandex-gpt/persona-rules';
 import { assertBotUnlockedForOwner } from '../bots/bot-lock.util';
+import { computeBotTestReadiness } from '../auto-tests/test-readiness.util';
 
 // Fixed presets shown in the cabinet's "Цель бота" picker — a custom
 // free-text goal is also accepted (preset key "custom"). Each preset's
@@ -1377,6 +1378,28 @@ export class CabinetService {
 
     const instruction = this.yandexGpt.buildPinnedOpenerInstruction(text);
     const existingVariants = stages[greetingIdx].variants ?? [];
+    // "A/B-тест можно запускать только после того, как оба варианта успешно
+    // прошли автотесты" — a variant landing on TOP of an already-existing
+    // one is what actually turns "Приветствия" into a live A/B test (a
+    // single variant is just the bot's one greeting, nothing to gate).
+    // Requires a completed run with zero critical results — no run yet
+    // blocks too, same as a failing one (see AutoTestsService's own
+    // readyToPublish).
+    if (existingVariants.length >= 1) {
+      // Same computeBotTestReadiness AutoTestsService's own dashboard uses
+      // for "готов к публикации" — one shared source of truth so the two
+      // can never disagree (found via code-review: an earlier inline copy
+      // of this check here already drifted from the dashboard's own logic
+      // once single-scenario reruns entered the picture).
+      const readiness = await computeBotTestReadiness(this.prisma, bot.id);
+      if (!readiness.readyToPublish) {
+        throw new BadRequestException(
+          readiness.hasAnyRun
+            ? 'Автотесты нашли критические ошибки — исправьте их и повторите тесты, прежде чем запускать A/B-тест приветствий.'
+            : 'Сначала запустите (или повторите) автотесты — A/B-тест приветствий можно включить только после успешной проверки всех критичных сценариев.',
+        );
+      }
+    }
     const updatedStages = stages.map((s, i) =>
       i === greetingIdx ? { ...s, variants: [...existingVariants, instruction] } : s,
     );

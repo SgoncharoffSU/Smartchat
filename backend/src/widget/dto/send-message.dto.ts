@@ -43,6 +43,20 @@ export class SendMessageDto {
   @IsBoolean()
   isPreview?: boolean;
 
+  // True only for AutoTestsService's own simulated/replayed turns — implies
+  // isPreview (never escalates, never counted), but ALSO suppresses lead
+  // capture/CRM push, unlike a plain isPreview session (see the pdConsent
+  // block in widget.service.ts for why plain preview traffic still creates
+  // a visible test lead on purpose). Without this, promoting a real dialog
+  // to a replay scenario (see AutoTestsService.promoteDialog) would replay
+  // that real customer's own consent + phone/email on every single test
+  // run, creating a fresh duplicate Lead and pushing their real PII to the
+  // company's real CRM every time "Запустить автотесты" runs (found via
+  // code-review).
+  @IsOptional()
+  @IsBoolean()
+  isAutoTest?: boolean;
+
   // True when the cabinet's test widget is switched to "Обучение" instead of
   // "Тестирование". Bypasses the bot's own sales funnel entirely in favor of
   // a fixed onboarding wizard that asks the owner about their business and

@@ -706,6 +706,120 @@ ${transcript}
   }
 
   /**
+   * The "customer" half of an Автотесты simulated scenario (see
+   * AutoTestsService.runScenario) — plays the persona/situation described
+   * in customerBrief against the bot's own real replies, one turn at a
+   * time. Returns null to end the conversation naturally (persona is
+   * satisfied, gave up, or the scripted situation has run its course) —
+   * the caller also enforces its own turn cap regardless, so a model that
+   * never signals "done" can't loop forever.
+   */
+  async simulateCustomerTurn(
+    customerBrief: string,
+    transcript: Array<{ role: 'visitor' | 'assistant'; content: string }>,
+  ): Promise<{ message: string | null; tokens: number }> {
+    const prompt = `
+Ты играешь роль клиента, тестирующего ИИ-продавца («Умный Чат») на сайте компании. Твоя задача
+и характер описаны ниже. Веди себя как настоящий живой посетитель: обычная разговорная речь,
+иногда с опечатками, можешь сомневаться, возражать, уточнять. НЕ представляйся тестировщиком и
+не упоминай, что это тест.
+
+Твоя роль и ситуация: "${customerBrief.slice(0, 1500)}"
+
+История разговора до сих пор:
+${transcript.length === 0 ? '(разговор ещё не начался — напиши первое сообщение)' : transcript.map((m) => `${m.role === 'visitor' ? 'Клиент' : 'Бот'}: ${m.content}`).join('\n')}
+
+Напиши СЛЕДУЮЩУЮ реплику клиента. Если по смыслу ситуации разговор уже закончен (получил ответ,
+оставил заявку, попрощался, или дальше продолжать нечем) — верни null вместо реплики.
+
+Верни ТОЛЬКО JSON (без markdown, без другого текста): {"message": string | null}
+`.trim();
+
+    try {
+      const { text: rawReply, tokens } = await this.callCompletion([{ role: 'system', text: prompt }], {
+        temperature: 0.7,
+        maxTokens: 400,
+        jsonObjectMode: true,
+      });
+      const stripped = rawReply.trim().replace(/^```[a-z]*\n?/i, '').replace(/```$/i, '').trim();
+      const parsed = JSON.parse(stripped);
+      const message = typeof parsed.message === 'string' && parsed.message.trim() ? parsed.message.trim() : null;
+      return { message, tokens };
+    } catch (error) {
+      this.logger.warn(`simulateCustomerTurn failed, ending scenario early: ${String(error)}`);
+      return { message: null, tokens: 0 };
+    }
+  }
+
+  /**
+   * The verdict half of Автотесты — given the finished transcript (real bot
+   * replies, from the SAME pipeline a real visitor hits) and the bot's own
+   * approved knowledge, decides whether the bot's answers were actually
+   * correct: nothing invented that isn't in knowledgeFacts, the visitor's
+   * question was understood, the conversation moved forward, contacts (if
+   * offered) were collected properly. isCritical steers what counts as
+   * "critical" for THIS scenario (wrong price/invented terms/broken
+   * required step/bad contact collection) vs a lesser "issue" — never
+   * upgraded past what the scenario itself was marked as, matching
+   * TestScenario.isCritical's own comment (a scenario not marked critical
+   * can still surface real problems, just never as blocking ones).
+   */
+  async gradeTestTranscript(
+    customerBriefOrReplayNote: string,
+    transcript: Array<{ role: 'visitor' | 'assistant'; content: string }>,
+    knowledgeFacts: string[],
+    isCritical: boolean,
+  ): Promise<{ verdict: 'pass' | 'issue' | 'critical'; whatWasWrong: string | null; expectedAnswer: string | null; tokens: number }> {
+    const prompt = `
+Ты проверяешь качество работы ИИ-продавца («Умный Чат») по итогам тестового диалога. Реплики
+"Бот" — настоящие ответы бота, сгенерированные так же, как для реального посетителя сайта.
+
+Проверяемая ситуация: "${customerBriefOrReplayNote.slice(0, 1000)}"
+
+Реальные факты, которые бот ЗНАЕТ (база знаний — единственный источник правды; всё, чего здесь
+нет, бот знать не должен и не имеет права придумывать):
+${knowledgeFacts.length > 0 ? knowledgeFacts.map((f, i) => `${i + 1}. ${f.slice(0, 400)}`).join('\n') : '(база знаний пуста)'}
+
+Диалог:
+${transcript.map((m) => `${m.role === 'visitor' ? 'Клиент' : 'Бот'}: ${m.content}`).join('\n')}
+
+Оцени: понял ли бот вопрос, не придумал ли информацию (цену, условия, наличие) которой нет в
+базе знаний, вёл ли клиента дальше по разговору, а не в тупик, корректно ли собирал контакты
+(если предлагал). "critical" — это грубая ошибка: неправильная цена/условия, придуманная
+информация, некорректный сбор контактов, полный срыв обязательного сценария. "issue" — реальный
+недочёт, но не критичный (общий/слабый ответ, неидеальная формулировка). "pass" — бот справился.
+
+Верни ТОЛЬКО JSON (без markdown, без другого текста):
+{"verdict": "pass"|"issue"|"critical", "whatWasWrong": string|null, "expectedAnswer": string|null}
+whatWasWrong и expectedAnswer — null при verdict "pass", иначе короткое (1-2 предложения) описание.
+`.trim();
+
+    try {
+      const { text: rawReply, tokens } = await this.callCompletion([{ role: 'system', text: prompt }], {
+        temperature: 0.2,
+        maxTokens: 600,
+        jsonObjectMode: true,
+      });
+      const stripped = rawReply.trim().replace(/^```[a-z]*\n?/i, '').replace(/```$/i, '').trim();
+      const parsed = JSON.parse(stripped);
+      let verdict: 'pass' | 'issue' | 'critical' = parsed.verdict === 'pass' ? 'pass' : parsed.verdict === 'critical' ? 'critical' : 'issue';
+      // A scenario not marked critical can still surface a real problem —
+      // just never escalated past "issue" purely on the grader's own say-so
+      // (see this method's own comment).
+      if (verdict === 'critical' && !isCritical) verdict = 'issue';
+      return {
+        verdict,
+        whatWasWrong: typeof parsed.whatWasWrong === 'string' ? parsed.whatWasWrong.trim() || null : null,
+        expectedAnswer: typeof parsed.expectedAnswer === 'string' ? parsed.expectedAnswer.trim() || null : null,
+        tokens,
+      };
+    } catch (error) {
+      this.logger.warn(`gradeTestTranscript failed, marking "issue" for manual review: ${String(error)}`);
+      return { verdict: 'issue', whatWasWrong: 'Не удалось автоматически оценить диалог — проверьте вручную.', expectedAnswer: null, tokens: 0 };
+    }
+  }
+
+  /**
    * Called only when a new instruction would push the bot past
    * MAX_INSTRUCTION_COUNT — the owner never sees a "limit reached" message
    * (see KnowledgeService.createInstruction), this is what makes that

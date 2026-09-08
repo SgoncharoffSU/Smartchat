@@ -567,6 +567,8 @@ model Bot {
   aiUsageEvents      AiUsageEvent[]
   deals              Deal[]
   payments           Payment[]
+  testScenarios      TestScenario[]
+  testRuns           TestRun[]
 
   @@index([companyId])
   @@index([tariffPlanId])
@@ -1003,4 +1005,90 @@ model ImplementationManager {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("implementation_manager")
+}
+
+// "Один вопрос/ситуация проверяется одним и тем же способом снова и снова" —
+// the real thing "Автотесты" runs. Two creation paths, two run modes:
+// - manual (mode: simulated) — an AI plays a customer persona per
+//   customerBrief, improvising each turn against the bot's own real replies.
+//   The core set a manager sets up during "Внедрение".
+// - promoted from a real dialog (mode: replay) — the ACTUAL visitor lines
+//   from that dialog are replayed verbatim (deterministic, not
+//   re-improvised) — a real bug found live becomes a regression test that
+//   can never quietly start passing again just because the simulator
+//   phrased something differently this time.
+model TestScenario {
+  id        String             @id @default(uuid())
+  botId     String             @map("bot_id")
+  title     String
+  mode      TestScenarioMode   @default(simulated)
+  // mode: simulated — persona/situation instructions for the customer-playing
+  // model (see YandexGptService.simulateCustomerTurn). Ignored for replay.
+  customerBrief   String?      @map("customer_brief")
+  // mode: replay — the real visitor's own message texts, in order, replayed
+  // verbatim turn by turn. Ignored for simulated.
+  replayMessages  Json?        @map("replay_messages")
+  // The dialog this was promoted from, if any — informational (see it, not
+  // re-derive from it), never re-read at run time.
+  sourceDialogId  String?      @map("source_dialog_id")
+  // A failure here blocks adding a SECOND+ greeting variant — the point at
+  // which "Приветствия" actually becomes an A/B test (see
+  // CabinetService.addGreetingVariant's own comment) — a wrong price,
+  // invented terms, broken required contact-collection or funnel step.
+  // Everything else is a real but non-blocking issue.
+  isCritical Boolean           @default(false) @map("is_critical")
+  archived   Boolean           @default(false)
+  createdAt  DateTime          @default(now()) @map("created_at")
+
+  bot     Bot          @relation(fields: [botId], references: [id], onDelete: Cascade)
+  results TestResult[]
+
+  @@index([botId])
+  @@map("test_scenarios")
+}
+
+enum TestScenarioMode {
+  simulated
+  replay
+}
+
+// One "Запустить автотесты" click — a batch across every (non-archived)
+// TestScenario for one bot.
+model TestRun {
+  id         String    @id @default(uuid())
+  botId      String    @map("bot_id")
+  startedAt  DateTime  @default(now()) @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+
+  bot     Bot          @relation(fields: [botId], references: [id], onDelete: Cascade)
+  results TestResult[]
+
+  @@index([botId])
+  @@map("test_runs")
+}
+
+model TestResult {
+  id         String      @id @default(uuid())
+  runId      String      @map("run_id")
+  scenarioId String      @map("scenario_id")
+  // [{role:'visitor'|'assistant', content:string}] — the full simulated/
+  // replayed conversation this verdict is based on.
+  transcript Json
+  verdict    TestVerdict
+  whatWasWrong    String? @map("what_was_wrong")
+  expectedAnswer  String? @map("expected_answer")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  run      TestRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  scenario TestScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([scenarioId])
+  @@map("test_results")
+}
+
+enum TestVerdict {
+  pass
+  issue
+  critical
 }
