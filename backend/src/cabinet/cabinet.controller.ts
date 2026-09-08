@@ -1,6 +1,11 @@
-import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { randomUUID } from 'crypto';
+import { extname } from 'path';
 import { Request, Response } from 'express';
+import { UPLOADS_DIR } from '../uploads-path';
 import { CabinetService } from './cabinet.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { BlockDuringImpersonationGuard } from '../auth/block-during-impersonation.guard';
@@ -411,6 +416,33 @@ export class CabinetController {
     @Query('botId') botId?: string,
   ) {
     return this.cabinet.updateAppearance(req.companyId, body, botId, req.impersonating);
+  }
+
+  // Same disk-upload convention as KnowledgeController.uploadFile — image
+  // only, capped well below its 15MB (this is a small square icon, not a
+  // document).
+  @Post('appearance/avatar')
+  @UseGuards(AuthGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: UPLOADS_DIR,
+        filename: (_req, file, cb) => cb(null, `${randomUUID()}${extname(file.originalname)}`),
+      }),
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype)),
+    }),
+  )
+  async uploadAvatar(@Req() req: AuthedRequest, @UploadedFile() file: Express.Multer.File | undefined, @Query('botId') botId?: string) {
+    if (!file) throw new BadRequestException('Файл не получен — проверьте тип (JPEG/PNG/WEBP/GIF) и размер (до 5 МБ)');
+    const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'https://chat.glavinstrument.com';
+    return this.cabinet.setAvatar(req.companyId, `${publicBaseUrl}/uploads/${file.filename}`, botId, req.impersonating);
+  }
+
+  @Post('appearance/avatar/generate')
+  @UseGuards(AuthGuard)
+  generateAvatar(@Req() req: AuthedRequest, @Query('botId') botId?: string) {
+    return this.cabinet.generateAvatar(req.companyId, botId, req.impersonating);
   }
 
   // Separate from /appearance: that's per-bot (persona name/color/etc.), this

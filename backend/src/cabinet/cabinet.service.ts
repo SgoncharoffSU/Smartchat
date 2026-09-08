@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { MessageRole, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { writeFile } from 'fs/promises';
+import { join } from 'path';
+import { UPLOADS_DIR } from '../uploads-path';
 import { PrismaService } from '../prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
@@ -717,6 +720,7 @@ export class CabinetService {
       gender: bot.gender,
       color: bot.widgetColor,
       position: bot.widgetPosition,
+      avatarUrl: bot.avatarUrl,
     };
   }
 
@@ -760,6 +764,63 @@ export class CabinetService {
 
     await this.prisma.bot.update({ where: { id: bot.id }, data });
     return this.getAppearance(companyId, bot.id);
+  }
+
+  // Backs both upload (KnowledgeController-style multer save, see
+  // CabinetController.uploadAvatar — the file's already on disk by the time
+  // this runs) and generation (below) — same lock check, same persisted
+  // field, same response shape as updateAppearance's other fields.
+  async setAvatar(companyId: string, avatarUrl: string, botId?: string, impersonating = false) {
+    const bot = await this.findOwnedBot(companyId, botId);
+    assertBotUnlockedForOwner(bot.managerLockedAt, impersonating);
+    await this.prisma.bot.update({ where: { id: bot.id }, data: { avatarUrl } });
+    return this.getAppearance(companyId, bot.id);
+  }
+
+  /**
+   * AI-generated bot avatar via RouterAI's OpenAI-compatible images endpoint
+   * — the SAME provider (and API key) already used for chat completions (see
+   * YandexGptService's own routerai branch), so this needs no new vendor
+   * integration. `openai/gpt-image-1` returns base64 PNG bytes directly (no
+   * download URL to fetch, unlike dall-e-3) — written straight to
+   * UPLOADS_DIR, same convention as KnowledgeController's file uploads.
+   */
+  async generateAvatar(companyId: string, botId: string | undefined, impersonating = false) {
+    const bot = await this.findOwnedBot(companyId, botId);
+    assertBotUnlockedForOwner(bot.managerLockedAt, impersonating);
+
+    const prompt =
+      `Круглая аватарка дружелюбного ИИ-ассистента по имени ${bot.name} для чат-бота компании. ` +
+      'Простой плоский минималистичный дизайн, приятная цветовая гамма, без текста и надписей, ' +
+      `${bot.gender === 'male' ? 'мужской' : 'женский'} образ, дружелюбное лицо, подходит для маленькой иконки чата.`;
+
+    const apiKey = process.env.ROUTERAI_API_KEY ?? '';
+    if (!apiKey) throw new BadRequestException('Генерация фото временно недоступна.');
+
+    let response: Response;
+    try {
+      response = await fetch('https://routerai.ru/api/v1/images/generations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: 'openai/gpt-image-1', prompt, n: 1, size: '1024x1024' }),
+      });
+    } catch (err) {
+      this.logger.warn(`generateAvatar: network error calling RouterAI — ${err instanceof Error ? err.message : err}`);
+      throw new BadRequestException('Не получилось сгенерировать фото — попробуйте ещё раз.');
+    }
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      this.logger.warn(`generateAvatar: RouterAI returned ${response.status} — ${body.slice(0, 300)}`);
+      throw new BadRequestException('Не получилось сгенерировать фото — попробуйте ещё раз.');
+    }
+    const json = (await response.json()) as { data?: { b64_json?: string }[] };
+    const b64 = json.data?.[0]?.b64_json;
+    if (!b64) throw new BadRequestException('Не получилось сгенерировать фото — попробуйте ещё раз.');
+
+    const filename = `${randomUUID()}.png`;
+    await writeFile(join(UPLOADS_DIR, filename), Buffer.from(b64, 'base64'));
+    const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'https://chat.glavinstrument.com';
+    return this.setAvatar(companyId, `${publicBaseUrl}/uploads/${filename}`, bot.id, impersonating);
   }
 
   /**

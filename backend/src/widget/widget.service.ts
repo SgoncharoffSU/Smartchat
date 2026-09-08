@@ -328,7 +328,7 @@ export class WidgetService {
         stage: 'trial_expired',
         dialogStatus: DialogStatus.closed,
         leadCaptured: false,
-        botName: bot.name,
+        botName: bot.name, botAvatarUrl: bot.avatarUrl,
       };
     }
 
@@ -366,7 +366,7 @@ export class WidgetService {
       // default exception filter, so a normal, expected cancellation never
       // shows up in the error log looking like a real failure.
       if (error instanceof SupersededTurnError || (error as { name?: string })?.name === 'AbortError') {
-        return { reply: '', buttons: [], stage: dialog.currentStageId ?? 'greeting', dialogStatus: dialog.status, leadCaptured: false, botName: bot.name };
+        return { reply: '', buttons: [], stage: dialog.currentStageId ?? 'greeting', dialogStatus: dialog.status, leadCaptured: false, botName: bot.name, botAvatarUrl: bot.avatarUrl };
       }
       throw error;
     }
@@ -406,7 +406,7 @@ export class WidgetService {
         stage: dialog.currentStageId ?? 'greeting',
         dialogStatus: dialog.status,
         leadCaptured: false,
-        botName: bot.name,
+        botName: bot.name, botAvatarUrl: bot.avatarUrl,
         messageId: saved.id,
       };
     }
@@ -430,7 +430,7 @@ export class WidgetService {
           stage: dialog.currentStageId ?? 'greeting',
           dialogStatus: dialog.status,
           leadCaptured: false,
-          botName: bot.name,
+          botName: bot.name, botAvatarUrl: bot.avatarUrl,
           messageId: firstAssistant.id,
         };
       }
@@ -455,7 +455,7 @@ export class WidgetService {
             stage: dialog.currentStageId ?? 'greeting',
             dialogStatus: dialog.status,
             leadCaptured: false,
-            botName: bot.name,
+            botName: bot.name, botAvatarUrl: bot.avatarUrl,
             messageId: lastAssistant.id,
           };
         }
@@ -1380,7 +1380,7 @@ export class WidgetService {
         stage: stage?.stageId ?? 'greeting',
         dialogStatus: DialogStatus.closed,
         leadCaptured: false,
-        botName: bot.name,
+        botName: bot.name, botAvatarUrl: bot.avatarUrl,
       };
     }
 
@@ -1432,7 +1432,7 @@ export class WidgetService {
         .escalate({
           botId: bot.id,
           companyId: bot.companyId,
-          botName: bot.name,
+          botName: bot.name, botAvatarUrl: bot.avatarUrl,
           dialogId: dialog.id,
           reason: 'unanswered',
           question: structuredReply.unansweredQuestion,
@@ -1468,7 +1468,7 @@ export class WidgetService {
         .escalate({
           botId: bot.id,
           companyId: bot.companyId,
-          botName: bot.name,
+          botName: bot.name, botAvatarUrl: bot.avatarUrl,
           dialogId: dialog.id,
           reason: 'dissatisfaction',
           question: structuredReply.dissatisfactionSignal,
@@ -1686,7 +1686,7 @@ export class WidgetService {
       stage: nextStageId,
       dialogStatus: status,
       leadCaptured: structuredReply.leadCaptured,
-      botName: bot.name,
+      botName: bot.name, botAvatarUrl: bot.avatarUrl,
       // The stored Message row's own id — one per TURN, not per visual
       // "bubble" (splitIntoBubbles is a client-side-only display split, see
       // chat.js). Lets the public 👎 on test-chat.html flag the actual DB
@@ -1707,7 +1707,7 @@ export class WidgetService {
 
     const dialog = await this.dialogs.findBySession(bot.id, sessionId);
     if (!dialog) {
-      return { messages: [], stage: null, dialogStatus: null, botName: bot.name };
+      return { messages: [], stage: null, dialogStatus: null, botName: bot.name, botAvatarUrl: bot.avatarUrl };
     }
 
     const messages = await this.messages.listByDialog(dialog.id);
@@ -1728,7 +1728,7 @@ export class WidgetService {
         })),
       stage: dialog.currentStageId,
       dialogStatus: dialog.status,
-      botName: bot.name,
+      botName: bot.name, botAvatarUrl: bot.avatarUrl,
     };
   }
 
@@ -2009,7 +2009,7 @@ export class WidgetService {
     bot: { name: string },
     dialog: { status: DialogStatus },
   ) {
-    return { reply: content, buttons, stage: 'training', dialogStatus: dialog.status, leadCaptured: false, botName: bot.name };
+    return { reply: content, buttons, stage: 'training', dialogStatus: dialog.status, leadCaptured: false, botName: bot.name, botAvatarUrl: bot.avatarUrl };
   }
 
   /**

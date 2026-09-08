@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "bots" ADD COLUMN "avatar_url" TEXT;

@@ -112,6 +112,23 @@
     }
   }
 
+  // Same set-once convention as updateBotName above — swaps the header's
+  // generic chat-bubble SVG icon for the owner's uploaded/generated photo
+  // (data.botAvatarUrl, see CabinetService.setAvatar/generateAvatar) the
+  // first time a response carries one; a bot without one just keeps the
+  // default icon, unchanged.
+  var botAvatarEl = document.querySelector('#chatHeader .avatar');
+  var botAvatarSet = false;
+  function updateBotAvatar(url) {
+    if (botAvatarSet || !url || !botAvatarEl) return;
+    var img = document.createElement('img');
+    img.src = url;
+    img.alt = '';
+    botAvatarEl.innerHTML = '';
+    botAvatarEl.appendChild(img);
+    botAvatarSet = true;
+  }
+
   // Same URL boundary rule as splitIntoBubbles below (stops before trailing
   // sentence punctuation, not just whitespace) — a real link handed to the
   // visitor (e.g. the cabinet registration link) must render as an actual
@@ -747,6 +764,7 @@
       var alreadyRenderedByPoll = Boolean(data.messageId && renderedMessageIds[data.messageId]);
       if (data.messageId) renderedMessageIds[data.messageId] = true;
       updateBotName(data.botName);
+      updateBotAvatar(data.botAvatarUrl);
       if (alreadyRenderedByPoll) {
         hideTyping(typingEl);
         lastBotText = data.reply;
@@ -978,6 +996,7 @@
         );
         var data = await res.json();
         updateBotName(data.botName);
+      updateBotAvatar(data.botAvatarUrl);
         if (data.messages && data.messages.length > 0) {
           // Only the outside teaser hook has happened so far (one assistant
           // message, no visitor reply yet). The visitor already read that hook

@@ -474,6 +474,13 @@ model Bot {
   // data-* attribute the loader already reads.
   widgetColor     String   @default("#4f46e5") @map("widget_color")
   widgetPosition  String   @default("bottom-right") @map("widget_position")
+  // Uploaded (a real photo, resized to a square) or AI-generated (RouterAI's
+  // /v1/images/generations — same provider already used for chat, see
+  // CabinetService.generateAvatar) — shown instead of the initials-in-a-
+  // circle fallback in both the cabinet preview and the real widget's chat
+  // head (chat.js: `data.avatarUrl`, baked into the embed snippet like
+  // widgetColor/widgetPosition above).
+  avatarUrl       String?  @map("avatar_url")
   // Set the first time widget.js reports the real page hostname it's running
   // on and it doesn't match sourceWebsite (the self-reported/chat-given
   // site) — gates the platform-admin Telegram alert to once per bot instead

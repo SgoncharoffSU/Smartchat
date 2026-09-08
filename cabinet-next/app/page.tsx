@@ -5,8 +5,8 @@ import {
   Activity, AlertCircle, ArrowRight, Bell, BookOpen, Bot, Check,
   Banknote, BrainCircuit, Building2, ChevronDown, CircleHelp, ClipboardCheck, Clock3, Copy, CreditCard, Database, Download, ExternalLink, Eye,
   FileUp, Flame, Globe2, GraduationCap, Headphones, History, Inbox, Info, LayoutDashboard, LifeBuoy, Link2, ListFilter, Lock,
-  MessageSquareText, MoreHorizontal, MousePointerClick, Plus, Rocket, Search, Send, Settings2,
-  ShieldCheck, SlidersHorizontal, Sparkles, Target, TestTube2, Trash2, Users, WandSparkles,
+  MessageSquareText, MoreHorizontal, MousePointerClick, Pipette, Plus, Rocket, Search, Send, Settings2,
+  ShieldCheck, SlidersHorizontal, Sparkles, Target, TestTube2, Trash2, Upload, Users, WandSparkles,
   ArrowLeft, Phone, Wallet, Workflow, X, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -2089,8 +2089,11 @@ function Scenario({ activeBotId }: { activeBotId: string | null }) {
 
 function WidgetSettings({ me, activeBotId, analytics, refetchAnalytics }: { me: CabinetMe; activeBotId: string | null; analytics: CabinetAnalytics; refetchAnalytics: () => void }) {
   const botQuery = activeBotId ? `?botId=${activeBotId}` : "";
-  type Appearance = { name: string; label: string | null; gender: string; color: string; position: string };
+  type Appearance = { name: string; label: string | null; gender: string; color: string; position: string; avatarUrl: string | null };
   const [form, setForm] = useState<Appearance | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -2128,7 +2131,41 @@ function WidgetSettings({ me, activeBotId, analytics, refetchAnalytics }: { me: 
     if (me?.companyName && companyName === null) setCompanyName(me.companyName);
   }, [me, companyName]);
 
-  const swatches = ["#4f46e5", "#8298ff", "#c8ff4d", "#ff9d6c", "#182b43"];
+  const swatches = ["#4f46e5", "#8298ff", "#c8ff4d", "#ff9d6c", "#182b43", "#2ca566", "#5367ca", "#a4372f", "#ffb020", "#0d1e30"];
+  // Real (not a fallback) only in Chrome/Edge — desktop only, no Safari/
+  // Firefox support as of this writing. Feature-detected at render time so
+  // the button simply doesn't appear anywhere it wouldn't work, rather than
+  // showing a button that throws when clicked.
+  const eyedropperSupported = typeof window !== "undefined" && "EyeDropper" in window;
+  const pickColor = () => {
+    const EyeDropperCtor = (window as unknown as { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
+    if (!EyeDropperCtor) return;
+    new EyeDropperCtor().open().then((result) => setForm((f) => f && { ...f, color: result.sRGBHex })).catch(() => {});
+  };
+
+  // Both hit the same /appearance shape as `save` below (avatarUrl included)
+  // so the UI updates from the real, just-persisted value — not an optimistic
+  // guess — the moment either finishes.
+  const uploadAvatar = (file: File) => {
+    setAvatarBusy(true);
+    setAvatarError(null);
+    const body = new FormData();
+    body.append("file", file);
+    fetch(`/api/cabinet/appearance/avatar${botQuery}`, { method: "POST", body })
+      .then((r) => (r.ok ? r.json() : r.json().catch(() => null).then((b) => Promise.reject(new Error(b?.message)))))
+      .then((data: Appearance) => setForm((f) => f && { ...f, avatarUrl: data.avatarUrl }))
+      .catch((e) => setAvatarError(e instanceof Error && e.message ? e.message : "Не получилось загрузить фото."))
+      .finally(() => setAvatarBusy(false));
+  };
+  const generateAvatar = () => {
+    setAvatarBusy(true);
+    setAvatarError(null);
+    fetch(`/api/cabinet/appearance/avatar/generate${botQuery}`, { method: "POST" })
+      .then((r) => (r.ok ? r.json() : r.json().catch(() => null).then((b) => Promise.reject(new Error(b?.message)))))
+      .then((data: Appearance) => setForm((f) => f && { ...f, avatarUrl: data.avatarUrl }))
+      .catch((e) => setAvatarError(e instanceof Error && e.message ? e.message : "Не получилось сгенерировать фото — попробуйте ещё раз."))
+      .finally(() => setAvatarBusy(false));
+  };
 
   const save = () => {
     if (!form) return;
@@ -2231,7 +2268,7 @@ function WidgetSettings({ me, activeBotId, analytics, refetchAnalytics }: { me: 
   ];
   const previewGreeting = displayVariants.find((v) => v.text)?.text || "Здравствуйте! Чем можем помочь?";
 
-  return <div className="settings-layout"><section className="settings-form"><div className="settings-section"><div className="section-title"><span><Bot /></span><div><h2>Личность бота</h2><p>То, как он представляется посетителю</p></div></div><label><span>Название компании</span><input value={companyName ?? ""} onChange={(e) => setCompanyName(e.target.value)} placeholder="Загружаю…" /></label><div className="two-fields"><label><span>Имя бота</span><input value={form?.name ?? ""} onChange={(e) => setForm((f) => f && { ...f, name: e.target.value })} placeholder="Загружаю…" /></label><label><span>Голос</span><Select value={form?.gender ?? "female"} onValueChange={(v) => setForm((f) => f && { ...f, gender: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="male">Мужской</SelectItem><SelectItem value="female">Женский</SelectItem></SelectContent></Select></label></div></div><div className="settings-section"><div className="section-title"><span><Sparkles /></span><div><h2>Внешний вид</h2><p>Цвет и расположение виджета</p></div></div><div className="color-field"><span>Акцентный цвет</span><div>{swatches.map(c => <button aria-label={`Цвет ${c}`} className={form?.color === c ? "active" : ""} style={{ background: c }} onClick={() => setForm((f) => f && { ...f, color: c })} key={c} />)}<input value={form?.color ?? ""} onChange={(e) => setForm((f) => f && { ...f, color: e.target.value })} /></div></div><label><span>Расположение</span><Select value={form?.position ?? "bottom-right"} onValueChange={(v) => setForm((f) => f && { ...f, position: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="bottom-right">Справа внизу</SelectItem><SelectItem value="bottom-left">Слева внизу</SelectItem></SelectContent></Select></label></div><div className="settings-section"><div className="section-title"><span><TestTube2 /></span><div><h2>Приветствия</h2><p>Сравнивайте варианты в A/B/C/D-тесте — реальные показы и конверсия по каждому</p></div></div>{displayVariants.length === 0 && <p style={{ color: "#7d8992", fontSize: 11, margin: "0 0 10px" }}>Вариантов пока нет — добавьте первый ниже.</p>}{displayVariants.map(v => <div className="greeting" key={v.label}><b>{v.label}</b><p style={{ margin: 0, fontSize: 11, lineHeight: 1.5 }}>{v.text || "—"}</p><StatusPill tone={v.shown === 0 ? "gray" : "blue"}>{v.shown === 0 ? "Ещё не показан" : `${Math.round(v.conversionRate)}% из ${v.engaged}`}</StatusPill></div>)}<label style={{ marginTop: displayVariants.length ? 14 : 0 }}><span>Новый вариант приветствия</span><input value={newVariant} onChange={(e) => setNewVariant(e.target.value)} placeholder="Например: А вы знали, что баня прогревается за час?" /></label>{variantError && <p className="form-error">{variantError}</p>}<button className="add-greeting" disabled={addingVariant || !newVariant.trim()} onClick={addVariant}><Plus /> {addingVariant ? "Добавляю…" : "Добавить вариант"}</button></div>{saveError && <p className="form-error">{saveError}</p>}<Button className="save-button" disabled={!form || saving} style={{ background: saved ? "#153526" : undefined }} onClick={save}>{saved ? <><Check />Сохранено</> : saving ? "Сохраняю…" : "Сохранить изменения"}</Button></section><aside className="live-preview"><div className="preview-label"><span><i /> Предпросмотр</span><button><ExternalLink /></button></div><div className="preview-site"><div className="preview-nav" /><div className="preview-copy"><i /><i /><i /></div><div className="floating-widget" style={{ ["--widget-accent" as string]: form?.color ?? "#4f46e5" }}><div className="widget-head"><span className="bot-avatar">{initials(form?.name || "Бот")}</span><div><b>{form?.name || "Бот"}</b><small><i /> На связи</small></div></div><p>{previewGreeting}</p><div className="widget-input"><span>Напишите сообщение</span><button><Send /></button></div></div></div></aside></div>;
+  return <div className="settings-layout"><section className="settings-form"><div className="settings-section"><div className="section-title"><span><Bot /></span><div><h2>Личность бота</h2><p>То, как он представляется посетителю</p></div></div><label><span>Название компании</span><input value={companyName ?? ""} onChange={(e) => setCompanyName(e.target.value)} placeholder="Загружаю…" /></label><div className="two-fields"><label><span>Имя бота</span><input value={form?.name ?? ""} onChange={(e) => setForm((f) => f && { ...f, name: e.target.value })} placeholder="Загружаю…" /></label><label><span>Голос</span><Select value={form?.gender ?? "female"} onValueChange={(v) => setForm((f) => f && { ...f, gender: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="male">Мужской</SelectItem><SelectItem value="female">Женский</SelectItem></SelectContent></Select></label></div><div className="avatar-field"><span>Фото бота</span><div className="avatar-field-row"><span className="avatar-preview">{form?.avatarUrl ? <img src={form.avatarUrl} alt="" /> : initials(form?.name || "Бот")}</span><div className="avatar-field-actions"><Button variant="outline" type="button" disabled={avatarBusy} onClick={() => fileInputRef.current?.click()}><Upload />Загрузить</Button><Button variant="outline" type="button" disabled={avatarBusy} onClick={generateAvatar}><WandSparkles />{avatarBusy ? "Секунду…" : "Сгенерировать"}</Button></div><input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); e.target.value = ""; }} /></div>{avatarError && <p className="form-error">{avatarError}</p>}</div></div><div className="settings-section"><div className="section-title"><span><Sparkles /></span><div><h2>Внешний вид</h2><p>Цвет и расположение виджета</p></div></div><div className="color-field"><span>Акцентный цвет</span><div>{swatches.map(c => <button aria-label={`Цвет ${c}`} className={form?.color === c ? "active" : ""} style={{ background: c }} onClick={() => setForm((f) => f && { ...f, color: c })} key={c} />)}{eyedropperSupported && <button type="button" aria-label="Пипетка — выбрать цвет с экрана" className="eyedropper-btn" onClick={pickColor}><Pipette /></button>}<input value={form?.color ?? ""} onChange={(e) => setForm((f) => f && { ...f, color: e.target.value })} /></div></div><label><span>Расположение</span><Select value={form?.position ?? "bottom-right"} onValueChange={(v) => setForm((f) => f && { ...f, position: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="bottom-right">Справа внизу</SelectItem><SelectItem value="bottom-left">Слева внизу</SelectItem></SelectContent></Select></label></div><div className="settings-section"><div className="section-title"><span><TestTube2 /></span><div><h2>Приветствия</h2><p>Сравнивайте варианты в A/B/C/D-тесте — реальные показы и конверсия по каждому</p></div></div>{displayVariants.length === 0 && <p style={{ color: "#7d8992", fontSize: 11, margin: "0 0 10px" }}>Вариантов пока нет — добавьте первый ниже.</p>}{displayVariants.map(v => <div className="greeting" key={v.label}><b>{v.label}</b><p style={{ margin: 0, fontSize: 11, lineHeight: 1.5 }}>{v.text || "—"}</p><StatusPill tone={v.shown === 0 ? "gray" : "blue"}>{v.shown === 0 ? "Ещё не показан" : `${Math.round(v.conversionRate)}% из ${v.engaged}`}</StatusPill></div>)}<label style={{ marginTop: displayVariants.length ? 14 : 0 }}><span>Новый вариант приветствия</span><input value={newVariant} onChange={(e) => setNewVariant(e.target.value)} placeholder="Например: А вы знали, что баня прогревается за час?" /></label>{variantError && <p className="form-error">{variantError}</p>}<button className="add-greeting" disabled={addingVariant || !newVariant.trim()} onClick={addVariant}><Plus /> {addingVariant ? "Добавляю…" : "Добавить вариант"}</button></div>{saveError && <p className="form-error">{saveError}</p>}<Button className="save-button" disabled={!form || saving} style={{ background: saved ? "#153526" : undefined }} onClick={save}>{saved ? <><Check />Сохранено</> : saving ? "Сохраняю…" : "Сохранить изменения"}</Button></section><aside className="live-preview"><div className="preview-label"><span><i /> Предпросмотр</span><button><ExternalLink /></button></div><div className="preview-site"><div className="preview-nav" /><div className="preview-copy"><i /><i /><i /></div><div className="floating-widget" style={{ ["--widget-accent" as string]: form?.color ?? "#4f46e5" }}><div className="widget-head"><span className="bot-avatar">{form?.avatarUrl ? <img src={form.avatarUrl} alt="" /> : initials(form?.name || "Бот")}</span><div><b>{form?.name || "Бот"}</b><small><i /> На связи</small></div></div><p>{previewGreeting}</p><div className="widget-input"><span>Напишите сообщение</span><button><Send /></button></div></div></div></aside></div>;
 }
 
 function Installation() {
