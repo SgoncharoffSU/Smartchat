@@ -783,23 +783,35 @@ export class CabinetService {
    * YandexGptService's own routerai branch), so this needs no new vendor
    * integration. `recraft/recraft-v3` (not `openai/gpt-image-1`, tried
    * first — a real ~35-45s per generation, unacceptable for an owner sitting
-   * in the cabinet waiting: "долго нельзя, это неклиентоориентировано")
-   * answers in ~5-8s and returns base64 WEBP bytes directly (no download URL
-   * to fetch) — written straight to UPLOADS_DIR, same convention as
-   * KnowledgeController's file uploads. One automatic retry on failure: a
-   * transient upstream server_error was observed live even on a plain
-   * request, and at this speed a silent retry costs nothing the owner would
-   * notice, unlike surfacing an error for something that usually just works
-   * the second time.
+   * in the cabinet waiting: "долго нельзя, это неклиентоориентировано", and
+   * flaky on top of slow — two live retries in a row both came back a plain
+   * upstream server_error) answers in ~5-8s and returns base64 WEBP bytes
+   * directly (no download URL to fetch) — written straight to UPLOADS_DIR,
+   * same convention as KnowledgeController's file uploads.
+   *
+   * Prompt is in ENGLISH, not Russian, and never includes the bot's own
+   * name — both found live, by actually decoding and looking at what came
+   * back (found live: "генерирует ужасные картинки с непонятными
+   * артефактами"): a Cyrillic prompt makes Recraft ignore the request
+   * entirely and return an unrelated photo/illustration (a stock "woman
+   * reading in a library" scene, repeatedly, regardless of style), and
+   * including the bot's name draws a garbled name-tag/speech-bubble into the
+   * image despite "no text" — an English, name-free prompt reliably comes
+   * back as a clean icon. One automatic retry on failure: a transient
+   * upstream server_error was observed live even on a plain request, and at
+   * this speed a silent retry costs nothing the owner would notice, unlike
+   * surfacing an error for something that usually just works the second
+   * time.
    */
   async generateAvatar(companyId: string, botId: string | undefined, impersonating = false) {
     const bot = await this.findOwnedBot(companyId, botId);
     assertBotUnlockedForOwner(bot.managerLockedAt, impersonating);
 
     const prompt =
-      `Круглая аватарка дружелюбного ИИ-ассистента по имени ${bot.name} для чат-бота компании. ` +
-      'Простой плоский минималистичный дизайн, приятная цветовая гамма, без текста и надписей, ' +
-      `${bot.gender === 'male' ? 'мужской' : 'женский'} образ, дружелюбное лицо, подходит для маленькой иконки чата.`;
+      `Round avatar icon of a friendly ${bot.gender === 'male' ? 'male' : 'female'} AI customer support ` +
+      'assistant for a company chatbot. Simple flat minimalist design, cheerful color palette, warm ' +
+      'friendly face. Absolutely no text, no letters, no words, no speech bubbles, no numbers anywhere ' +
+      'in the image.';
 
     const apiKey = process.env.ROUTERAI_API_KEY ?? '';
     if (!apiKey) throw new BadRequestException('Генерация фото временно недоступна.');
@@ -810,7 +822,12 @@ export class CabinetService {
         response = await fetch('https://routerai.ru/api/v1/images/generations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ model: 'recraft/recraft-v3', prompt, n: 1, size: '1024x1024' }),
+          // style: 'icon' is load-bearing, not cosmetic — without it Recraft
+          // defaults to photorealistic and just ignores the "плоский
+          // дизайн/иконка" wording in the prompt entirely (found live: a
+          // random photo of a woman reading in a library came back for a
+          // "круглая аватарка... флэт дизайн" prompt with no style set).
+          body: JSON.stringify({ model: 'recraft/recraft-v3', prompt, n: 1, size: '1024x1024', style: 'icon' }),
         });
       } catch (err) {
         this.logger.warn(`generateAvatar: network error calling RouterAI — ${err instanceof Error ? err.message : err}`);
