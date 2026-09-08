@@ -24,6 +24,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ImplementationManagerModule } from './implementation-manager/implementation-manager.module';
 import { ManagerNotesModule } from './manager-notes/manager-notes.module';
 import { AutoTestsModule } from './auto-tests/auto-tests.module';
+import { QaChecklistModule } from './qa-checklist/qa-checklist.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { AutoTestsModule } from './auto-tests/auto-tests.module';
     ImplementationManagerModule,
     ManagerNotesModule,
     AutoTestsModule,
+    QaChecklistModule,
   ],
 })
 export class AppModule implements NestModule {
