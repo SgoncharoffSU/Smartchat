@@ -57,23 +57,28 @@
   if (params.get('mode') === 'fullscreen') {
     document.body.classList.add('fullscreen');
   }
-  // Owner-configurable in the cabinet's "Обучение бота" section — the loader
+  // Owner-configurable in the cabinet's "Внешний вид" — the loader
   // (widget.js) and the cabinet's own pane URLs both pass this through; chat.css
   // reads it via the --primary custom property instead of a hardcoded hex.
-  var colorParam = params.get('color');
-  if (colorParam && /^#[0-9a-fA-F]{6}$/.test(colorParam)) {
-    document.documentElement.style.setProperty('--primary', colorParam);
+  // A function, not inline, so a LATER smartchat:set-color message (see the
+  // bottom of this file — widget.js's own live-config patch, for a color
+  // change made in the cabinet after this iframe already loaded) reruns the
+  // exact same logic instead of a second, easily-drifting copy of it.
+  function applyPrimaryColor(color) {
+    document.documentElement.style.setProperty('--primary', color);
     // Text/icon color for anything sitting ON TOP of --primary (the visitor's
-    // own bubble, the navigate-page CTA button) — a light accent (picked via
-    // the cabinet's swatches or eyedropper) needs dark text, not the
-    // permanently-white text those elements used to hardcode. Same simple
-    // luminance heuristic as the cabinet's own live preview.
-    var r = parseInt(colorParam.slice(1, 3), 16);
-    var g = parseInt(colorParam.slice(3, 5), 16);
-    var b = parseInt(colorParam.slice(5, 7), 16);
+    // own bubble, the navigate-page CTA button, the send button) — a light
+    // accent (picked via the cabinet's swatches or eyedropper) needs dark
+    // text, not the permanently-white text those elements used to hardcode.
+    // Same simple luminance heuristic as the cabinet's own live preview.
+    var r = parseInt(color.slice(1, 3), 16);
+    var g = parseInt(color.slice(3, 5), 16);
+    var b = parseInt(color.slice(5, 7), 16);
     var luminance = 0.299 * r + 0.587 * g + 0.114 * b;
     document.documentElement.style.setProperty('--primary-contrast', luminance < 140 ? '#fff' : '#1a1a1a');
   }
+  var colorParam = params.get('color');
+  if (colorParam && /^#[0-9a-fA-F]{6}$/.test(colorParam)) applyPrimaryColor(colorParam);
   // widget.js now preloads this iframe (network fetch, JS parse/compile) the
   // moment the outside teaser bubble becomes visible, well before the visitor
   // actually clicks — but must NOT also trigger loadHistory()'s real
@@ -1147,6 +1152,23 @@
       .catch(function (err) { console.error('[Smartchat]', err); });
   }
   setInterval(pollForNewMessages, POLL_INTERVAL_MS);
+
+  // Registered unconditionally (not just inside the !autostart branch below)
+  // — smartchat:set-color can arrive at any point in the session, not only
+  // before the first start. widget.js's own live-config patch (see its
+  // applyLiveConfig) used to only ever reach the OUTSIDE launcher; an already
+  // preloaded-or-open iframe kept whatever color it was first built with
+  // forever (found live: "в настройках оранжевый... только кружок чата
+  // нормальный" — the launcher outside had live-patched to orange, this
+  // iframe's own header/bubbles/send button hadn't). Messaging in the new
+  // color live is strictly better than widget.js re-navigating the iframe
+  // (its OTHER option) — never disrupts a conversation already in progress.
+  window.addEventListener('message', function (e) {
+    if (e.source !== window.parent || !e.data) return;
+    if (e.data.type === 'smartchat:set-color' && typeof e.data.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(e.data.color)) {
+      applyPrimaryColor(e.data.color);
+    }
+  });
 
   if (autostart) {
     loadHistory();

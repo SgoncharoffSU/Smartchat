@@ -334,6 +334,14 @@
     if (e.source !== iframe.contentWindow || !e.data) return;
     if (e.data.type === 'smartchat:ready') {
       iframeReady = true;
+      // Always, not just when a live-config update happened to change it —
+      // buildChatUiUrl() already bakes the current widgetColor into the
+      // iframe's own URL at load time, but this covers the same race
+      // 'smartchat:start' below has its own startRequested flag for: a
+      // configPromise color change that lands AFTER the iframe started
+      // loading but BEFORE chat.js's listener was actually registered would
+      // otherwise just be lost (postMessage never buffers).
+      iframe.contentWindow.postMessage({ type: 'smartchat:set-color', color: widgetColor }, '*');
       if (startRequested) {
         iframe.contentWindow.postMessage({ type: 'smartchat:start', quickReply: pendingQuickReply }, '*');
         pendingQuickReply = undefined;
@@ -1178,12 +1186,23 @@
       applyPulseStyle();
     }
     applyLauncherPosition();
+    // Rebuilt so the NEXT time the iframe loads fresh (was never preloaded
+    // yet) it gets the current color baked in from the start — no flash, no
+    // message needed. An iframe that's ALREADY loaded gets a live
+    // smartchat:set-color message instead of being re-navigated: messaging
+    // works whether it's merely preloaded or the visitor is mid-conversation
+    // (isOpen), and unlike a reload it never disrupts either (found live:
+    // "в настройках оранжевый... только кружок чата нормальный" — the
+    // outside launcher WAS live-patching correctly, this iframe's own
+    // header/bubbles/send button had no such path at all before).
+    // Only if already ready — postMessage never buffers, and if it's not
+    // ready yet the 'smartchat:ready' handler above always sends the
+    // current widgetColor itself the moment it fires, so there's nothing
+    // further to do here for that case.
+    if (changedColor && iframeLoaded && iframeReady) {
+      iframe.contentWindow.postMessage({ type: 'smartchat:set-color', color: widgetColor }, '*');
+    }
     chatUiUrl = buildChatUiUrl();
-    // Only re-navigates an iframe that was merely PRELOADED (teaser-visible,
-    // autostart=0, no real conversation yet) — never one the visitor has
-    // actually opened (isOpen), which would otherwise yank an in-progress
-    // chat out from under them for the sake of a color update.
-    if (iframeLoaded && !isOpen) iframe.src = chatUiUrl;
     applyIframeLayout();
   });
 })();
