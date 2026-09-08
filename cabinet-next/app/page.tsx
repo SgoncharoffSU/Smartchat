@@ -1080,11 +1080,20 @@ function PendingEscalationRow({
       )}
 
       {dialogOpen && !confirmed && !taughtAs && (
-        <div style={{ marginTop: 8, paddingLeft: 34, maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ marginTop: 8, paddingLeft: 34, paddingRight: 10, maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
           {dialogLoading ? <small style={{ color: "#7d8992" }}>Загружаю переписку…</small>
             : !dialogMessages || dialogMessages.length === 0 ? <small style={{ color: "#7d8992" }}>Переписка недоступна.</small>
             : dialogMessages.map((m) => (
-              <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} key={m.id} style={{ margin: 0, maxWidth: "90%" }}>
+              // No maxWidth override here anymore — this card is much
+              // narrower than the real Dialogs panel .message was designed
+              // for, and the old 90% (measured against a box with 34px of
+              // LEFT padding but none on the right) left the bubble's own
+              // right edge flush against the card's edge with no breathing
+              // room, reading as "sticking out" (found live, screenshot: a
+              // second report after the text-wrap fix — that one was real
+              // and is fixed, this is a separate width issue). The class's
+              // own max-width:min(520px,78%) already leaves real margin.
+              <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} key={m.id} style={{ margin: 0 }}>
                 <p style={{ margin: 0 }}>{m.content}</p>
                 <small>{fmtMessageTime(m.createdAt)} МСК</small>
                 {/* Point at a SPECIFIC bad reply right here, not just an
