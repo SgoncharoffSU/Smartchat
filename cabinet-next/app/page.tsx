@@ -739,6 +739,46 @@ function Readiness({ setView, readiness }: { setView: (v: View) => void; readine
 // by default — a resolved queue isn't something to lead with, but it has
 // to be reachable.
 type ProcessedEscalation = { id: string; reason: string; question: string; botReply: string | null; answer: string | null; processedAt: string };
+
+// Same "Показать переписку" + per-message 👎 the pending queue already has
+// (PendingEscalationRow) — a "reserved/completed" row that could only show
+// its own one-line question/answer wasn't the real registry the old
+// cabinet had (found live: "переписка стала недоступна... реестра
+// выполненных, как в старой версии, тут нет?"). Own row component (not a
+// shared one with PendingEscalationRow) so each item's open/loading state
+// is independent without threading it through the list — matches this
+// file's own per-row-owns-its-async-state convention elsewhere.
+function ProcessedRow({ e, busy, onUnprocess }: { e: ProcessedEscalation; busy: boolean; onUnprocess: () => void }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMessages, setDialogMessages] = useState<DialogTranscriptMessage[] | null>(null);
+  const [dialogLoading, setDialogLoading] = useState(false);
+  const toggleDialog = () => {
+    if (dialogOpen) { setDialogOpen(false); return; }
+    setDialogOpen(true);
+    if (dialogMessages !== null) return;
+    setDialogLoading(true);
+    fetchJsonWithRetry<{ messages: DialogTranscriptMessage[] }>(`/api/cabinet/escalations/${e.id}/dialog`)
+      .then((data) => setDialogMessages(data?.messages ?? (data === null ? null : [])))
+      .finally(() => setDialogLoading(false));
+  };
+
+  return <div className="escalation-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <span className="check-state"><Check /></span>
+      <div className="escalation-text">
+        <b>{ESCALATION_REASON_LABELS[e.reason] || "Нет ответа"}</b>
+        <small>{e.question}{(e.answer || e.botReply) ? ` — ${e.answer || e.botReply}` : ""}</small>
+      </div>
+    </div>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <Button variant="outline" onClick={toggleDialog}>{dialogOpen ? "Скрыть переписку" : "Показать переписку"}</Button>
+      <small style={{ color: "#7d8992" }}>Обработано {fmtDialogDate(e.processedAt)}</small>
+      <Button variant="outline" disabled={busy} onClick={onUnprocess}>Вернуть в очередь</Button>
+    </div>
+    {dialogOpen && <DialogTranscript loading={dialogLoading} messages={dialogMessages} />}
+  </div>;
+}
+
 function ProcessedList({ items, busyId, onUnprocess }: { items: ProcessedEscalation[]; busyId: string | null; onUnprocess: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   if (items.length === 0) return null;
@@ -747,19 +787,7 @@ function ProcessedList({ items, busyId, onUnprocess }: { items: ProcessedEscalat
       {open ? "Скрыть обработанные" : `Показать обработанные (${items.length})`}
     </button>
     {open && <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
-      {items.map((e) => <div className="escalation-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }} key={e.id}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span className="check-state"><Check /></span>
-          <div className="escalation-text">
-            <b>{ESCALATION_REASON_LABELS[e.reason] || "Нет ответа"}</b>
-            <small>{e.question}{(e.answer || e.botReply) ? ` — ${e.answer || e.botReply}` : ""}</small>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <small style={{ color: "#7d8992" }}>Обработано {fmtDialogDate(e.processedAt)}</small>
-          <Button variant="outline" disabled={busyId === e.id} onClick={() => onUnprocess(e.id)}>Вернуть в очередь</Button>
-        </div>
-      </div>)}
+      {items.map((e) => <ProcessedRow key={e.id} e={e} busy={busyId === e.id} onUnprocess={() => onUnprocess(e.id)} />)}
     </div>}
   </article>;
 }
@@ -942,6 +970,57 @@ function DislikeControl({ messageId, initiallyDisliked, initiallyDone }: { messa
   );
 }
 
+type DialogTranscriptMessage = { id: string; role: string; content: string; createdAt: string; dislikedAt: string | null; dislikeResolvedAt: string | null };
+
+// Shared by PendingEscalationRow and ProcessedRow — was copy-pasted between
+// the two once ProcessedRow needed its own "Показать переписку" (found live:
+// "переписка стала недоступна... реестра выполненных, как в старой версии,
+// тут нет?"), and this exact block has already needed two separate fixes
+// today (DislikeControl-as-sibling, width:auto over max-content) — a third
+// copy anywhere else would mean re-finding and re-applying both by hand
+// (found via code-review). One definition now; both rows just render it.
+function DialogTranscript({ loading, messages }: { loading: boolean; messages: DialogTranscriptMessage[] | null }) {
+  return <div style={{ marginTop: 8, paddingLeft: 34, paddingRight: 10, maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+    {loading ? <small style={{ color: "#7d8992" }}>Загружаю переписку…</small>
+      : !messages || messages.length === 0 ? <small style={{ color: "#7d8992" }}>Переписка недоступна.</small>
+      : messages.map((m) => (
+        // DislikeControl is a SIBLING of .message, not a child — .message is
+        // width:max-content (shrink-wraps to its own text), and the
+        // correction form's buttons (whitespace-nowrap, per Button's own
+        // className) don't shrink at all, so nesting it inside used to force
+        // the whole bubble to stretch to fit the widest button, which then
+        // rendered past the card's edge with no room to lay out (found live,
+        // screenshot: buttons "крупные и не позиционируются"). As a sibling
+        // it takes its own natural width, independent of the bubble.
+        //
+        // width:auto on the bubble itself (overriding .message's own
+        // width:max-content) for a related reason — max-content intrinsic
+        // sizing measures a wrappable sentence as if it were all on ONE
+        // line (overflow-wrap only affects wrapping AFTER the width is
+        // chosen, not the max-content calculation), so a long bot reply
+        // could compute far wider than this narrow card and — nested flex-
+        // in-grid with align-items:stretch at every level — drag the whole
+        // card wider than its column, spilling into the neighbor (found
+        // live, screenshot: "съехали кнопки"). width:auto respects
+        // max-width against the actually-resolved container width instead.
+        <Fragment key={m.id}>
+          <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} style={{ margin: 0, width: "auto" }}>
+            <p style={{ margin: 0 }}>{m.content}</p>
+            <small>{fmtMessageTime(m.createdAt)} МСК</small>
+          </div>
+          {/* Point at a SPECIFIC bad reply right here, not just an overall
+             verdict on the whole escalation — same backend endpoint the
+             test-chat's own 👎 already uses (see DislikesService
+             .markDisliked's own comment: "Lets the owner flag a bad reply
+             from anywhere it's shown in the cabinet (e.g. the "Требует
+             внимания" dialog viewer)" — that wiring never actually happened
+             in this cabinet until now, found live). */}
+          {m.role === "assistant" && <DislikeControl messageId={m.id} initiallyDisliked={Boolean(m.dislikedAt)} initiallyDone={Boolean(m.dislikeResolvedAt)} />}
+        </Fragment>
+      ))}
+  </div>;
+}
+
 // Draft-then-confirm answer flow for one pending escalation: preview never
 // writes anything (POST .../answer/preview, with the owner's own draft text
 // or empty to have the bot suggest one from the business's own systemPrompt),
@@ -1007,7 +1086,7 @@ function PendingEscalationRow({
   // as the "Диалоги" AI-резюме: a real LLM/DB cost per open, only paid for
   // rows the owner actually expands.
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMessages, setDialogMessages] = useState<Array<{ id: string; role: string; content: string; createdAt: string; dislikedAt: string | null; dislikeResolvedAt: string | null }> | null>(null);
+  const [dialogMessages, setDialogMessages] = useState<DialogTranscriptMessage[] | null>(null);
   const [dialogLoading, setDialogLoading] = useState(false);
   const toggleDialog = () => {
     if (dialogOpen) { setDialogOpen(false); return; }
@@ -1018,7 +1097,7 @@ function PendingEscalationRow({
     // cached as a permanent "Переписка недоступна." — a null result here
     // means "fetch genuinely failed", left as null so the NEXT click retries
     // instead of re-showing the same stale failure forever.
-    fetchJsonWithRetry<{ messages: Array<{ id: string; role: string; content: string; createdAt: string; dislikedAt: string | null; dislikeResolvedAt: string | null }> }>(`/api/cabinet/escalations/${e.id}/dialog`)
+    fetchJsonWithRetry<{ messages: DialogTranscriptMessage[] }>(`/api/cabinet/escalations/${e.id}/dialog`)
       .then((data) => setDialogMessages(data?.messages ?? (data === null ? null : [])))
       .finally(() => setDialogLoading(false));
   };
@@ -1120,53 +1199,7 @@ function PendingEscalationRow({
         </div>
       )}
 
-      {dialogOpen && !confirmed && !taughtAs && (
-        <div style={{ marginTop: 8, paddingLeft: 34, paddingRight: 10, maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
-          {dialogLoading ? <small style={{ color: "#7d8992" }}>Загружаю переписку…</small>
-            : !dialogMessages || dialogMessages.length === 0 ? <small style={{ color: "#7d8992" }}>Переписка недоступна.</small>
-            : dialogMessages.map((m) => (
-              // DislikeControl is a SIBLING of .message now, not a child —
-              // .message is width:max-content (shrink-wraps to its own
-              // text), and the correction form's buttons (whitespace-nowrap,
-              // per Button's own className) don't shrink at all, so nesting
-              // it inside used to force the whole bubble to stretch to fit
-              // the widest button — the buttons themselves then rendered
-              // past the card's edge with no room to lay out (found live,
-              // screenshot: buttons "крупные и не позиционируются"). As a
-              // sibling in this flex column it just takes its own natural
-              // width, independent of the bubble's sizing.
-              //
-              // width:auto (overriding .message's own width:max-content)
-              // for the SAME underlying reason — max-content intrinsic
-              // sizing measures a wrappable sentence as if it were all on
-              // ONE line (overflow-wrap only affects wrapping AFTER the
-              // width is chosen, not the max-content calculation itself),
-              // so a long bot reply could compute far wider than this
-              // narrow card and — because this card sits in a nested flex-
-              // in-grid chain with `align-items:stretch` at every level —
-              // drag the whole card wider than its grid column, visibly
-              // spilling into "Как это работает" next to it (found live,
-              // screenshot: "съехали кнопки"). width:auto respects
-              // max-width against the actual resolved container width
-              // instead of an unwrapped intrinsic one.
-              <Fragment key={m.id}>
-                <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} style={{ margin: 0, width: "auto" }}>
-                  <p style={{ margin: 0 }}>{m.content}</p>
-                  <small>{fmtMessageTime(m.createdAt)} МСК</small>
-                </div>
-                {/* Point at a SPECIFIC bad reply right here, not just an
-                   overall verdict on the whole escalation — same backend
-                   endpoint the test-chat's own 👎 already uses (see
-                   DislikesService.markDisliked's own comment: "Lets the
-                   owner flag a bad reply from anywhere it's shown in the
-                   cabinet (e.g. the "Требует внимания" dialog viewer)" —
-                   that wiring never actually happened in this cabinet
-                   until now, found live). */}
-                {m.role === "assistant" && <DislikeControl messageId={m.id} initiallyDisliked={Boolean(m.dislikedAt)} initiallyDone={Boolean(m.dislikeResolvedAt)} />}
-              </Fragment>
-            ))}
-        </div>
-      )}
+      {dialogOpen && !confirmed && !taughtAs && <DialogTranscript loading={dialogLoading} messages={dialogMessages} />}
 
       {confirmed && (
         <p style={{ color: "#237a52", fontSize: 12, margin: 0, paddingLeft: 34 }}>
