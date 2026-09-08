@@ -439,10 +439,17 @@ export class CabinetController {
     return this.cabinet.setAvatar(req.companyId, `${publicBaseUrl}/uploads/${file.filename}`, botId, req.impersonating);
   }
 
+  // Body gender is OPTIONAL and only ever a same-turn override — the owner
+  // picking "Мужской" and clicking "Сгенерировать" without hitting "Сохранить
+  // изменения" first must still generate a male photo, not silently fall
+  // back to whatever gender happens to be persisted (found live: switched to
+  // "Мужской" in the form, generated, got a female photo — the endpoint was
+  // reading bot.gender straight from the DB, oblivious to the unsaved edit
+  // sitting in the form).
   @Post('appearance/avatar/generate')
   @UseGuards(AuthGuard)
-  generateAvatar(@Req() req: AuthedRequest, @Query('botId') botId?: string) {
-    return this.cabinet.generateAvatar(req.companyId, botId, req.impersonating);
+  generateAvatar(@Req() req: AuthedRequest, @Body() body: { gender?: string }, @Query('botId') botId?: string) {
+    return this.cabinet.generateAvatar(req.companyId, botId, req.impersonating, body?.gender);
   }
 
   // Separate from /appearance: that's per-bot (persona name/color/etc.), this

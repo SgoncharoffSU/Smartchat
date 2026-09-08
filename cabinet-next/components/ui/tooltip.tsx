@@ -33,9 +33,10 @@ function TooltipTrigger({
 function TooltipContent({
   className,
   sideOffset = 0,
+  showArrow = true,
   children,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+}: React.ComponentProps<typeof TooltipPrimitive.Content> & { showArrow?: boolean }) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -48,7 +49,13 @@ function TooltipContent({
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
+        {/* Optional — the arrow's own translate-y trick (calc(-50% - 2px), to
+            sit flush on the content's border) overlapped short/narrow text
+            instead of pointing at it cleanly for at least one real trigger
+            (found live, screenshot: the diamond sat ON TOP of "ого" in
+            "любого"). Rather than fight that geometry for every future short
+            tooltip, callers can just turn it off. */}
+        {showArrow && <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />}
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   )

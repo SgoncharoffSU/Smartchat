@@ -803,12 +803,17 @@ export class CabinetService {
    * surfacing an error for something that usually just works the second
    * time.
    */
-  async generateAvatar(companyId: string, botId: string | undefined, impersonating = false) {
+  async generateAvatar(companyId: string, botId: string | undefined, impersonating = false, genderOverride?: string) {
     const bot = await this.findOwnedBot(companyId, botId);
     assertBotUnlockedForOwner(bot.managerLockedAt, impersonating);
 
+    // Whatever's currently showing in the form, if given — see the
+    // controller's own comment for why this can legitimately differ from
+    // bot.gender (an edit not saved yet). Falls back to the persisted value
+    // for any other caller of this method that doesn't pass one.
+    const effectiveGender = BOT_GENDERS.includes(genderOverride ?? '') ? genderOverride : bot.gender;
     const prompt =
-      `Professional headshot-style avatar portrait of a friendly ${bot.gender === 'male' ? 'male' : 'female'} ` +
+      `Professional headshot-style avatar portrait of a friendly ${effectiveGender === 'male' ? 'male' : 'female'} ` +
       'customer support assistant for a company chatbot. Warm genuine smile, neutral soft-colored ' +
       'background, clean modern look, photorealistic. Absolutely no text, no letters, no words, no ' +
       'logos anywhere in the image.';
