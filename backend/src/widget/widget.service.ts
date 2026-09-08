@@ -791,7 +791,9 @@ export class WidgetService {
     const textOnlyEntries = knowledgeEntries.filter((k) => !k.fileUrl);
     if (textOnlyEntries.length > 0) {
       stageInstructions +=
-        '\n\nБаза знаний (факты и проверенные ответы, которые ты точно знаешь о бизнесе):\n' +
+        '\n\nБаза знаний (факты и проверенные ответы, которые ты точно знаешь о бизнесе). Если в ' +
+        'факте есть ссылка (http/https) — при пересказе своими словами скопируй её ТОЧНО как есть, ' +
+        'ни одного символа не меняя (chat.js автоматически превращает такую ссылку в кликабельную):\n' +
         textOnlyEntries.map((k) => (k.question ? `- Вопрос: ${k.question}\n  Ответ: ${k.answer}` : `- ${k.answer}`)).join('\n');
     }
     // Lets the model actually attach a real file (contract, product photo,
