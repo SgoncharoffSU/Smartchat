@@ -66,11 +66,17 @@
     var params = new URLSearchParams(location.search);
     var botToken = params.get('token');
     var color = params.get('color') || '#4f46e5';
+    // Never forwarded before (color was) — the owner's "Расположение: слева"
+    // choice had no test surface anywhere to actually confirm it on (found
+    // live: comparing left vs right by eye wasn't possible, only the real
+    // embed snippet's own baked data-position ever reflected it).
+    var position = params.get('position') || 'bottom-right';
     var autoOpen = params.get('autoopen') === '1';
     var s = document.createElement('script');
     s.src = '/widget.js';
     s.setAttribute('data-bot-token', botToken);
     s.setAttribute('data-color', color);
+    s.setAttribute('data-position', position);
     s.setAttribute('data-teaser-delay-ms', '1500');
     s.setAttribute('data-preview', 'true');
     if (autoOpen) {
