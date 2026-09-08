@@ -1094,8 +1094,22 @@ function PendingEscalationRow({
               // screenshot: buttons "крупные и не позиционируются"). As a
               // sibling in this flex column it just takes its own natural
               // width, independent of the bubble's sizing.
+              //
+              // width:auto (overriding .message's own width:max-content)
+              // for the SAME underlying reason — max-content intrinsic
+              // sizing measures a wrappable sentence as if it were all on
+              // ONE line (overflow-wrap only affects wrapping AFTER the
+              // width is chosen, not the max-content calculation itself),
+              // so a long bot reply could compute far wider than this
+              // narrow card and — because this card sits in a nested flex-
+              // in-grid chain with `align-items:stretch` at every level —
+              // drag the whole card wider than its grid column, visibly
+              // spilling into "Как это работает" next to it (found live,
+              // screenshot: "съехали кнопки"). width:auto respects
+              // max-width against the actual resolved container width
+              // instead of an unwrapped intrinsic one.
               <Fragment key={m.id}>
-                <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} style={{ margin: 0 }}>
+                <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} style={{ margin: 0, width: "auto" }}>
                   <p style={{ margin: 0 }}>{m.content}</p>
                   <small>{fmtMessageTime(m.createdAt)} МСК</small>
                 </div>

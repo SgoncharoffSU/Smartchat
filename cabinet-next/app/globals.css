@@ -344,7 +344,7 @@ span.deal-task-badge.overdue{background:#fde8e6;color:#b3392f}
    a phone). flex-wrap here reflows the button onto its own line under the
    text instead, at any width, with no separate mobile-only media query
    needed. */
-.escalation-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding:15px;background:#fff;border:1px solid var(--line);border-radius:13px}
+.escalation-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding:15px;background:#fff;border:1px solid var(--line);border-radius:13px;min-width:0;overflow-x:hidden}
 .escalation-row .check-state{flex:0 0 auto}
 /* .escalation-row>div (a bare direct-child selector) used to style the text
    block here — worked for needsVerification's flat markup (icon/text/button
