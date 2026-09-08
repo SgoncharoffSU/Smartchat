@@ -27,6 +27,7 @@ export class MessagesService {
     content: string,
     buttons?: string[],
     attachment?: { url: string; name: string | null; mimeType: string | null },
+    navigate?: { url: string; label: string | null },
   ) {
     return this.prisma.message.create({
       data: {
@@ -37,6 +38,8 @@ export class MessagesService {
         attachmentUrl: attachment?.url,
         attachmentName: attachment?.name ?? undefined,
         attachmentMimeType: attachment?.mimeType ?? undefined,
+        navigateUrl: navigate?.url,
+        navigateLabel: navigate?.label ?? undefined,
       },
     });
   }

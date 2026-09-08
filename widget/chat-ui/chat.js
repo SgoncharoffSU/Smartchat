@@ -174,6 +174,32 @@
     return bubble;
   }
 
+  // "go to this page" CTA — a plain <a href>, not a click handler that sets
+  // window.location itself, so normal browser behavior (ctrl/cmd-click for a
+  // new tab, right-click "copy link", middle-click) all keep working.
+  // target="_top" is NOT optional here — chat.js itself always runs inside
+  // the loader's own <iframe> (see widget/loader/widget.js), so a same-frame
+  // link would just navigate that tiny iframe's own content instead of the
+  // visitor's actual page (found via code-review — the feature's whole
+  // point is navigating the real tab). _top breaks out to the topmost
+  // browsing context regardless of nesting. The widget's own session key
+  // is stored in localStorage keyed by botWidgetToken, so the chat picks up
+  // right where it left off once the loader re-embeds it on the next page —
+  // nothing extra to wire up for that. Always a SEPARATE bubble after the
+  // text reply, same convention as renderAttachment.
+  function renderNavigateButton(url, label, beforeNode) {
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble bubble-assistant bubble-navigate';
+    var link = document.createElement('a');
+    link.href = url;
+    link.target = '_top';
+    link.className = 'navigate-page-btn';
+    link.textContent = (label || 'Перейти на страницу') + ' →';
+    bubble.appendChild(link);
+    insertBubble(bubble, beforeNode);
+    return bubble;
+  }
+
   function renderMessage(role, content, beforeNode, attachment) {
     // See lastSeenAt's own comment — every render, regardless of source,
     // advances the poll's watermark so it never re-shows this same message.
@@ -775,6 +801,9 @@
       if (data.attachmentUrl) {
         renderAttachment({ url: data.attachmentUrl, name: data.attachmentName, mimeType: data.attachmentMimeType }, beforeNode);
       }
+      if (data.navigateUrl) {
+        renderNavigateButton(data.navigateUrl, data.navigateLabel, beforeNode);
+      }
       renderButtons(data.buttons);
 
       // Unlike the correction control, this is per TURN (last bubble only) —
@@ -967,6 +996,9 @@
                 if (m.attachmentUrl) {
                   renderAttachment({ url: m.attachmentUrl, name: m.attachmentName, mimeType: m.attachmentMimeType }, revealAnchor);
                 }
+                if (m.navigateUrl) {
+                  renderNavigateButton(m.navigateUrl, m.navigateLabel, revealAnchor);
+                }
               } else {
                 renderMessage(m.role, m.content, revealAnchor);
               }
@@ -1074,6 +1106,9 @@
           });
           if (m.attachmentUrl) {
             renderAttachment({ url: m.attachmentUrl, name: m.attachmentName, mimeType: m.attachmentMimeType });
+          }
+          if (m.navigateUrl) {
+            renderNavigateButton(m.navigateUrl, m.navigateLabel);
           }
           // Per TURN, same as requestReplyAndRender's own — see its comment.
           if (publicDislikeMode && lastBubbleEl) attachDislikeControl(lastBubbleEl, m.id);

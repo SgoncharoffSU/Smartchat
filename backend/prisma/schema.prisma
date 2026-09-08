@@ -623,6 +623,15 @@ model Message {
   attachmentUrl      String? @map("attachment_url")
   attachmentName     String? @map("attachment_name")
   attachmentMimeType String? @map("attachment_mime_type")
+  // A prominent "go to this page" BUTTON, navigating the visitor's CURRENT
+  // tab (unlike a plain link inside `content`, which opens in a new one —
+  // see chat.js's own linkify loop) — only ever offered for a page on the
+  // bot's OWN site (see WidgetService's own hostname check against
+  // Bot.sourceWebsite before this is ever saved), never an arbitrary URL
+  // the model invented. Found live: "наш бот на такой вопрос мог бы и на
+  // сайте открыть, такого ни у кого нет".
+  navigateUrl        String? @map("navigate_url")
+  navigateLabel      String? @map("navigate_label")
   createdAt DateTime    @default(now()) @map("created_at")
   // Set by the public 👎 on test-chat.html (the demo link given to testers
   // with no cabinet access) — flags this reply for the OWNER to review later

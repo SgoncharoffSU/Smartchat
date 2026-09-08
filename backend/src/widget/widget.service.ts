@@ -793,7 +793,9 @@ export class WidgetService {
       stageInstructions +=
         '\n\nБаза знаний (факты и проверенные ответы, которые ты точно знаешь о бизнесе). Если в ' +
         'факте есть ссылка (http/https) — при пересказе своими словами скопируй её ТОЧНО как есть, ' +
-        'ни одного символа не меняя (chat.js автоматически превращает такую ссылку в кликабельную):\n' +
+        'ни одного символа не меняя (chat.js автоматически превращает такую ссылку в кликабельную); ' +
+        'если посетитель явно спрашивает, где найти конкретную страницу (цены, каталог, регистрация) — ' +
+        'предложи её той же ссылкой через navigateUrl/navigateLabel (см. инструкцию к этим полям выше):\n' +
         textOnlyEntries.map((k) => (k.question ? `- Вопрос: ${k.question}\n  Ответ: ${k.answer}` : `- ${k.answer}`)).join('\n');
     }
     // Lets the model actually attach a real file (contract, product photo,
@@ -1561,12 +1563,34 @@ export class WidgetService {
       ? { url: validatedAttachment.fileUrl!, name: validatedAttachment.fileName, mimeType: validatedAttachment.fileMimeType }
       : undefined;
 
+    // Same discipline as attachmentUrl above, but same-SITE rather than
+    // exact-match — the model copies a fact's own link, and this is a
+    // prominent one-click CTA (unlike a plain text link, which just opens a
+    // new tab), so it's worth a real hostname check rather than trusting
+    // whatever url-shaped string comes back. bot.sourceWebsite is already
+    // normalized (see ProvisioningService.normalizeWebsite — protocol/www/
+    // path stripped), so both sides go through the same normalizer.
+    let navigateToSave: { url: string; label: string | null } | undefined;
+    if (structuredReply.navigateUrl) {
+      const hasScheme = /^https?:\/\//i.test(structuredReply.navigateUrl);
+      const targetHost = hasScheme ? this.provisioning.normalizeWebsite(structuredReply.navigateUrl) : null;
+      const ownHost = bot.sourceWebsite ? this.provisioning.normalizeWebsite(bot.sourceWebsite) : null;
+      if (targetHost && ownHost && targetHost === ownHost) {
+        navigateToSave = { url: structuredReply.navigateUrl, label: structuredReply.navigateLabel ?? null };
+      } else {
+        this.logger.warn(
+          `Dialog ${dialog.id}: model returned navigateUrl outside the bot's own site — discarding: ${structuredReply.navigateUrl}`,
+        );
+      }
+    }
+
     const savedAssistantMessage = await this.messages.append(
       dialog.id,
       MessageRole.assistant,
       structuredReply.reply,
       structuredReply.buttons,
       attachmentToSave,
+      navigateToSave,
     );
 
     if (dto.isReveal) {
@@ -1672,6 +1696,8 @@ export class WidgetService {
       attachmentUrl: attachmentToSave?.url,
       attachmentName: attachmentToSave?.name,
       attachmentMimeType: attachmentToSave?.mimeType,
+      navigateUrl: navigateToSave?.url,
+      navigateLabel: navigateToSave?.label,
     };
   }
 
@@ -1696,6 +1722,8 @@ export class WidgetService {
           attachmentUrl: m.attachmentUrl,
           attachmentName: m.attachmentName,
           attachmentMimeType: m.attachmentMimeType,
+          navigateUrl: m.navigateUrl,
+          navigateLabel: m.navigateLabel,
           createdAt: m.createdAt,
         })),
       stage: dialog.currentStageId,
@@ -1735,6 +1763,8 @@ export class WidgetService {
           attachmentUrl: m.attachmentUrl,
           attachmentName: m.attachmentName,
           attachmentMimeType: m.attachmentMimeType,
+          navigateUrl: m.navigateUrl,
+          navigateLabel: m.navigateLabel,
           createdAt: m.createdAt,
         })),
     };

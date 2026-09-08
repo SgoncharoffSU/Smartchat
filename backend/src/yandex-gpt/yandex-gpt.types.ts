@@ -45,6 +45,15 @@ export interface StructuredReply {
   // known set, so an invented one would silently render as a broken
   // attachment for the visitor.
   attachmentUrl?: string;
+  // A prominent "go to this page" BUTTON (navigates the visitor's CURRENT
+  // tab — the chat session persists across it, unlike a plain link inside
+  // `reply`, which just opens in a new tab). Only ever offered when a
+  // knowledge-base fact's own URL genuinely answers "where do I find this"
+  // (e.g. a pricing page) — never invented. WidgetService only trusts it
+  // when its hostname matches the bot's own sourceWebsite; anything else is
+  // discarded before the visitor ever sees it.
+  navigateUrl?: string;
+  navigateLabel?: string;
   leadData?: {
     name?: string;
     phone?: string;

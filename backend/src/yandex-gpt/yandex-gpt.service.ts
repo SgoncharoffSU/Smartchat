@@ -46,6 +46,8 @@ Shape (all fields required):
   "unansweredQuestion": string,
   "dissatisfactionSignal": string,
   "attachmentUrl": string,
+  "navigateUrl": string,
+  "navigateLabel": string,
   "leadData": {
     "name": string, "phone": string, "email": string,
     "website": string, "hasWebsite": boolean, "businessDescription": string,
@@ -99,18 +101,29 @@ gives you (where it's installed/displayed, a fact worth mentioning, etc.) — e.
 установили у клиента в Подмосковье:" or "Этот образец стоит у нас на выставке, можно посмотреть вживую:".
 The description is there specifically so you can say something real about THIS file, not just name it.
 
+"navigateUrl"/"navigateLabel": offer a prominent BUTTON that takes the visitor straight to a page on the
+company's OWN site — use this instead of (not in addition to) putting the same link as plain text in
+"reply" whenever a knowledge-base fact contains a link and the visitor is clearly asking "where do I find
+X" (prices, a catalog, a signup/registration page). navigateUrl must be copied character-for-character
+from that fact's own link in "База знаний" — never invented, never guessed, never a link you weren't
+given. navigateLabel is a short (2-4 words) Russian action label for the button, e.g. "Смотреть цены",
+"Перейти к каталогу" — not the raw URL. Leave both as empty strings on every other turn, including any
+turn where no fact with a link was given to you. Still write a normal "reply" alongside it (briefly
+explain the value/context — e.g. mention a free trial period before sending someone to pricing — the
+button is the call to action, not a replacement for actually answering).
+
 Valid example for a greeting stage — note the question is narrow and easy to answer in one word or a
 click, not an open "tell me about your business" that takes real effort to compose from scratch. This is
 shape-only: it deliberately has no self-introduction, so it never becomes a name/company you'd copy — your
 own name and company come only from the system prompt above, never from this example.
-{"reply": "Подскажите, у вас уже есть сайт компании?", "buttons": ["Да, есть сайт", "Пока нет"], "nextStage": "greeting", "leadCaptured": false, "pdConsentGiven": false, "deletionRequested": false, "unansweredQuestion": "", "dissatisfactionSignal": "", "attachmentUrl": "", "leadData": {}}
+{"reply": "Подскажите, у вас уже есть сайт компании?", "buttons": ["Да, есть сайт", "Пока нет"], "nextStage": "greeting", "leadCaptured": false, "pdConsentGiven": false, "deletionRequested": false, "unansweredQuestion": "", "dissatisfactionSignal": "", "attachmentUrl": "", "navigateUrl": "", "navigateLabel": "", "leadData": {}}
 
 Valid example for the VERY NEXT turn, right after the visitor clicks "Да, есть сайт" in reply to the
 example above — note that leadData.hasWebsite is set to true on THIS exact turn, even though no URL was
 given yet ("website" stays empty until a URL actually shows up). This is the single most commonly missed
 field in real traffic: skipping it here means every later stage re-asks a question the visitor already
 answered, which reads as not having listened at all.
-{"reply": "Отлично! А как сейчас к вам попадают заявки от клиентов?", "buttons": [], "nextStage": "pain_discovery", "leadCaptured": false, "pdConsentGiven": false, "deletionRequested": false, "unansweredQuestion": "", "dissatisfactionSignal": "", "attachmentUrl": "", "leadData": {"hasWebsite": true}}
+{"reply": "Отлично! А как сейчас к вам попадают заявки от клиентов?", "buttons": [], "nextStage": "pain_discovery", "leadCaptured": false, "pdConsentGiven": false, "deletionRequested": false, "unansweredQuestion": "", "dissatisfactionSignal": "", "attachmentUrl": "", "navigateUrl": "", "navigateLabel": "", "leadData": {"hasWebsite": true}}
 `.trim();
 
 interface GenerateReplyParams {
@@ -1169,6 +1182,8 @@ ${params.siteText ? `Текст с главной страницы их сайт
         // before ever saving/sending it, discarding anything that doesn't
         // match exactly (an invented or stale url).
         attachmentUrl: typeof parsed.attachmentUrl === 'string' && parsed.attachmentUrl.trim() ? parsed.attachmentUrl.trim() : undefined,
+        navigateUrl: typeof parsed.navigateUrl === 'string' && parsed.navigateUrl.trim() ? parsed.navigateUrl.trim() : undefined,
+        navigateLabel: typeof parsed.navigateLabel === 'string' && parsed.navigateLabel.trim() ? parsed.navigateLabel.trim() : undefined,
         leadData: typeof parsed.leadData === 'object' && parsed.leadData !== null ? parsed.leadData : undefined,
       };
     } catch (error) {

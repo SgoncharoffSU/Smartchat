@@ -260,6 +260,31 @@ body {
   text-decoration: underline;
 }
 
+.bubble-navigate {
+  padding: 6px;
+}
+
+/* Two classes (0,2,0) — beats the generic .bubble a / .bubble-assistant a
+   rules above (0,1,1) without reaching for !important: those set an
+   underline + brand-color text meant for an inline link inside normal
+   reply text, not this standalone filled CTA button. */
+.bubble-navigate .navigate-page-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.bubble-navigate .navigate-page-btn:hover {
+  opacity: 0.9;
+}
+
 .bubble-visitor a {
   color: #fff;
 }
