@@ -55,6 +55,13 @@ export class WidgetController {
     return this.widgetService.sendMessage(dto, visitorIp, sessionToken, controller.signal);
   }
 
+  // Public, no session/dialog involved — see WidgetService.getPublicConfig's
+  // own comment for what this is for.
+  @Get('config')
+  getConfig(@Query('botToken') botToken: string) {
+    return this.widgetService.getPublicConfig(botToken);
+  }
+
   @Get('history')
   getHistory(@Query('botToken') botToken: string, @Query('sessionId') sessionId: string) {
     return this.widgetService.getHistory(botToken, sessionId);

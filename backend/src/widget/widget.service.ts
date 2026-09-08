@@ -1701,6 +1701,24 @@ export class WidgetService {
     };
   }
 
+  /**
+   * Public, unauthenticated, by botToken only — deliberately the bare
+   * minimum (color/position, nothing else) a page could need to build its
+   * OWN dynamic embed <script> tag instead of a static one that goes stale
+   * the moment the owner changes appearance in the cabinet (found live on
+   * our own landing page: "ставлю справа, сохраняю, а он всегда слева" — a
+   * hand-written snippet with no way to know the cabinet had since changed).
+   * Every snippet the cabinet itself generates still bakes data-color/data-
+   * position in directly (see CabinetService.getEmbedSnippet) — this exists
+   * for the rare page that would rather always reflect the bot's current
+   * settings than a copy-pasted-once snapshot.
+   */
+  async getPublicConfig(botToken: string) {
+    const bot = await this.bots.findActiveByWidgetToken(botToken);
+    if (!bot) throw new NotFoundException('Unknown or inactive bot token');
+    return { color: bot.widgetColor, position: bot.widgetPosition };
+  }
+
   async getHistory(botToken: string, sessionId: string) {
     const bot = await this.bots.findActiveByWidgetToken(botToken);
     if (!bot) throw new NotFoundException('Unknown or inactive bot token');

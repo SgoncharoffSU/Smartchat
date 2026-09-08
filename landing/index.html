@@ -953,12 +953,33 @@ document.getElementById('privacyModalClose').addEventListener('click', closePriv
 privacyModal.addEventListener('click', function(e){ if (e.target === privacyModal) closePrivacyModal(); });
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !privacyModal.hidden) closePrivacyModal(); });
 </script>
-<!-- data-color/data-position: a real client site only picks these up when
-     the snippet is re-copied after a cabinet change (see WidgetSettings'
-     own note) — this IS that re-copy, kept in sync with "Умный Чат"'s own
-     bot in the cabinet (found live: "в настройках хорошо... на самом сайте
-     — нет", because this exact script tag had neither attribute at all and
-     silently defaulted to right/#4f46e5 regardless of what the cabinet said). -->
-<script src="https://chat.glavinstrument.com/widget.js" data-bot-token="demo-smartchat-self-sell" data-color="#0d1e30" data-position="bottom-right" data-offset-bottom="56" data-hero-target="#heroChatSlot"></script>
+<script>
+// A real client's embed snippet bakes data-color/data-position in as a
+// static snapshot (see CabinetService.getEmbedSnippet) — normal and fine
+// for them, since it only goes stale until they next re-copy it. THIS is
+// our own site advertising our own product, so a stale snapshot reads
+// worse (found live twice in a row: "ставлю справа, сохраняю, а он всегда
+// слева" — a hand-edited data-position that only matched whatever the
+// cabinet said at the moment someone last remembered to update it).
+// GET /api/widget/config is public/unauthenticated, by botToken only (see
+// WidgetService.getPublicConfig) — fetched once here, before the real
+// widget.js tag is even created, so this always reflects the bot's actual
+// current settings with no manual re-sync ever needed again. Falls back to
+// the last-known values (matching what was hand-baked in before) if the
+// fetch fails, so a network hiccup never leaves the widget entirely off.
+fetch('https://chat.glavinstrument.com/api/widget/config?botToken=demo-smartchat-self-sell')
+  .then(function (r) { return r.ok ? r.json() : null; })
+  .catch(function () { return null; })
+  .then(function (config) {
+    var s = document.createElement('script');
+    s.src = 'https://chat.glavinstrument.com/widget.js';
+    s.setAttribute('data-bot-token', 'demo-smartchat-self-sell');
+    s.setAttribute('data-color', (config && config.color) || '#0d1e30');
+    s.setAttribute('data-position', (config && config.position) || 'bottom-right');
+    s.setAttribute('data-offset-bottom', '56');
+    s.setAttribute('data-hero-target', '#heroChatSlot');
+    document.body.appendChild(s);
+  });
+</script>
 </body>
 </html>
