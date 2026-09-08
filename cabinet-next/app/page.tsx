@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, AlertCircle, ArrowRight, Bell, BookOpen, Bot, Check,
   Banknote, BrainCircuit, Building2, ChevronDown, CircleHelp, ClipboardCheck, Clock3, Copy, CreditCard, Database, Download, ExternalLink, Eye,
@@ -1084,18 +1084,21 @@ function PendingEscalationRow({
           {dialogLoading ? <small style={{ color: "#7d8992" }}>Загружаю переписку…</small>
             : !dialogMessages || dialogMessages.length === 0 ? <small style={{ color: "#7d8992" }}>Переписка недоступна.</small>
             : dialogMessages.map((m) => (
-              // No maxWidth override here anymore — this card is much
-              // narrower than the real Dialogs panel .message was designed
-              // for, and the old 90% (measured against a box with 34px of
-              // LEFT padding but none on the right) left the bubble's own
-              // right edge flush against the card's edge with no breathing
-              // room, reading as "sticking out" (found live, screenshot: a
-              // second report after the text-wrap fix — that one was real
-              // and is fixed, this is a separate width issue). The class's
-              // own max-width:min(520px,78%) already leaves real margin.
-              <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} key={m.id} style={{ margin: 0 }}>
-                <p style={{ margin: 0 }}>{m.content}</p>
-                <small>{fmtMessageTime(m.createdAt)} МСК</small>
+              // DislikeControl is a SIBLING of .message now, not a child —
+              // .message is width:max-content (shrink-wraps to its own
+              // text), and the correction form's buttons (whitespace-nowrap,
+              // per Button's own className) don't shrink at all, so nesting
+              // it inside used to force the whole bubble to stretch to fit
+              // the widest button — the buttons themselves then rendered
+              // past the card's edge with no room to lay out (found live,
+              // screenshot: buttons "крупные и не позиционируются"). As a
+              // sibling in this flex column it just takes its own natural
+              // width, independent of the bubble's sizing.
+              <Fragment key={m.id}>
+                <div className={`message ${m.role === "assistant" ? "bot-message" : "client-message"}`} style={{ margin: 0 }}>
+                  <p style={{ margin: 0 }}>{m.content}</p>
+                  <small>{fmtMessageTime(m.createdAt)} МСК</small>
+                </div>
                 {/* Point at a SPECIFIC bad reply right here, not just an
                    overall verdict on the whole escalation — same backend
                    endpoint the test-chat's own 👎 already uses (see
@@ -1105,7 +1108,7 @@ function PendingEscalationRow({
                    that wiring never actually happened in this cabinet
                    until now, found live). */}
                 {m.role === "assistant" && <DislikeControl messageId={m.id} initiallyDisliked={Boolean(m.dislikedAt)} initiallyDone={Boolean(m.dislikeResolvedAt)} />}
-              </div>
+              </Fragment>
             ))}
         </div>
       )}
