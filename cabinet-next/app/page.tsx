@@ -64,6 +64,13 @@ type CabinetAnalytics = {
   escalations: {
     pending: Array<{ id: string; reason: string; question: string; botReply: string | null; createdAt: string; visitorQuestion?: string }>;
     needsVerification: Array<{ id: string; question: string; answer: string; answeredAt: string }>;
+    // Both already computed and returned by getAnalytics, just never
+    // reached the frontend type — clicking "Обработано" made an item
+    // vanish from `pending` with nowhere in cabinet-next to see it again
+    // (found live: "не понимаю, где обработанные обращения" — the old
+    // cabinet has a real collapsible "Обработанные" section for exactly
+    // this, ported below).
+    processed: Array<{ id: string; reason: string; question: string; botReply: string | null; answer: string | null; processedAt: string }>;
     verifiedCount: number;
     reviewedCount: number;
   };
@@ -724,20 +731,54 @@ function Readiness({ setView, readiness }: { setView: (v: View) => void; readine
 // own (only this empty state). Omitted for now: the old cabinet's "Открыть
 // диалог" full-thread modal — the escalation's own question/reply already
 // show inline below without the extra fetch+modal.
+// "Обработано" used to just make an item vanish from `pending` with no way
+// to see it again anywhere in cabinet-next (found live: "не понимаю, где
+// обработанные обращения") — the old cabinet has a real collapsible list
+// for exactly this (escalations.processed, already computed by
+// getAnalytics, just never reached this frontend's type until now). Closed
+// by default — a resolved queue isn't something to lead with, but it has
+// to be reachable.
+type ProcessedEscalation = { id: string; reason: string; question: string; botReply: string | null; answer: string | null; processedAt: string };
+function ProcessedList({ items, busyId, onUnprocess }: { items: ProcessedEscalation[]; busyId: string | null; onUnprocess: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  if (items.length === 0) return null;
+  return <article className="panel">
+    <button type="button" className="dislike-flag-btn" style={{ marginTop: 0 }} onClick={() => setOpen((v) => !v)}>
+      {open ? "Скрыть обработанные" : `Показать обработанные (${items.length})`}
+    </button>
+    {open && <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+      {items.map((e) => <div className="escalation-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }} key={e.id}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span className="check-state"><Check /></span>
+          <div className="escalation-text">
+            <b>{ESCALATION_REASON_LABELS[e.reason] || "Нет ответа"}</b>
+            <small>{e.question}{(e.answer || e.botReply) ? ` — ${e.answer || e.botReply}` : ""}</small>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <small style={{ color: "#7d8992" }}>Обработано {fmtDialogDate(e.processedAt)}</small>
+          <Button variant="outline" disabled={busyId === e.id} onClick={() => onUnprocess(e.id)}>Вернуть в очередь</Button>
+        </div>
+      </div>)}
+    </div>}
+  </article>;
+}
+
 function Attention({ analytics, onProcessed }: { analytics: CabinetAnalytics; onProcessed: () => void }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   if (!analytics) return <div className="attention-layout"><article className="panel empty-quality"><p>Загружаю…</p></article></div>;
 
   const pending = analytics.escalations.pending;
   const needsVerification = analytics.escalations.needsVerification;
+  const processed = analytics.escalations.processed;
 
-  const markProcessed = async (id: string) => {
+  const markProcessed = async (id: string, processedFlag = true) => {
     setBusyId(id);
     try {
       await fetch(`/api/cabinet/escalations/${id}/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ processed: true }),
+        body: JSON.stringify({ processed: processedFlag }),
       });
       onProcessed();
     } finally {
@@ -755,11 +796,11 @@ function Attention({ analytics, onProcessed }: { analytics: CabinetAnalytics; on
   };
 
   if (pending.length === 0 && needsVerification.length === 0) {
-    return <div className="attention-layout"><article className="panel empty-quality"><div className="empty-orbit"><ShieldCheck /></div><h2>Сейчас всё под контролем</h2><p>Нет ответов, которые требуют проверки. Когда бот столкнётся со сложным вопросом или получит негативную оценку, он появится здесь.</p></article><aside className="panel how-panel"><span className="section-label">Как это работает</span><h3>Единый центр качества</h3><ul><li><span>1</span>Бот отмечает слабый ответ</li><li><span>2</span>Вы добавляете правильную информацию</li><li><span>3</span>Ответ сразу попадает в базу знаний</li></ul></aside></div>;
+    return <div className="attention-layout"><section style={{ display: "flex", flexDirection: "column", gap: 14 }}><article className="panel empty-quality"><div className="empty-orbit"><ShieldCheck /></div><h2>Сейчас всё под контролем</h2><p>Нет ответов, которые требуют проверки. Когда бот столкнётся со сложным вопросом или получит негативную оценку, он появится здесь.</p></article><ProcessedList items={processed} busyId={busyId} onUnprocess={(id) => markProcessed(id, false)} /></section><aside className="panel how-panel"><span className="section-label">Как это работает</span><h3>Единый центр качества</h3><ul><li><span>1</span>Бот отмечает слабый ответ</li><li><span>2</span>Вы добавляете правильную информацию</li><li><span>3</span>Ответ сразу попадает в базу знаний</li></ul></aside></div>;
   }
 
   return <div className="attention-layout">
-    <section>
+    <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {pending.length > 0 && <article className="panel">
         <span className="section-label">Ждут ответа</span>
         <h2>Бот не смог ответить</h2>
