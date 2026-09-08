@@ -808,10 +808,10 @@ export class CabinetService {
     assertBotUnlockedForOwner(bot.managerLockedAt, impersonating);
 
     const prompt =
-      `Round avatar icon of a friendly ${bot.gender === 'male' ? 'male' : 'female'} AI customer support ` +
-      'assistant for a company chatbot. Simple flat minimalist design, cheerful color palette, warm ' +
-      'friendly face. Absolutely no text, no letters, no words, no speech bubbles, no numbers anywhere ' +
-      'in the image.';
+      `Professional headshot-style avatar portrait of a friendly ${bot.gender === 'male' ? 'male' : 'female'} ` +
+      'customer support assistant for a company chatbot. Warm genuine smile, neutral soft-colored ' +
+      'background, clean modern look, photorealistic. Absolutely no text, no letters, no words, no ' +
+      'logos anywhere in the image.';
 
     const apiKey = process.env.ROUTERAI_API_KEY ?? '';
     if (!apiKey) throw new BadRequestException('Генерация фото временно недоступна.');
@@ -822,12 +822,14 @@ export class CabinetService {
         response = await fetch('https://routerai.ru/api/v1/images/generations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          // style: 'icon' is load-bearing, not cosmetic — without it Recraft
-          // defaults to photorealistic and just ignores the "плоский
-          // дизайн/иконка" wording in the prompt entirely (found live: a
-          // random photo of a woman reading in a library came back for a
-          // "круглая аватарка... флэт дизайн" prompt with no style set).
-          body: JSON.stringify({ model: 'recraft/recraft-v3', prompt, n: 1, size: '1024x1024', style: 'icon' }),
+          // style: 'realistic_image' — a real support-agent-style headshot,
+          // not a cartoon mascot ("зачем нам мультик с артефактами?", after
+          // an earlier 'icon' style pass — flat-cartoon by definition, even
+          // once the Cyrillic/name issues below were fixed). Still explicit
+          // rather than omitted: an unset style leaves Recraft to guess, and
+          // that guess is inconsistent — see the prompt-language comment
+          // above for what an unconstrained request actually came back as.
+          body: JSON.stringify({ model: 'recraft/recraft-v3', prompt, n: 1, size: '1024x1024', style: 'realistic_image' }),
         });
       } catch (err) {
         this.logger.warn(`generateAvatar: network error calling RouterAI — ${err instanceof Error ? err.message : err}`);
