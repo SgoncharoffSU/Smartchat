@@ -153,15 +153,55 @@ button{font-family:inherit}
 .defect-form select,.defect-form textarea{font-family:inherit;font-size:12px;border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:var(--paper);color:var(--ink);width:100%}
 .defect-form textarea{min-height:52px;resize:vertical}
 .defect-form label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:3px}
+.save-hint{font-size:11px;color:var(--muted)}
 
 footer{max-width:900px;margin:0 auto;padding:0 40px 60px;color:var(--muted);font-size:11px}
+
+/* ---- Identity gate ---- */
+#identity-overlay{position:fixed;inset:0;background:rgba(11,20,32,.6);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+#identity-overlay[hidden]{display:none}
+.identity-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;max-width:340px;width:100%;text-align:center}
+.identity-card h2{font-size:17px;margin-bottom:6px}
+.identity-card p{color:var(--muted);font-size:12.5px;margin-bottom:18px}
+.identity-btn{display:block;width:100%;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font-size:13.5px;font-weight:600;cursor:pointer;margin-bottom:8px}
+.identity-btn:hover{border-color:var(--focus)}
+
+.identity-badge{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px}
+.identity-badge b{font-size:12.5px}
+.identity-badge button{border:none;background:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;padding:0}
+
+/* ---- Activity log ---- */
+#log-panel{margin-bottom:36px}
+#log-panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:10px}
+.log-list{max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.log-row{display:flex;align-items:baseline;gap:8px;padding:8px 12px;font-size:12px;border-bottom:1px solid var(--line)}
+.log-row:last-child{border-bottom:none}
+.log-row time{flex:none;color:var(--muted);font-family:'IBM Plex Mono';font-size:10.5px;width:42px}
+.log-row .who{flex:none;font-weight:700;color:var(--ink)}
+.log-row .what{color:var(--muted);flex:1;min-width:0}
+.log-row .what b{color:var(--ink);font-weight:500}
+.log-badge{flex:none;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px}
+.log-badge.pass{background:var(--pass-bg);color:var(--pass)}
+.log-badge.fail{background:var(--fail-bg);color:var(--fail)}
+.log-badge.untested{background:var(--untested-bg);color:var(--muted)}
+.no-log{padding:14px;font-size:12.5px;color:var(--muted);font-style:italic}
 </style>
 </head>
 <body>
 
+<div id="identity-overlay">
+  <div class="identity-card">
+    <h2>Кто тестирует?</h2>
+    <p>Выберите себя — имя пойдёт в журнал действий рядом с каждой отметкой.</p>
+    <div id="identity-choices"></div>
+  </div>
+</div>
+
 <div class="shell">
   <nav class="rail">
     <div class="brand"><b>Дефектовка</b><span>Smartchat · Личный кабинет</span></div>
+
+    <div class="identity-badge"><span>Вы: <b id="identity-name">—</b></span><button id="identity-switch">Сменить</button></div>
 
     <div class="summary">
       <div class="summary-row"><span>Готово</span><b id="sum-pct">0%</b></div>
@@ -198,6 +238,11 @@ footer{max-width:900px;margin:0 auto;padding:0 40px 60px;color:var(--muted);font
     <div id="defects-panel">
       <h2>Открытые дефекты</h2>
       <div id="defects-list"><p class="no-defects">Пока не найдено ни одного.</p></div>
+    </div>
+
+    <div id="log-panel">
+      <h2>Журнал действий</h2>
+      <div class="log-list" id="log-list"><p class="no-log">Пока пусто.</p></div>
     </div>
 
     <div id="sections"></div>
@@ -338,12 +383,49 @@ const SECTIONS = [
 ];
 
 const SEVERITIES = { critical: "Критично", major: "Серьёзно", minor: "Мелочь" };
+const STATUS_LABELS = { pass: "Пройдено", fail: "Дефект", untested: "Не проверено" };
 const API = "/api/qa-checklist";
+const NAMES = ["Олег (тест)", "Родион (тест)", "Сергей (тест, правки)"];
+const IDENTITY_KEY = "qa_checklist_identity";
 
-let state = {};       // id -> {status, severity, note, updatedAt}
+let state = {};       // id -> {status, severity, note, by, updatedAt}
+let log = [];
 let showOnlyDefects = false;
+let identity = null;
 
 function itemKey(sec, item){ return sec + "__" + item; }
+
+// key -> {section, title} — every save posts this alongside the status so
+// the log reads as an actual sentence ("Сергей — Пипетка: Дефект"), not just
+// a bare key like "widget__eyedropper".
+const ITEM_INFO = {};
+SECTIONS.forEach(sec => sec.items.forEach(it => { ITEM_INFO[itemKey(sec.id, it[0])] = { section: sec.title, title: it[1] }; }));
+
+function loadIdentity(){
+  try { identity = localStorage.getItem(IDENTITY_KEY); } catch(e) { identity = null; }
+  document.getElementById("identity-overlay").hidden = !!identity;
+  document.getElementById("identity-name").textContent = identity || "—";
+}
+function chooseIdentity(name){
+  identity = name;
+  try { localStorage.setItem(IDENTITY_KEY, name); } catch(e) {}
+  document.getElementById("identity-overlay").hidden = true;
+  document.getElementById("identity-name").textContent = name;
+}
+(function initIdentity(){
+  const wrap = document.getElementById("identity-choices");
+  NAMES.forEach(n => {
+    const b = document.createElement("button");
+    b.className = "identity-btn";
+    b.textContent = n;
+    b.onclick = () => chooseIdentity(n);
+    wrap.appendChild(b);
+  });
+  document.getElementById("identity-switch").addEventListener("click", () => {
+    document.getElementById("identity-overlay").hidden = false;
+  });
+  loadIdentity();
+})();
 
 function renderNav(){
   const nav = document.getElementById("nav-list");
@@ -416,6 +498,10 @@ function renderSections(){
     visibleItems.forEach(([id, title, steps, expected], idx) => {
       const k = itemKey(sec.id, id);
       const s = state[k] || { status: "untested" };
+      // "Пройдено ставит тот, кто нашёл баг" — only the original reporter
+      // may close it out; enforced server-side too (this is just so the
+      // button reads as disabled instead of silently failing on click).
+      const lockedToReporter = s.status === "fail" && s.foundBy && s.foundBy !== identity;
       const row = document.createElement("div");
       row.className = "item";
       row.id = "row-" + k;
@@ -429,7 +515,7 @@ function renderSections(){
           </div>
           <div class="status-btns">
             <button class="status-btn sel-untested ${s.status==='untested'?'on':''}" data-action="untested">Не проверено</button>
-            <button class="status-btn sel-pass ${s.status==='pass'?'on':''}" data-action="pass">Пройдено</button>
+            <button class="status-btn sel-pass ${s.status==='pass'?'on':''}" data-action="pass" ${lockedToReporter?`disabled title="Закрыть может только ${s.foundBy} — кто нашёл дефект"`:''}>Пройдено</button>
             <button class="status-btn sel-fail ${s.status==='fail'?'on':''}" data-action="fail">Дефект</button>
           </div>
         </div>
@@ -447,6 +533,7 @@ function renderSections(){
           <div><label>Что увидели на самом деле</label>
             <textarea data-field="note" placeholder="Опишите фактическое поведение, чем оно отличается от ожидаемого">${s.note||""}</textarea>
           </div>
+          ${s.foundBy ? `<span class="save-hint">Нашёл: <b>${s.foundBy}</b> — закрыть «Пройдено» может только этот человек</span>` : ""}
         </div>` : ""}
       `;
       row.querySelectorAll(".status-btn").forEach(b => b.addEventListener("click", () => setStatus(k, b.dataset.action)));
@@ -481,28 +568,39 @@ function setSyncNote(text, isErr){
 }
 
 async function saveItem(key, fields){
+  const before = state[key];
   state[key] = Object.assign({}, state[key], fields, { updatedAt: Date.now() });
+  renderAll();
+  const info = ITEM_INFO[key] || {};
   try {
     const res = await fetch(API + "/item", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.assign({ key }, fields)),
+      body: JSON.stringify(Object.assign({ key, by: identity, section: info.section, title: info.title }, fields)),
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    if (!res.ok) {
+      // 403 from the "только тот, кто нашёл" rule carries the real reason —
+      // show it as-is rather than a generic "не сохранилось", and roll back
+      // the optimistic flip above so the UI doesn't lie about what saved.
+      const body = await res.json().catch(() => null);
+      state[key] = before;
+      renderAll();
+      setSyncNote(body?.message || ("Не сохранилось (HTTP " + res.status + ")"), true);
+      return;
+    }
+    const saved = await res.json();
+    state[key] = saved;
+    renderAll();
     setSyncNote("Сохранено");
+    loadLog();
   } catch (e) {
+    state[key] = before;
+    renderAll();
     setSyncNote("Не сохранилось — проверьте связь", true);
   }
 }
 function setStatus(key, status){
-  renderIntent(key, status);
   saveItem(key, { status });
-}
-// Optimistic local render before the network round trip resolves, same as
-// the rest of the site's own widget code — a click should feel instant.
-function renderIntent(key, status){
-  state[key] = Object.assign({}, state[key], { status });
-  renderAll();
 }
 
 document.getElementById("filter-defects").addEventListener("change", (e) => {
@@ -525,9 +623,44 @@ async function loadState(){
   }
 }
 
+function timeAgo(at){
+  const mins = Math.round((Date.now() - at) / 60000);
+  if (mins < 1) return "сейчас";
+  if (mins < 60) return mins + " мин";
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return hrs + " ч";
+  const d = new Date(at);
+  return String(d.getDate()).padStart(2,'0') + "." + String(d.getMonth()+1).padStart(2,'0');
+}
+function renderLog(){
+  const el = document.getElementById("log-list");
+  if (!log.length){
+    el.innerHTML = '<p class="no-log">Пока пусто.</p>';
+    return;
+  }
+  el.innerHTML = "";
+  log.slice(0, 100).forEach(e => {
+    const row = document.createElement("div");
+    row.className = "log-row";
+    const badge = e.status ? `<span class="log-badge ${e.status}">${STATUS_LABELS[e.status]||e.status}</span>` : "";
+    row.innerHTML = `<time>${timeAgo(e.at)}</time><span class="who">${e.by}</span><span class="what"><b>${e.section}</b> — ${e.title}${e.note ? ': "' + e.note + '"' : ""}</span>${badge}`;
+    el.appendChild(row);
+  });
+}
+async function loadLog(){
+  try {
+    const res = await fetch(API + "/log");
+    if (!res.ok) return;
+    log = await res.json();
+    renderLog();
+  } catch (e) { /* silent — the log is a nice-to-have, not core state */ }
+}
+
 renderAll();
 loadState();
+loadLog();
 setInterval(loadState, 5000);
+setInterval(loadLog, 5000);
 </script>
 </body>
 </html>
