@@ -953,6 +953,12 @@ document.getElementById('privacyModalClose').addEventListener('click', closePriv
 privacyModal.addEventListener('click', function(e){ if (e.target === privacyModal) closePrivacyModal(); });
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !privacyModal.hidden) closePrivacyModal(); });
 </script>
-<script src="https://chat.glavinstrument.com/widget.js" data-bot-token="demo-smartchat-self-sell" data-offset-bottom="56" data-hero-target="#heroChatSlot"></script>
+<!-- data-color/data-position: a real client site only picks these up when
+     the snippet is re-copied after a cabinet change (see WidgetSettings'
+     own note) — this IS that re-copy, kept in sync with "Умный Чат"'s own
+     bot in the cabinet (found live: "в настройках хорошо... на самом сайте
+     — нет", because this exact script tag had neither attribute at all and
+     silently defaulted to right/#4f46e5 regardless of what the cabinet said). -->
+<script src="https://chat.glavinstrument.com/widget.js" data-bot-token="demo-smartchat-self-sell" data-color="#0d1e30" data-position="bottom-left" data-offset-bottom="56" data-hero-target="#heroChatSlot"></script>
 </body>
 </html>
