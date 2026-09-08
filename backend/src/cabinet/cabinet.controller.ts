@@ -4,6 +4,7 @@ import { Request, Response } from 'express';
 import { CabinetService } from './cabinet.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { BlockDuringImpersonationGuard } from '../auth/block-during-impersonation.guard';
+import { RequireImpersonationGuard } from '../auth/require-impersonation.guard';
 import { AuthService } from '../auth/auth.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { AddVariantDto } from './dto/add-variant.dto';
@@ -323,6 +324,27 @@ export class CabinetController {
   @UseGuards(AuthGuard)
   setGoal(@Body() body: { preset: string; customText?: string }, @Req() req: AuthedRequest, @Query('botId') botId?: string) {
     return this.cabinet.setGoal(req.companyId, body.preset, body.customText, botId, req.impersonating);
+  }
+
+  // The funnel/scenario STRUCTURE — manager-only, see
+  // RequireImpersonationGuard's own comment: the owner's cabinet doesn't
+  // even show this section, and the API refuses it too, not just a hidden
+  // button.
+  @Get('funnel')
+  @UseGuards(AuthGuard, RequireImpersonationGuard)
+  getFunnel(@Req() req: AuthedRequest, @Query('botId') botId?: string) {
+    return this.cabinet.getFunnel(req.companyId, botId);
+  }
+
+  @Post('funnel/:stageId')
+  @UseGuards(AuthGuard, RequireImpersonationGuard)
+  updateFunnelStage(
+    @Param('stageId') stageId: string,
+    @Body() body: { instructions: string; suggestedButtons?: string[] },
+    @Req() req: AuthedRequest,
+    @Query('botId') botId?: string,
+  ) {
+    return this.cabinet.updateFunnelStage(req.companyId, stageId, body, botId);
   }
 
   @Get('integrations/crm')

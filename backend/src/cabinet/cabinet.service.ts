@@ -1464,6 +1464,73 @@ export class CabinetService {
     return { ok: true, goalLabel: label, goalPreset: preset };
   }
 
+  /**
+   * The funnel/scenario STRUCTURE (Bot.funnelConfig) — the one layer of a
+   * bot's setup with no cabinet edit path at all until now (KB articles,
+   * instructions, corrections, appearance, goal, greetings are all already
+   * real; this wasn't). Manager-only (see RequireImpersonationGuard on the
+   * controller side) — exitCondition is a controlled vocabulary the
+   * runtime state machine reads directly (only 'handoff'/'closed' mean
+   * anything, see WidgetService), not free text, so it's returned
+   * read-only here rather than opened up to an owner who could easily
+   * break the whole conversation with an unrecognized value. Found live:
+   * "системные инструкции должны быть доступны только менеджерам, а
+   * другие пользователю."
+   */
+  async getFunnel(companyId: string, botId?: string) {
+    const bot = await this.findOwnedBot(companyId, botId);
+    const stages = Array.isArray(bot.funnelConfig) ? (bot.funnelConfig as unknown as FunnelStage[]) : [];
+    return {
+      stages: stages.map((s) => ({
+        stageId: s.stageId,
+        instructions: s.instructions,
+        suggestedButtons: s.suggestedButtons ?? [],
+        exitCondition: s.exitCondition ?? null,
+      })),
+    };
+  }
+
+  /**
+   * Edits ONE existing stage's instructions/buttons in place — deliberately
+   * not a full-array replace, and deliberately no add/remove/rename here:
+   * stageId is what the model's own `nextStage` transitions (and any
+   * dialog's currentStageId already in progress) reference, and
+   * exitCondition governs the state machine (see getFunnel's own comment)
+   * — both stay exactly as they were, only the human-facing instructions/
+   * buttons text changes.
+   */
+  async updateFunnelStage(
+    companyId: string,
+    stageId: string,
+    input: { instructions: string; suggestedButtons?: string[] },
+    botId?: string,
+  ) {
+    const bot = await this.findOwnedBot(companyId, botId);
+    const stages = Array.isArray(bot.funnelConfig) ? (bot.funnelConfig as unknown as FunnelStage[]) : [];
+    // No class-validator DTO on this route (a plain @Body() object-literal
+    // type, same house style as most of this controller — see
+    // validateDisplayName's own comment on the same gap elsewhere) — a
+    // missing/non-string field would otherwise crash .trim() itself as an
+    // opaque 500 instead of a clean 400 (found via code-review).
+    if (typeof input.instructions !== 'string') throw new BadRequestException('Instructions are required');
+    const trimmed = input.instructions.trim();
+    if (!trimmed) throw new BadRequestException('Instructions are required');
+    const index = stages.findIndex((s) => s.stageId === stageId);
+    if (index === -1) throw new NotFoundException('Stage not found');
+
+    // No cap here — this is manager-only content (see the controller's own
+    // RequireImpersonationGuard), and silently truncating past some
+    // arbitrary limit would have saved fewer buttons than the manager
+    // actually typed with no indication anything was dropped (found via
+    // code-review).
+    const buttons = Array.isArray(input.suggestedButtons)
+      ? input.suggestedButtons.map((b) => b.trim()).filter(Boolean)
+      : stages[index].suggestedButtons;
+    const updatedStages = stages.map((s, i) => (i === index ? { ...s, instructions: trimmed, suggestedButtons: buttons } : s));
+    await this.prisma.bot.update({ where: { id: bot.id }, data: { funnelConfig: updatedStages as any } });
+    return { ok: true };
+  }
+
   async getCrmIntegrations(companyId: string, botId?: string) {
     let bot = await this.findOwnedBot(companyId, botId);
     // Self-heal: any bot connected BEFORE the inbound-webhook feature shipped

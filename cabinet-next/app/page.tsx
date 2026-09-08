@@ -29,7 +29,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 
-type View = "dashboard" | "readiness" | "attention" | "dialogs" | "training" | "tests" | "knowledge" | "widget" | "install" | "integrations" | "crm" | "billing" | "team" | "support";
+type View = "dashboard" | "readiness" | "attention" | "dialogs" | "training" | "tests" | "knowledge" | "widget" | "install" | "integrations" | "crm" | "billing" | "team" | "support" | "scenario";
 
 // Real data from our existing NestJS API (same origin as this app, so the
 // browser's own smartchat_cabinet_session cookie is sent automatically — no
@@ -232,6 +232,10 @@ const nav = [
   ]},
   { label: "Настройка", items: [
     { id: "readiness" as View, label: "Статус внедрения", icon: Rocket }, // badge computed live in Home() — see navBadge/readinessPercent
+    // Manager-only — filtered out of `nav` in Home() unless me.impersonating
+    // (the API refuses it too, see RequireImpersonationGuard — this hides
+    // the button, that's the actual enforcement).
+    { id: "scenario" as View, label: "Сценарий", icon: Workflow },
     { id: "widget" as View, label: "Виджет и приветствие", icon: SlidersHorizontal },
     { id: "install" as View, label: "Установка", icon: Link2 },
     { id: "integrations" as View, label: "Интеграции", icon: Workflow },
@@ -249,6 +253,7 @@ const nav = [
 const titles: Record<View, { title: string; desc: string }> = {
   dashboard: { title: "Обзор", desc: "Главное о работе бота и движении посетителей к заявке" },
   readiness: { title: "Статус внедрения", desc: "Что уже настроил менеджер и что осталось до запуска" },
+  scenario: { title: "Сценарий", desc: "Этапы диалога и инструкции бота на каждом шаге — доступно менеджеру" },
   attention: { title: "Требует внимания", desc: "Слабые ответы и повторяющиеся вопросы в одном месте" },
   dialogs: { title: "Диалоги", desc: "Все разговоры посетителей с ботом" },
   training: { title: "Обучение бота", desc: "Проверьте диалог глазами посетителя и улучшите ответы" },
@@ -1908,6 +1913,79 @@ function Knowledge({ activeBotId }: { activeBotId: string | null }) {
 // removed, by the backend as it exists today (see CabinetService.
 // addGreetingVariant) — shown read-only with their real shown/engaged/
 // converted numbers (analytics.variantReport), not as editable textareas.
+type FunnelStageRow = { stageId: string; instructions: string; suggestedButtons: string[]; exitCondition: string | null };
+
+const EXIT_CONDITION_LABELS: Record<string, string> = { handoff: "Передача заявки", closed: "Завершение диалога" };
+
+function FunnelStageCard({ stage, botId }: { stage: FunnelStageRow; botId: string | null }) {
+  const [instructions, setInstructions] = useState(stage.instructions);
+  const [buttonsText, setButtonsText] = useState(stage.suggestedButtons.join(", "));
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  // Compared against the last-SAVED values, not the `stage` prop — that
+  // prop is never refetched after a save (this component owns its own
+  // edit), so comparing against it kept Save enabled/"dirty" right after a
+  // successful save with no way to tell the edit actually persisted
+  // (found via code-review).
+  const [savedInstructions, setSavedInstructions] = useState(stage.instructions);
+  const [savedButtonsText, setSavedButtonsText] = useState(stage.suggestedButtons.join(", "));
+  const dirty = instructions !== savedInstructions || buttonsText !== savedButtonsText;
+
+  const save = () => {
+    const trimmed = instructions.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setStatus(null);
+    postJson(`/api/cabinet/funnel/${stage.stageId}${botId ? `?botId=${botId}` : ""}`, {
+      instructions: trimmed,
+      suggestedButtons: buttonsText.split(",").map((b) => b.trim()).filter(Boolean),
+    })
+      .then(() => { setStatus("Сохранено."); setSavedInstructions(trimmed); setSavedButtonsText(buttonsText); })
+      .catch((err) => setStatus(err instanceof Error && err.message ? err.message : "Не получилось сохранить."))
+      .finally(() => setSaving(false));
+  };
+
+  return <article className="panel" style={{ padding: 18 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+      <b style={{ fontSize: 12 }}>{stage.stageId}</b>
+      {stage.exitCondition && <StatusPill tone="blue">{EXIT_CONDITION_LABELS[stage.exitCondition] ?? stage.exitCondition}</StatusPill>}
+    </div>
+    <div className="prototype-form">
+      <label><span>Инструкция для бота на этом этапе</span><textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={4} /></label>
+      <label><span>Кнопки-подсказки (через запятую)</span><input value={buttonsText} onChange={(e) => setButtonsText(e.target.value)} placeholder="Например: Узнать цену, Есть вопрос" /></label>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Button variant="outline" disabled={saving || !dirty || !instructions.trim()} onClick={save}>{saving ? "Сохраняю…" : "Сохранить"}</Button>
+        {status && <small>{status}</small>}
+      </div>
+    </div>
+  </article>;
+}
+
+// The one layer of a bot's setup with no cabinet edit path until this —
+// only reachable via "Войти" (see RequireImpersonationGuard and the nav
+// filtering in Home()). exitCondition is shown read-only, not editable —
+// it's a controlled vocabulary the runtime state machine reads directly
+// (see CabinetService.getFunnel's own comment), not free text.
+function Scenario({ activeBotId }: { activeBotId: string | null }) {
+  const [stages, setStages] = useState<FunnelStageRow[] | null>(null);
+  const requestId = useRef(0);
+  useEffect(() => {
+    const id = ++requestId.current;
+    setStages(null);
+    fetchJsonWithRetry<{ stages: FunnelStageRow[] }>(`/api/cabinet/funnel${activeBotId ? `?botId=${activeBotId}` : ""}`).then((data) => {
+      if (id !== requestId.current) return;
+      setStages(data?.stages ?? []);
+    });
+  }, [activeBotId]);
+
+  return <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <p className="empty" style={{ textAlign: "left" }}>Порядок и переходы между этапами менять здесь нельзя — только формулировки и кнопки-подсказки. Добавить или удалить этап можно только разработкой.</p>
+    {stages === null
+      ? <div className="dialogs-empty-conv" style={{ padding: 20 }}>Загружаю…</div>
+      : stages.map((s) => <FunnelStageCard key={s.stageId} stage={s} botId={activeBotId} />)}
+  </div>;
+}
+
 function WidgetSettings({ me, activeBotId, analytics, refetchAnalytics }: { me: CabinetMe; activeBotId: string | null; analytics: CabinetAnalytics; refetchAnalytics: () => void }) {
   const botQuery = activeBotId ? `?botId=${activeBotId}` : "";
   type Appearance = { name: string; label: string | null; gender: string; color: string; position: string };
@@ -2717,7 +2795,7 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
 
 function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen, readiness }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void; readiness: ReadinessData | null }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} readiness={readiness} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests setView={setView} activeBotId={activeBotId} />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />,
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} readiness={readiness} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests setView={setView} activeBotId={activeBotId} />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />, scenario: <Scenario activeBotId={activeBotId} />,
   }), [setView, onAction, analytics, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen, readiness]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
@@ -2852,6 +2930,13 @@ export default function Home() {
   // Same definition as the old cabinet's own attentionCount (pending +
   // needsVerification escalations) — real, not the reference's static "0".
   const attentionCount = analytics ? analytics.escalations.pending.length + analytics.escalations.needsVerification.length : undefined;
+  // "Сценарий" only exists in the nav for a manager viewing via "Войти" —
+  // the API refuses it for anyone else too (RequireImpersonationGuard),
+  // this just keeps a regular owner from seeing a button that would only
+  // 403 on them.
+  const visibleNav = me?.impersonating
+    ? nav
+    : nav.map((group) => ({ ...group, items: group.items.filter((item) => item.id !== "scenario") }));
   const navBadge = (item: { id: View; badge?: string }): string | undefined => {
     if (item.id === "attention") return attentionCount === undefined ? "…" : String(attentionCount);
     if (item.id === "readiness") return readinessPercent === null ? "…" : `${readinessPercent}%`;
@@ -2862,7 +2947,7 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{nav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div><button className="sidebar-user" data-live onClick={() => setProfileOpen(true)}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")} onOpenProfile={() => setProfileOpen(true)}/><TrialBar onBilling={() => setView("billing")} trialEndsAt={activeBot ? activeBot.trialEndsAt ?? null : undefined} subscriptionActive={activeBot?.subscriptionActive}/><ManagerLockBar locked={activeBot?.managerLocked}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{visibleNav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div><button className="sidebar-user" data-live onClick={() => setProfileOpen(true)}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")} onOpenProfile={() => setProfileOpen(true)}/><TrialBar onBilling={() => setView("billing")} trialEndsAt={activeBot ? activeBot.trialEndsAt ?? null : undefined} subscriptionActive={activeBot?.subscriptionActive}/><ManagerLockBar locked={activeBot?.managerLocked}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
     <BotSwitcherDialog open={botSwitcherOpen} onClose={() => setBotSwitcherOpen(false)} bots={me?.bots ?? []} activeBotId={activeBot?.id ?? null} onSelect={(id) => { setActiveBotId(id); setBotSwitcherOpen(false); }} onCreated={(bot) => { refetchMe(); setActiveBotId(bot.id); setBotSwitcherOpen(false); }} />
     <ProfileSheet open={profileOpen} onOpenChange={setProfileOpen} rawUserName={me?.userName ?? null} userEmail={me?.userEmail ?? null} roleLabel={roleLabel} companyName={companyName} impersonating={me?.impersonating} onNameSaved={(name) => setMe((prev) => (prev ? { ...prev, userName: name } : prev))} />
     <AckManagerLockDialog open={Boolean(activeBot?.managerLockAckNeeded)} botId={activeBot?.id ?? null} onAcknowledge={() => setMe((prev) => (prev && activeBot ? { ...prev, bots: prev.bots.map((b) => (b.id === activeBot.id ? { ...b, managerLockAckNeeded: false } : b)) } : prev))} />
