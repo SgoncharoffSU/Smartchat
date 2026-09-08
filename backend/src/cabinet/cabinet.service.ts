@@ -781,9 +781,16 @@ export class CabinetService {
    * AI-generated bot avatar via RouterAI's OpenAI-compatible images endpoint
    * — the SAME provider (and API key) already used for chat completions (see
    * YandexGptService's own routerai branch), so this needs no new vendor
-   * integration. `openai/gpt-image-1` returns base64 PNG bytes directly (no
-   * download URL to fetch, unlike dall-e-3) — written straight to
-   * UPLOADS_DIR, same convention as KnowledgeController's file uploads.
+   * integration. `recraft/recraft-v3` (not `openai/gpt-image-1`, tried
+   * first — a real ~35-45s per generation, unacceptable for an owner sitting
+   * in the cabinet waiting: "долго нельзя, это неклиентоориентировано")
+   * answers in ~5-8s and returns base64 WEBP bytes directly (no download URL
+   * to fetch) — written straight to UPLOADS_DIR, same convention as
+   * KnowledgeController's file uploads. One automatic retry on failure: a
+   * transient upstream server_error was observed live even on a plain
+   * request, and at this speed a silent retry costs nothing the owner would
+   * notice, unlike surfacing an error for something that usually just works
+   * the second time.
    */
   async generateAvatar(companyId: string, botId: string | undefined, impersonating = false) {
     const bot = await this.findOwnedBot(companyId, botId);
@@ -797,27 +804,31 @@ export class CabinetService {
     const apiKey = process.env.ROUTERAI_API_KEY ?? '';
     if (!apiKey) throw new BadRequestException('Генерация фото временно недоступна.');
 
-    let response: Response;
-    try {
-      response = await fetch('https://routerai.ru/api/v1/images/generations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: 'openai/gpt-image-1', prompt, n: 1, size: '1024x1024' }),
-      });
-    } catch (err) {
-      this.logger.warn(`generateAvatar: network error calling RouterAI — ${err instanceof Error ? err.message : err}`);
-      throw new BadRequestException('Не получилось сгенерировать фото — попробуйте ещё раз.');
-    }
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      this.logger.warn(`generateAvatar: RouterAI returned ${response.status} — ${body.slice(0, 300)}`);
-      throw new BadRequestException('Не получилось сгенерировать фото — попробуйте ещё раз.');
-    }
-    const json = (await response.json()) as { data?: { b64_json?: string }[] };
-    const b64 = json.data?.[0]?.b64_json;
+    const attempt = async (): Promise<string | null> => {
+      let response: Response;
+      try {
+        response = await fetch('https://routerai.ru/api/v1/images/generations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({ model: 'recraft/recraft-v3', prompt, n: 1, size: '1024x1024' }),
+        });
+      } catch (err) {
+        this.logger.warn(`generateAvatar: network error calling RouterAI — ${err instanceof Error ? err.message : err}`);
+        return null;
+      }
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        this.logger.warn(`generateAvatar: RouterAI returned ${response.status} — ${body.slice(0, 300)}`);
+        return null;
+      }
+      const json = (await response.json()) as { data?: { b64_json?: string }[] };
+      return json.data?.[0]?.b64_json ?? null;
+    };
+
+    const b64 = (await attempt()) ?? (await attempt());
     if (!b64) throw new BadRequestException('Не получилось сгенерировать фото — попробуйте ещё раз.');
 
-    const filename = `${randomUUID()}.png`;
+    const filename = `${randomUUID()}.webp`;
     await writeFile(join(UPLOADS_DIR, filename), Buffer.from(b64, 'base64'));
     const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'https://chat.glavinstrument.com';
     return this.setAvatar(companyId, `${publicBaseUrl}/uploads/${filename}`, bot.id, impersonating);

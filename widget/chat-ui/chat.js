@@ -63,6 +63,16 @@
   var colorParam = params.get('color');
   if (colorParam && /^#[0-9a-fA-F]{6}$/.test(colorParam)) {
     document.documentElement.style.setProperty('--primary', colorParam);
+    // Text/icon color for anything sitting ON TOP of --primary (the visitor's
+    // own bubble, the navigate-page CTA button) — a light accent (picked via
+    // the cabinet's swatches or eyedropper) needs dark text, not the
+    // permanently-white text those elements used to hardcode. Same simple
+    // luminance heuristic as the cabinet's own live preview.
+    var r = parseInt(colorParam.slice(1, 3), 16);
+    var g = parseInt(colorParam.slice(3, 5), 16);
+    var b = parseInt(colorParam.slice(5, 7), 16);
+    var luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+    document.documentElement.style.setProperty('--primary-contrast', luminance < 140 ? '#fff' : '#1a1a1a');
   }
   // widget.js now preloads this iframe (network fetch, JS parse/compile) the
   // moment the outside teaser bubble becomes visible, well before the visitor

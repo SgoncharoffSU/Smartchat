@@ -1,5 +1,6 @@
 :root {
   --primary: #4f46e5;
+  --primary-contrast: #fff;
 }
 
 * {
@@ -164,7 +165,7 @@ body {
 .bubble-visitor {
   align-self: flex-end;
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-contrast);
   border-bottom-right-radius: 4px;
 }
 
@@ -281,7 +282,7 @@ body {
   gap: 6px;
   padding: 10px 16px;
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-contrast);
   border-radius: 10px;
   text-decoration: none;
   font-weight: 600;
