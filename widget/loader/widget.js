@@ -7,10 +7,17 @@
   }
   var baseUrl = scriptTag.getAttribute('data-base-url') || new URL(scriptTag.src, location.href).origin;
 
-  // Owner-configurable in the cabinet's "Обучение бота" section (see
+  // Owner-configurable in the cabinet's "Внешний вид" section (see
   // cabinet.service.ts's getEmbedSnippet) — baked into the snippet as plain
-  // data attributes, same as every other data-* setting this loader reads.
-  // A real client site only picks up a change once it re-copies the snippet.
+  // data attributes so the FIRST paint (before any network round trip) is
+  // never wrong. But no longer the last word: GET /api/widget/config below
+  // fetches the bot's actual current color/position and live-patches them in
+  // if the owner has since changed them in the cabinet — a real site used to
+  // only ever pick up a change by re-copying the snippet (found live, twice
+  // in a row: "ставлю справа, сохраняю, а он всегда слева... каждый
+  // пользователь должен иметь возможность выбрать цвет и положение и это
+  // должно сразу срабатывать для его сайта не меняя скрипт"). See
+  // applyLiveConfig further down for what actually gets re-applied.
   var DEFAULT_WIDGET_COLOR = '#4f46e5';
   var widgetColorAttr = scriptTag.getAttribute('data-color');
   var widgetColor = widgetColorAttr && /^#[0-9a-fA-F]{6}$/.test(widgetColorAttr) ? widgetColorAttr : DEFAULT_WIDGET_COLOR;
@@ -21,6 +28,14 @@
   var widgetRgb = hexToRgb(widgetColor);
   // Which screen corner the launcher/chat window/teaser all anchor to.
   var widgetSide = scriptTag.getAttribute('data-position') === 'bottom-left' ? 'left' : 'right';
+  // Fired immediately, in parallel with everything else below — never blocks
+  // first paint (that still comes from the data-* attributes above). Public,
+  // unauthenticated, by botToken only (see WidgetService.getPublicConfig).
+  // Consumed by applyLiveConfig, defined and called at the very end of this
+  // file once the launcher/iframe/style elements it patches actually exist.
+  var configPromise = fetch(baseUrl + '/api/widget/config?botToken=' + encodeURIComponent(botToken))
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .catch(function () { return null; });
 
   // Read here (not just at its other call site further down) so the preview
   // flag is available before the session key is built below — a preview
@@ -52,13 +67,20 @@
 
   var launcher = document.createElement('button');
   var launcherIconUrl = scriptTag.getAttribute('data-launcher-icon');
-  if (launcherIconUrl) {
-    var launcherImg = document.createElement('img');
-    launcherImg.src = launcherIconUrl;
-    launcherImg.alt = '';
-    Object.assign(launcherImg.style, { width: '28px', height: '28px', objectFit: 'contain' });
-    launcher.appendChild(launcherImg);
-  } else {
+  // Only the built-in mark actually depends on widgetColor (the spark's own
+  // fill) — a custom data-launcher-icon is the owner's own fixed image,
+  // unrelated to the accent color, so applyLiveConfig below never needs to
+  // touch it again once set here.
+  function applyLauncherIcon() {
+    if (launcherIconUrl) {
+      var launcherImg = document.createElement('img');
+      launcherImg.src = launcherIconUrl;
+      launcherImg.alt = '';
+      Object.assign(launcherImg.style, { width: '28px', height: '28px', objectFit: 'contain' });
+      launcher.innerHTML = '';
+      launcher.appendChild(launcherImg);
+      return;
+    }
     // Built-in "AI chat" mark (bubble + curved sparkle) instead of a generic
     // emoji — swap in a real brand logo later via data-launcher-icon="<image url>".
     // The sparkle uses curved (concave) sides on purpose: a straight-edged
@@ -70,6 +92,7 @@
       '<path d="M12 6c.5 3.8 2.2 5.5 6 6-3.8.5-5.5 2.2-6 6-.5-3.8-2.2-5.5-6-6 3.8-.5 5.5-2.2 6-6z" fill="' + widgetColor + '"/>' +
       '</svg>';
   }
+  applyLauncherIcon();
   // Lets embedding pages (currently just the cabinet's own test widget, which
   // sits above a page-level "Сбросить тестовый чат" link) nudge the launcher,
   // teaser and floating chat window up so that link has room and isn't hugging
@@ -81,18 +104,27 @@
   // Inline styles can't express :hover or @keyframes, so this is the one bit
   // of real CSS the loader injects into the host page.
   var style = document.createElement('style');
-  var glowRgb = widgetRgb.r + ',' + widgetRgb.g + ',' + widgetRgb.b;
-  style.textContent =
-    '@keyframes smartchat-launcher-pulse {' +
-    '0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.25),0 0 0 0 rgba(' + glowRgb + ',.55)}' +
-    '50%{box-shadow:0 4px 14px rgba(0,0,0,.25),0 0 0 10px rgba(' + glowRgb + ',0)}' +
-    '}' +
-    '.smartchat-launcher{animation:smartchat-launcher-pulse 2.6s ease-in-out infinite;transition:transform .18s ease;}' +
-    '.smartchat-launcher:hover{transform:scale(1.08);}';
+  function applyPulseStyle() {
+    var glowRgb = widgetRgb.r + ',' + widgetRgb.g + ',' + widgetRgb.b;
+    style.textContent =
+      '@keyframes smartchat-launcher-pulse {' +
+      '0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.25),0 0 0 0 rgba(' + glowRgb + ',.55)}' +
+      '50%{box-shadow:0 4px 14px rgba(0,0,0,.25),0 0 0 10px rgba(' + glowRgb + ',0)}' +
+      '}' +
+      '.smartchat-launcher{animation:smartchat-launcher-pulse 2.6s ease-in-out infinite;transition:transform .18s ease;}' +
+      '.smartchat-launcher:hover{transform:scale(1.08);}';
+  }
+  applyPulseStyle();
   document.head.appendChild(style);
 
   launcher.setAttribute('aria-label', 'Open Smartchat');
   launcher.className = 'smartchat-launcher';
+  function applyLauncherPosition() {
+    launcher.style.background = widgetColor;
+    launcher.style.left = 'auto';
+    launcher.style.right = 'auto';
+    launcher.style[widgetSide] = '20px';
+  }
   var launcherStyle = {
     position: 'fixed',
     bottom: (20 + offsetBottom) + 'px',
@@ -164,28 +196,36 @@
   var forceFullScreen = scriptTag.getAttribute('data-force-fullscreen') === 'true';
 
   var iframe = document.createElement('iframe');
-  var chatUiUrl =
-    baseUrl +
-    '/chat-ui/index.html?token=' +
-    encodeURIComponent(botToken) +
-    '&session=' +
-    encodeURIComponent(sessionId) +
-    '&api=' +
-    encodeURIComponent(baseUrl) +
-    '&mode=' +
-    (forceFullScreen || window.innerWidth <= 480 ? 'fullscreen' : 'floating') +
-    '&color=' +
-    encodeURIComponent(widgetColor) +
-    (previewMode ? '&preview=1' : '') +
-    (ownerTestingMode ? '&ownerPreview=1' : '') +
-    // See chat.js — the iframe's document/script load early (this same
-    // src, fired the moment the outside teaser becomes visible instead of
-    // waiting for a real click), but its own real isInit/reveal call stays
-    // gated on an explicit "start" postMessage from openChat() below. That
-    // keeps the fetch + JS parse/compile off the critical path when the
-    // visitor actually opens, without paying for a wasted completion call
-    // on every visitor who merely saw the teaser and never opened.
-    '&autostart=0';
+  // A function, not a value baked once — buildChatUiUrl() reads widgetColor
+  // fresh each call, so a live-config color update (applyLiveConfig below)
+  // that arrives before the chat iframe first loads is reflected too, not
+  // just the value that happened to be true at page-load time.
+  function buildChatUiUrl() {
+    return (
+      baseUrl +
+      '/chat-ui/index.html?token=' +
+      encodeURIComponent(botToken) +
+      '&session=' +
+      encodeURIComponent(sessionId) +
+      '&api=' +
+      encodeURIComponent(baseUrl) +
+      '&mode=' +
+      (forceFullScreen || window.innerWidth <= 480 ? 'fullscreen' : 'floating') +
+      '&color=' +
+      encodeURIComponent(widgetColor) +
+      (previewMode ? '&preview=1' : '') +
+      (ownerTestingMode ? '&ownerPreview=1' : '') +
+      // See chat.js — the iframe's document/script load early (this same
+      // src, fired the moment the outside teaser becomes visible instead of
+      // waiting for a real click), but its own real isInit/reveal call stays
+      // gated on an explicit "start" postMessage from openChat() below. That
+      // keeps the fetch + JS parse/compile off the critical path when the
+      // visitor actually opens, without paying for a wasted completion call
+      // on every visitor who merely saw the teaser and never opened.
+      '&autostart=0'
+    );
+  }
+  var chatUiUrl = buildChatUiUrl();
   // Loaded lazily (see ensureIframeLoaded) rather than immediately: the chat-ui
   // page calls isInit itself on load, and starting that eagerly for every page
   // view — even ones that never touch the chat — would race with the teaser's
@@ -1104,4 +1144,46 @@
   // Minimal public API so the embedding page (e.g. the landing page's own CTA
   // buttons) can open the chat programmatically instead of linking away.
   window.SmartchatWidget = { open: openChat };
+
+  // Resolves configPromise (fired at the very top, in parallel with all the
+  // synchronous setup above) and re-applies color/position if the cabinet's
+  // actual current values differ from what the data-* attributes said — see
+  // configPromise's own comment for why this exists at all. Every piece
+  // touched here (applyLauncherIcon/applyPulseStyle/applyLauncherPosition/
+  // buildChatUiUrl/applyIframeLayout) already reads widgetColor/widgetRgb/
+  // widgetSide fresh from these shared closure vars rather than a value
+  // frozen at setup time, so reassigning them here and re-running each is
+  // enough — no separate "live" code path to keep in sync with the initial
+  // one. Position changing while the chat is already OPEN, or while hero-
+  // docked, is intentionally left alone (heroLayoutLocked/applyIframeLayout's
+  // own guard already no-ops there) — it takes effect the next time the
+  // floating widget actually lays itself out, same as a plain window resize
+  // would, rather than yanking a mid-conversation visitor's chat window
+  // around the screen.
+  configPromise.then(function (config) {
+    if (!config) return;
+    var changedColor = false;
+    if (config.color && /^#[0-9a-fA-F]{6}$/.test(config.color) && config.color !== widgetColor) {
+      widgetColor = config.color;
+      widgetRgb = hexToRgb(widgetColor);
+      changedColor = true;
+    }
+    var newSide = config.position === 'bottom-left' ? 'left' : 'right';
+    var changedSide = newSide !== widgetSide;
+    if (changedSide) widgetSide = newSide;
+    if (!changedColor && !changedSide) return;
+
+    if (changedColor) {
+      applyLauncherIcon();
+      applyPulseStyle();
+    }
+    applyLauncherPosition();
+    chatUiUrl = buildChatUiUrl();
+    // Only re-navigates an iframe that was merely PRELOADED (teaser-visible,
+    // autostart=0, no real conversation yet) — never one the visitor has
+    // actually opened (isOpen), which would otherwise yank an in-progress
+    // chat out from under them for the sake of a color update.
+    if (iframeLoaded && !isOpen) iframe.src = chatUiUrl;
+    applyIframeLayout();
+  });
 })();
