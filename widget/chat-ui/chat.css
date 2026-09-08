@@ -586,7 +586,7 @@ body {
 .composer button {
   border: none;
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-contrast);
   border-radius: 50%;
   width: 38px;
   height: 38px;
