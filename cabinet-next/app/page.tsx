@@ -10,6 +10,9 @@ import {
   ArrowLeft, Phone, Wallet, Workflow, X, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import type { DateRange } from "react-day-picker";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -114,7 +117,7 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return data as T;
 }
 
-type AnalyticsPeriod = "yesterday" | "week" | "month" | "all";
+type AnalyticsPeriod = "yesterday" | "week" | "month" | "all" | "custom";
 
 function useCabinetData() {
   const [me, setMe] = useState<CabinetMe>(null);
@@ -129,6 +132,15 @@ function useCabinetData() {
   // that just call refetchAnalytics() keep refreshing the SAME period the
   // owner is looking at), changePeriod is the one that actually switches it.
   const [period, setPeriod] = useState<AnalyticsPeriod>("week");
+  // ISO "YYYY-MM-DD", only meaningful while period === "custom" — the
+  // "date-filter" button in Dashboard used to render the current period's
+  // label as inert text with no click handler at all (found live: "не
+  // работает фильтр по свободному диапазону дат" — there was no filter to
+  // not work, just a fake button). The backend's own getAnalytics has
+  // supported period=custom&from=&to= this whole time (see
+  // CabinetService.getPeriodRange), just never wired up from here.
+  const [customFrom, setCustomFrom] = useState<string | null>(null);
+  const [customTo, setCustomTo] = useState<string | null>(null);
   // Which of the company's bots(s) every bot-scoped page reads/writes
   // against — real multi-bot companies exist now (see CabinetService.getMe's
   // own bots[]/activeBotId comment), so this can no longer just be "the
@@ -149,15 +161,27 @@ function useCabinetData() {
   // switched AWAY from resolving after the newer one would otherwise
   // silently show the wrong bot's numbers.
   const analyticsRequestId = useRef(0);
-  const refetchAnalytics = (p: AnalyticsPeriod = period) => {
+  const refetchAnalytics = (p: AnalyticsPeriod = period, from: string | null = customFrom, to: string | null = customTo) => {
     const requestId = ++analyticsRequestId.current;
-    fetchJsonWithRetry<CabinetAnalytics>(`/api/cabinet/analytics?period=${p}${activeBotId ? `&botId=${activeBotId}` : ""}`).then((data) => {
+    const range = p === "custom" && from && to ? `&from=${from}&to=${to}` : "";
+    fetchJsonWithRetry<CabinetAnalytics>(`/api/cabinet/analytics?period=${p}${range}${activeBotId ? `&botId=${activeBotId}` : ""}`).then((data) => {
       if (analyticsRequestId.current === requestId) setAnalytics(data);
     });
   };
   const changePeriod = (p: AnalyticsPeriod) => {
     setPeriod(p);
-    refetchAnalytics(p);
+    if (p !== "custom") { setCustomFrom(null); setCustomTo(null); }
+    refetchAnalytics(p, null, null);
+  };
+  // Called only once both ends of the range are actually picked (see
+  // Dashboard's own popover) — never fires on a lone first click, which
+  // would otherwise query a same-day "range" no visitor data would ever
+  // match.
+  const changeCustomRange = (from: string, to: string) => {
+    setPeriod("custom");
+    setCustomFrom(from);
+    setCustomTo(to);
+    refetchAnalytics("custom", from, to);
   };
   // Guards against a slow refetchMe() (the fallback-retry path below, or one
   // triggered by BotSwitcherDialog's onCreated) resolving AFTER a newer,
@@ -216,7 +240,7 @@ function useCabinetData() {
     if (activeBotId) refetchAnalytics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBotId]);
-  return { me, setMe, analytics, refetchAnalytics, refetchMe, signedOut, period, changePeriod, activeBotId, setActiveBotId };
+  return { me, setMe, analytics, refetchAnalytics, refetchMe, signedOut, period, changePeriod, customFrom, customTo, changeCustomRange, activeBotId, setActiveBotId };
 }
 
 // Real getAnalytics numbers are integers; ru-RU grouping matches the
@@ -650,10 +674,33 @@ function ConversionChart() {
 // values ("yesterday") one-for-one — this is the one place that mapping
 // happens, so Tabs' value stays the human label the reference already used.
 const PERIOD_TAB_TO_BACKEND: Record<string, AnalyticsPeriod> = { day: "yesterday", week: "week", month: "month", all: "all" };
-const PERIOD_RANGE_LABEL: Record<AnalyticsPeriod, string> = { yesterday: "За вчера", week: "Последние 7 дней", month: "Последние 30 дней", all: "За всё время" };
+const PERIOD_RANGE_LABEL: Record<AnalyticsPeriod, string> = { yesterday: "За вчера", week: "Последние 7 дней", month: "Последние 30 дней", all: "За всё время", custom: "Свой период" };
 
-function Dashboard({ setView, onAction, analytics, period, onPeriodChange }: { setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; period: AnalyticsPeriod; onPeriodChange: (p: AnalyticsPeriod) => void }) {
-  const periodTab = Object.entries(PERIOD_TAB_TO_BACKEND).find(([, backend]) => backend === period)?.[0] ?? "week";
+// Local-time YYYY-MM-DD, not toISOString().slice(0,10) — that reads the UTC
+// calendar day, which silently shifts the picked date by one for any visitor
+// west of UTC in the evening (same reasoning as the backend's own
+// localDateKey in CabinetService). The backend parses this with `new
+// Date(from)`, which needs an unambiguous calendar date, not a instant.
+function toIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function fmtRangeLabel(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${d}.${String(m).padStart(2, "0")}.${y}`;
+}
+
+function Dashboard({ setView, onAction, analytics, period, onPeriodChange, customFrom, customTo, onCustomRange }: { setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; period: AnalyticsPeriod; onPeriodChange: (p: AnalyticsPeriod) => void; customFrom: string | null; customTo: string | null; onCustomRange: (from: string, to: string) => void }) {
+  // "week" here is purely which TAB highlights — period itself stays
+  // whatever it really is (including "custom", which matches none of the 4
+  // tabs on purpose, so switching to a custom range correctly leaves all
+  // four tabs unhighlighted instead of falsely showing "Неделя" as active).
+  const periodTab = Object.entries(PERIOD_TAB_TO_BACKEND).find(([, backend]) => backend === period)?.[0] ?? "";
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const [draftRange, setDraftRange] = useState<DateRange>({ from: undefined, to: undefined });
+  const dateFilterLabel =
+    period === "custom" && customFrom && customTo
+      ? `${fmtRangeLabel(customFrom)} – ${fmtRangeLabel(customTo)}`
+      : PERIOD_RANGE_LABEL[period];
   const shown = analytics?.shown.count;
   const opened = analytics?.opened.count;
   const dialogs = analytics?.dialogs.count;
@@ -663,7 +710,31 @@ function Dashboard({ setView, onAction, analytics, period, onPeriodChange }: { s
   // just computed from real counts instead.
   const pct = (n: number | undefined) => (shown && n !== undefined && shown > 0 ? Math.max(4, Math.round((n / shown) * 100)) : 0);
   return <>
-    <div className="dashboard-toolbar"><Tabs value={periodTab} onValueChange={(v) => onPeriodChange(PERIOD_TAB_TO_BACKEND[v] ?? "week")}><TabsList><TabsTrigger value="day">Вчера</TabsTrigger><TabsTrigger value="week">Неделя</TabsTrigger><TabsTrigger value="month">Месяц</TabsTrigger><TabsTrigger value="all">Всё время</TabsTrigger></TabsList></Tabs><button className="date-filter"><ListFilter /> {PERIOD_RANGE_LABEL[period]}</button></div>
+    <div className="dashboard-toolbar"><Tabs value={periodTab} onValueChange={(v) => onPeriodChange(PERIOD_TAB_TO_BACKEND[v] ?? "week")}><TabsList><TabsTrigger value="day">Вчера</TabsTrigger><TabsTrigger value="week">Неделя</TabsTrigger><TabsTrigger value="month">Месяц</TabsTrigger><TabsTrigger value="all">Всё время</TabsTrigger></TabsList></Tabs>
+      <Popover open={rangeOpen} onOpenChange={(v) => { setRangeOpen(v); if (v) setDraftRange(customFrom && customTo ? { from: new Date(customFrom), to: new Date(customTo) } : { from: undefined, to: undefined }); }}>
+        <PopoverTrigger asChild><button type="button" className={`date-filter${period === "custom" ? " active" : ""}`}><ListFilter /> {dateFilterLabel}</button></PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="end">
+          <Calendar
+            mode="range"
+            selected={draftRange}
+            onSelect={(range) => setDraftRange(range ?? { from: undefined, to: undefined })}
+            defaultMonth={draftRange.from}
+            numberOfMonths={2}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "0 12px 12px" }}>
+            <Button variant="outline" onClick={() => setRangeOpen(false)}>Отмена</Button>
+            <Button
+              disabled={!draftRange.from || !draftRange.to}
+              onClick={() => {
+                if (!draftRange.from || !draftRange.to) return;
+                onCustomRange(toIsoDate(draftRange.from), toIsoDate(draftRange.to));
+                setRangeOpen(false);
+              }}
+            >Применить</Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
     <section className="metrics-grid"><Metric label="Посетители" value={fmtNum(shown)} note="На страницах с виджетом" tone="violet" icon={Activity} /><Metric label="Открыли чат" value={fmtNum(opened)} note={`${fmtPct(analytics?.opened.conversionRate)} посетителей`} tone="cyan" icon={MousePointerClick} /><Metric label="Диалоги" value={fmtNum(dialogs)} note={`${fmtPct(analytics?.dialogs.conversionRate)} посетителей начали разговор`} tone="green" icon={MessageSquareText} /><Metric label="Заявки" value={fmtNum(leads)} note={`${fmtPct(analytics?.leads.conversionRate)} диалогов оставили контакт`} tone="lime" icon={Target} /></section>
     <section className="dashboard-grid">
       <article className="panel funnel-panel"><div className="panel-head"><div><span className="section-label">Воронка</span><h2>Путь посетителя к заявке</h2></div><button className="ghost-action" data-live onClick={() => onAction("Как считается воронка")}>Как считается <ArrowRight /></button></div><div className="funnel"><div className="funnel-stage"><span>Посетитель</span><b>{fmtNum(shown)}</b><i style={{ width: `${pct(shown)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.opened.conversionRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Открыл чат</span><b>{fmtNum(opened)}</b><i style={{ width: `${pct(opened)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.opened.openedToDialogRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Диалог</span><b>{fmtNum(dialogs)}</b><i style={{ width: `${pct(dialogs)}%` }} /></div><div className="funnel-arrow"><span>{fmtPct(analytics?.leads.conversionRate)}</span><ArrowRight /></div><div className="funnel-stage"><span>Заявка</span><b>{fmtNum(leads)}</b><i style={{ width: `${pct(leads)}%` }} /></div></div><div className="insight"><Info /><div><b>Показатели собираются автоматически</b><span>Виджет фиксирует посещения, открытия чата, начатые диалоги и полученные контакты.</span></div><button data-live onClick={() => onAction("События аналитики")}>Подробнее</button></div></article>
@@ -2956,10 +3027,10 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
   return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
 }
 
-function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen, readiness }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void; readiness: ReadinessData | null }) {
+function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, activeBotId, period, changePeriod, customFrom, customTo, changeCustomRange, crmDealToOpen, setCrmDealToOpen, readiness }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; customFrom: string | null; customTo: string | null; changeCustomRange: (from: string, to: string) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void; readiness: ReadinessData | null }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} />, readiness: <Readiness setView={setView} readiness={readiness} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests setView={setView} activeBotId={activeBotId} />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />, scenario: <Scenario activeBotId={activeBotId} />,
-  }), [setView, onAction, analytics, refetchAnalytics, me, activeBotId, period, changePeriod, crmDealToOpen, setCrmDealToOpen, readiness]);
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} customFrom={customFrom} customTo={customTo} onCustomRange={changeCustomRange} />, readiness: <Readiness setView={setView} readiness={readiness} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests setView={setView} activeBotId={activeBotId} />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />, scenario: <Scenario activeBotId={activeBotId} />,
+  }), [setView, onAction, analytics, refetchAnalytics, me, activeBotId, period, changePeriod, customFrom, customTo, changeCustomRange, crmDealToOpen, setCrmDealToOpen, readiness]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
 
@@ -3064,7 +3135,7 @@ export default function Home() {
   // "Открыть лид" (Диалоги) -> CRM's deal panel — a cross-view handoff, so it
   // lives up here alongside view/setView rather than inside either page.
   const [crmDealToOpen, setCrmDealToOpen] = useState<string | null>(null);
-  const { me, setMe, analytics, refetchAnalytics, refetchMe, signedOut, period, changePeriod, activeBotId, setActiveBotId } = useCabinetData();
+  const { me, setMe, analytics, refetchAnalytics, refetchMe, signedOut, period, changePeriod, customFrom, customTo, changeCustomRange, activeBotId, setActiveBotId } = useCabinetData();
   const [botSwitcherOpen, setBotSwitcherOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   // The real active bot (see useCabinetData's own activeBotId comment), not
@@ -3125,7 +3196,7 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{visibleNav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div><button className="sidebar-user" data-live onClick={() => setProfileOpen(true)}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")} onOpenProfile={() => setProfileOpen(true)}/><TrialBar onBilling={() => setView("billing")} trialEndsAt={activeBot ? activeBot.trialEndsAt ?? null : undefined} subscriptionActive={activeBot?.subscriptionActive}/><ManagerLockBar locked={activeBot?.managerLocked}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{visibleNav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div><button className="sidebar-user" data-live onClick={() => setProfileOpen(true)}><span>{initials(userName)}</span><div><b>{userName}</b><small>{roleLabel}</small></div><Settings2 /></button></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")} onOpenProfile={() => setProfileOpen(true)}/><TrialBar onBilling={() => setView("billing")} trialEndsAt={activeBot ? activeBot.trialEndsAt ?? null : undefined} subscriptionActive={activeBot?.subscriptionActive}/><ManagerLockBar locked={activeBot?.managerLocked}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} customFrom={customFrom} customTo={customTo} changeCustomRange={changeCustomRange} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
     <BotSwitcherDialog open={botSwitcherOpen} onClose={() => setBotSwitcherOpen(false)} bots={me?.bots ?? []} activeBotId={activeBot?.id ?? null} onSelect={(id) => { setActiveBotId(id); setBotSwitcherOpen(false); }} onCreated={(bot) => { refetchMe(); setActiveBotId(bot.id); setBotSwitcherOpen(false); }} />
     <ProfileSheet open={profileOpen} onOpenChange={setProfileOpen} rawUserName={me?.userName ?? null} userEmail={me?.userEmail ?? null} roleLabel={roleLabel} companyName={companyName} impersonating={me?.impersonating} onNameSaved={(name) => setMe((prev) => (prev ? { ...prev, userName: name } : prev))} />
     <AckManagerLockDialog open={Boolean(activeBot?.managerLockAckNeeded)} botId={activeBot?.id ?? null} onAcknowledge={() => setMe((prev) => (prev && activeBot ? { ...prev, bots: prev.bots.map((b) => (b.id === activeBot.id ? { ...b, managerLockAckNeeded: false } : b)) } : prev))} />
