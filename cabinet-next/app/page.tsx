@@ -845,6 +845,7 @@ function Attention({ analytics, onProcessed }: { analytics: CabinetAnalytics; on
           <Button variant="outline" disabled={busyId === e.id} onClick={() => markVerified(e.id)}>Отметить проверенным</Button>
         </div>)}
       </article>}
+      <ProcessedList items={processed} busyId={busyId} onUnprocess={(id) => markProcessed(id, false)} />
     </section>
     <aside className="panel how-panel"><span className="section-label">Как это работает</span><h3>Единый центр качества</h3><ul><li><span>1</span>Бот отмечает слабый ответ</li><li><span>2</span>Вы добавляете правильную информацию</li><li><span>3</span>Ответ сразу попадает в базу знаний</li></ul></aside>
   </div>;
