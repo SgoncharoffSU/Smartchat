@@ -1432,7 +1432,7 @@ export class WidgetService {
         .escalate({
           botId: bot.id,
           companyId: bot.companyId,
-          botName: bot.name, botAvatarUrl: bot.avatarUrl,
+          botName: bot.name,
           dialogId: dialog.id,
           reason: 'unanswered',
           question: structuredReply.unansweredQuestion,
@@ -1468,7 +1468,7 @@ export class WidgetService {
         .escalate({
           botId: bot.id,
           companyId: bot.companyId,
-          botName: bot.name, botAvatarUrl: bot.avatarUrl,
+          botName: bot.name,
           dialogId: dialog.id,
           reason: 'dissatisfaction',
           question: structuredReply.dissatisfactionSignal,
@@ -2009,7 +2009,7 @@ export class WidgetService {
     bot: { name: string },
     dialog: { status: DialogStatus },
   ) {
-    return { reply: content, buttons, stage: 'training', dialogStatus: dialog.status, leadCaptured: false, botName: bot.name, botAvatarUrl: bot.avatarUrl };
+    return { reply: content, buttons, stage: 'training', dialogStatus: dialog.status, leadCaptured: false, botName: bot.name };
   }
 
   /**

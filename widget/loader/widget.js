@@ -284,6 +284,7 @@
   // "start" message just gets sent the moment iframe-ready arrives instead.
   var iframeReady = false;
   var startRequested = false;
+  var pendingQuickReply = undefined;
   // Set only inside the heroTarget branch below (see there) — stays null
   // everywhere else, so these messages are simply ignored for the normal
   // floating widget, desktop, and cabinet test panes.
@@ -293,7 +294,10 @@
     if (e.source !== iframe.contentWindow || !e.data) return;
     if (e.data.type === 'smartchat:ready') {
       iframeReady = true;
-      if (startRequested) iframe.contentWindow.postMessage({ type: 'smartchat:start' }, '*');
+      if (startRequested) {
+        iframe.contentWindow.postMessage({ type: 'smartchat:start', quickReply: pendingQuickReply }, '*');
+        pendingQuickReply = undefined;
+      }
     } else if (e.data.type === 'smartchat:input-focus') {
       if (heroKeyboardFocusHandler) heroKeyboardFocusHandler();
     } else if (e.data.type === 'smartchat:input-blur') {
@@ -302,12 +306,18 @@
   });
 
   var isOpen = false;
-  function openChat() {
+  // quickReplyText: set when the visitor clicked one of the teaser hook's own
+  // choice buttons (see showTeaser below) instead of the bubble itself —
+  // forwarded to chat.js on the same 'smartchat:start' handshake so it can
+  // send that exact answer as the visitor's first real message once history
+  // has loaded, rather than making them re-type what they already picked.
+  function openChat(quickReplyText) {
     ensureIframeLoaded();
     if (iframeReady) {
-      iframe.contentWindow.postMessage({ type: 'smartchat:start' }, '*');
+      iframe.contentWindow.postMessage({ type: 'smartchat:start', quickReply: quickReplyText || undefined }, '*');
     } else {
       startRequested = true;
+      pendingQuickReply = quickReplyText || pendingQuickReply;
     }
     isOpen = true;
     iframe.style.display = 'block';
@@ -848,7 +858,7 @@
         return res.json();
       })
       .then(function (data) {
-        return data.reply;
+        return { reply: data.reply, buttons: data.buttons || [] };
       });
   }
 
@@ -869,6 +879,12 @@
     if (isOpen || (!ownerTestingMode && localStorage.getItem(teaserDismissedKey))) return;
 
     var teaserText = teaserOverride || teaserFallback;
+    // Choice buttons from the greeting stage's own suggestedButtons (set in
+    // the cabinet's Scenario editor) — e.g. "Какой размер бани
+    // рассматриваете? 6х3м, 6х4м..." — shown right on the outside hook so a
+    // visitor can answer before ever opening the chat. Only for the real
+    // fetched hook, never the static data-teaser override, same as teaserText.
+    var teaserButtons = [];
     // Always call isInit — even with a fixed override text — so message #1
     // is actually persisted server-side. Skipping this when an override is
     // set (e.g. the cabinet's own test-chat framing) used to mean the chat
@@ -877,7 +893,10 @@
     // scratch — five-plus messages before the visitor had said a word.
     try {
       var fetched = await fetchOpeningReply();
-      if (!teaserOverride && fetched) teaserText = fetched;
+      if (!teaserOverride && fetched) {
+        if (fetched.reply) teaserText = fetched.reply;
+        teaserButtons = fetched.buttons || [];
+      }
     } catch (err) {
       console.error('[Smartchat]', err);
     }
@@ -912,6 +931,44 @@
       transition: 'opacity .28s ease, transform .28s cubic-bezier(.34,1.56,.64,1)',
     });
     teaserEl.textContent = teaserText;
+
+    if (teaserButtons.length > 0) {
+      var teaserButtonsWrap = document.createElement('div');
+      Object.assign(teaserButtonsWrap.style, {
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '6px',
+        marginTop: '10px',
+      });
+      teaserButtons.forEach(function (label) {
+        var quickBtn = document.createElement('button');
+        quickBtn.type = 'button';
+        quickBtn.textContent = label;
+        Object.assign(quickBtn.style, {
+          border: '1px solid rgba(0,0,0,.12)',
+          borderRadius: '999px',
+          padding: '6px 12px',
+          background: '#f5f5f7',
+          color: '#1a1a1a',
+          fontSize: '12.5px',
+          fontWeight: '500',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+        });
+        // Own click handler, not the bubble's — a tap on a button answers
+        // that specific question (opens the chat AND sends it as the
+        // visitor's first message, see openChat's quickReplyText param),
+        // while a tap anywhere else on the bubble just opens the chat with
+        // nothing pre-answered. stopPropagation keeps the bubble's own
+        // click listener (openChat with no argument) from also firing.
+        quickBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          openChat(label);
+        });
+        teaserButtonsWrap.appendChild(quickBtn);
+      });
+      teaserEl.appendChild(teaserButtonsWrap);
+    }
 
     var closeBtn = document.createElement('span');
     closeBtn.textContent = '✕';

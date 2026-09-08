@@ -1147,7 +1147,17 @@
     // the message would simply be lost (postMessage never buffers).
     window.addEventListener('message', function (e) {
       if (e.source !== window.parent || !e.data) return;
-      if (e.data.type === 'smartchat:start') loadHistory();
+      if (e.data.type === 'smartchat:start') {
+        // quickReply: the visitor tapped one of the outside teaser hook's own
+        // choice buttons (see widget.js's showTeaser) instead of the bubble
+        // itself — send it as their first real message once history (the
+        // hook + reveal) has actually loaded, so it lands as a normal reply
+        // to a question already visible, not before anything is rendered.
+        var quickReply = e.data.quickReply;
+        loadHistory().then(function () {
+          if (quickReply) send(null, quickReply);
+        });
+      }
       // The parent's own close ("✕") button while the hero-docked chat is
       // fullscreen for the keyboard (see widget.js's expandHeroForKeyboard) —
       // blurring the REAL focused input is what actually dismisses the
