@@ -3268,7 +3268,7 @@ function NavMenuItem({ item, view, setView, badge }: { item: { id: View; label: 
     <SidebarMenuButton tooltip={item.label} isActive={view === item.id} onClick={() => { setView(item.id); setOpenMobile(false); }}>
       <item.icon /><span>{item.label}</span>
     </SidebarMenuButton>
-    {badge && <SidebarMenuBadge>{badge}</SidebarMenuBadge>}
+    {badge && <SidebarMenuBadge className={item.id === "attention" && badge !== "0" ? "nav-badge-alert" : undefined}>{badge}</SidebarMenuBadge>}
   </SidebarMenuItem>;
 }
 
