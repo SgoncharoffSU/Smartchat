@@ -34,7 +34,7 @@
 .brand-icon i{position:absolute;width:12px;height:2px;background:var(--ink);border-radius:3px}.brand-icon i:first-child{transform:rotate(60deg)}.brand-icon i:nth-child(2){transform:rotate(-60deg)}
 .brand-text{display:flex;flex-direction:column;line-height:1.2}.brand-text b{color:#fff;font-size:14px}.brand-text small{color:#71869b;font-size:10px;letter-spacing:.04em}
 .company-switch,.sidebar-user{display:flex;align-items:center;width:100%;gap:9px;padding:9px;color:#fff;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);border-radius:12px;text-align:left;overflow:hidden}
-.company-switch>span,.sidebar-user>span{display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border-radius:9px;background:#253c52;color:#fff;font-size:11px;font-weight:800;overflow:hidden}.company-switch>span img{width:100%;height:100%;object-fit:cover}
+.company-switch>span,.sidebar-user>span{display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border-radius:9px;background:#253c52;color:#fff;font-size:11px;font-weight:800;overflow:hidden}.company-switch>span img{width:100%;height:100%;object-fit:contain;padding:3px}
 .company-switch div,.sidebar-user div{display:flex;flex:1;min-width:0;flex-direction:column}.company-switch b,.sidebar-user b{font-size:12px;white-space:nowrap}.company-switch small,.sidebar-user small{font-size:10px;color:#8295a7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.company-switch>svg,.sidebar-user>svg{width:14px;color:#8295a7}
 .sidebar-help{display:flex;align-items:center;gap:9px;padding:10px;background:rgba(200,255,77,.09);border:1px solid rgba(200,255,77,.15);border-radius:12px;overflow:hidden;white-space:nowrap}.sidebar-help>svg{color:var(--lime)}.sidebar-help span{display:flex;flex-direction:column}.sidebar-help b{font-size:11px;color:#fff}.sidebar-help small{font-size:10px;color:#819588}
 /* Collapsed-rail (collapsible="icon") state for the 4 sidebar rows above
@@ -79,8 +79,18 @@
    side padding shrinks to 8px here too, so a 2rem (32px) button actually
    centers inside the 48px rail with room either side, matching the icon
    size Tailwind itself intended. */
-[data-collapsible="icon"] .app-sidebar [data-sidebar=sidebar]{padding-left:8px;padding-right:8px}
-[data-collapsible="icon"] .app-sidebar [data-sidebar=menu-button]{min-height:0;width:2rem;height:2rem;padding:0;justify-content:center}
+[data-collapsible="icon"] .app-sidebar [data-sidebar=sidebar]{padding-left:6px;padding-right:6px}
+/* width smaller than the full 36px content area on purpose (was a flush
+   2rem/32px) + margin auto to center it — the active-state indicator below
+   is a left-edge bar, and a button with zero breathing room around it read
+   as "прилипает к лого" (found live) once the button had no padding left to
+   separate icon from bar. */
+[data-collapsible="icon"] .app-sidebar [data-sidebar=menu-button]{min-height:0;width:1.875rem;height:1.875rem;padding:0;justify-content:center;margin:0 auto}
+/* The expanded left-edge accent bar (three rules up) reads as a directional
+   "bracket" that has nowhere good to sit on a small isolated square icon —
+   a symmetric ring instead, same idea as a selected icon in any icon-only
+   toolbar. */
+[data-collapsible="icon"] .app-sidebar [data-sidebar=menu-button][data-active=true]{box-shadow:inset 0 0 0 1.5px var(--lime)}
 
 /* App chrome */
 .app-inset{min-width:0;background:var(--canvas)}.topbar{position:sticky;top:0;z-index:20;min-height:70px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:10px clamp(18px,3vw,42px);background:rgba(242,244,242,.93);backdrop-filter:blur(16px);border-bottom:1px solid rgba(8,21,34,.07)}

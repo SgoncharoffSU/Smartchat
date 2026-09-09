@@ -315,21 +315,24 @@ function Brand() {
 // no text.
 function ReadinessRing({ percent }: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, percent));
-  // Thinner ring (was 3) buys the number more room to grow into — found
-  // live: "цифра нечитаемая, слишком мелко" at the old fontSize 8 for a
-  // 2-3 digit number inside a 30-unit circle.
-  const radius = 12.5;
+  // Bumped from 30 to 36px overall (found live: "картинка... маловата, надо
+  // немного увеличить" — even after the fontSize fix, the whole graphic
+  // read as small) — fits the collapsed rail's own ~36px content width
+  // (see [data-collapsible="icon"] .app-sidebar [data-sidebar=sidebar]).
+  const size = 36;
+  const center = size / 2;
+  const radius = 15;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - clamped / 100);
   return (
-    <svg width="30" height="30" viewBox="0 0 30 30" role="img" aria-label={`Внедрение готово на ${clamped}%`}>
-      <circle cx="15" cy="15" r={radius} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="2.5" />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`Внедрение готово на ${clamped}%`}>
+      <circle cx={center} cy={center} r={radius} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="2.5" />
       <circle
-        cx="15" cy="15" r={radius} fill="none" stroke="var(--lime)" strokeWidth="2.5" strokeLinecap="round"
+        cx={center} cy={center} r={radius} fill="none" stroke="var(--lime)" strokeWidth="2.5" strokeLinecap="round"
         strokeDasharray={circumference} strokeDashoffset={offset}
-        transform="rotate(-90 15 15)"
+        transform={`rotate(-90 ${center} ${center})`}
       />
-      <text x="15" y="16" textAnchor="middle" dominantBaseline="middle" fontSize="11" fontWeight="800" fill="#fff">{clamped}</text>
+      <text x={center} y={center + 1} textAnchor="middle" dominantBaseline="middle" fontSize="13" fontWeight="800" fill="#fff">{clamped}</text>
     </svg>
   );
 }
