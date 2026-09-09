@@ -86,7 +86,7 @@
    bar, then — after switching to a ring — the ring itself still hugged the
    icon's left side). margin:auto centering measured off slightly right in
    practice; a small fixed left-biased margin instead. */
-[data-collapsible="icon"] .app-sidebar [data-sidebar=menu-button]{min-height:0;width:1.875rem;height:1.875rem;padding:0;justify-content:center;margin:0 4px 0 2px}
+[data-collapsible="icon"] .app-sidebar [data-sidebar=menu-button]{min-height:0;width:1.875rem;height:1.875rem;padding:0;justify-content:center;margin:0 2px 0 4px}
 /* The expanded left-edge accent bar (three rules up) reads as a directional
    "bracket" that has nowhere good to sit on a small isolated square icon —
    a symmetric ring instead, same idea as a selected icon in any icon-only
