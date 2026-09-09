@@ -30,9 +30,16 @@
 .app-sidebar [data-sidebar=menu-button]:hover{color:#fff;background:rgba(255,255,255,.06)}
 .app-sidebar [data-sidebar=menu-button][data-active=true]{color:var(--lime);background:rgba(200,255,77,.1);box-shadow:inset 3px 0 0 var(--lime)}
 .app-sidebar [data-sidebar=menu-badge]{color:#8295a7;right:10px;font-size:10px}.app-sidebar [data-sidebar=footer]{gap:8px;padding:8px 2px 2px}
-.brand{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 8px;white-space:nowrap;overflow:hidden}.brand-icon{position:relative;display:grid;place-items:center;width:31px;height:31px;flex:0 0 31px;border-radius:9px;background:var(--lime);transform:rotate(-8deg)}
+/* .brand itself must NOT clip: .brand-icon is a 31x31 square rotated -8deg
+   (transform doesn't change its layout box, only the paint), so the rotated
+   corners project a couple px outside that box — an overflow:hidden here
+   was cutting them off ("Лого обрезан", found by reasoning about the
+   rotation math, not another guess at the unrelated company-logo upload).
+   Truncation for the (fixed, short) product name/tagline moves to
+   .brand-text itself instead, where it can't clip the icon. */
+.brand{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 8px;white-space:nowrap}.brand-icon{position:relative;display:grid;place-items:center;width:31px;height:31px;flex:0 0 31px;border-radius:9px;background:var(--lime);transform:rotate(-8deg)}
 .brand-icon i{position:absolute;width:12px;height:2px;background:var(--ink);border-radius:3px}.brand-icon i:first-child{transform:rotate(60deg)}.brand-icon i:nth-child(2){transform:rotate(-60deg)}
-.brand-text{display:flex;flex-direction:column;line-height:1.2}.brand-text b{color:#fff;font-size:14px}.brand-text small{color:#71869b;font-size:10px;letter-spacing:.04em}
+.brand-text{display:flex;flex-direction:column;line-height:1.2;min-width:0}.brand-text b{color:#fff;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.brand-text small{color:#71869b;font-size:10px;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .company-switch,.sidebar-user{display:flex;align-items:center;width:100%;gap:9px;padding:9px;color:#fff;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);border-radius:12px;text-align:left;overflow:hidden}
 .company-switch>span,.sidebar-user>span{display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border-radius:9px;background:#253c52;color:#fff;font-size:11px;font-weight:800;overflow:hidden}.company-switch>span img{width:100%;height:100%;object-fit:contain;padding:6px}
 .company-switch div,.sidebar-user div{display:flex;flex:1;min-width:0;flex-direction:column}.company-switch b,.sidebar-user b{font-size:12px;white-space:nowrap}.company-switch small,.sidebar-user small{font-size:10px;color:#8295a7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.company-switch>svg,.sidebar-user>svg{width:14px;color:#8295a7}
@@ -80,13 +87,19 @@
    centers inside the 48px rail with room either side, matching the icon
    size Tailwind itself intended. */
 [data-collapsible="icon"] .app-sidebar [data-sidebar=sidebar]{padding-left:6px;padding-right:6px}
-/* width smaller than the full 36px content area on purpose (was a flush
-   2rem/32px) — the active-state ring below needs breathing room around the
-   icon, or it reads as "прилипает" (found live twice: first to a left-edge
-   bar, then — after switching to a ring — the ring itself still hugged the
-   icon's left side). margin:auto centering measured off slightly right in
-   practice; a small fixed left-biased margin instead. */
-[data-collapsible="icon"] .app-sidebar [data-sidebar=menu-button]{min-height:0;width:1.875rem;height:1.875rem;padding:0;justify-content:center;margin:0 2px 0 4px}
+[data-collapsible="icon"] .app-sidebar [data-sidebar=menu-button]{min-height:0;width:1.875rem;height:1.875rem;padding:0;justify-content:center;margin:0 auto}
+/* Two margin-direction guesses ("прилипает"/"криво стоит") both failed to
+   fix the ring-vs-icon misalignment because the real cause wasn't the
+   button's position at all: NavMenuItem always renders <item.icon/><span>
+   label</span>, and nothing ever hides that label span when collapsed. Its
+   layout box collapses to ~0 width (overflow:hidden on the button gives it
+   an automatic min-width of 0), but the button's own `gap-2` after the icon
+   still applies to that phantom item — so centered content is icon+gap+0,
+   not just icon, and justify-content:center visibly centers THAT, pulling
+   the icon left of the button's true center. The ring (an inset box-shadow
+   on the button's real box) stays put, so it reads as crooked around the
+   icon. Hiding the label removes the phantom gap; margin:auto is enough. */
+[data-collapsible="icon"] .app-sidebar [data-sidebar=menu-button]>span{display:none}
 /* The expanded left-edge accent bar (three rules up) reads as a directional
    "bracket" that has nowhere good to sit on a small isolated square icon —
    a symmetric ring instead, same idea as a selected icon in any icon-only

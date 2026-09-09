@@ -315,17 +315,19 @@ function Brand() {
 // no text.
 function ReadinessRing({ percent }: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, percent));
-  // 30 -> 36 -> 40px (found live twice: "маловата... ещё увеличь") — a couple
-  // px wider than the collapsed rail's own ~36px content area, which reads
-  // fine here (a ring bleeding slightly into the gutter, not clipped
-  // content/text) rather than staying small enough to never need this again.
   const size = 40;
   const center = size / 2;
   const radius = 16.5;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - clamped / 100);
+  // Every earlier size bump (30 -> 36 -> 40) rendered identically small —
+  // root cause: globals.css has an unconditional `svg{width:18px;height:18px}`
+  // reset (for the many bare nav-icon svgs elsewhere) which, being a plain
+  // CSS property, overrides this element's width/height ATTRIBUTES per the
+  // CSS spec (presentation attributes always lose to any CSS rule, even a
+  // low-specificity type selector). An inline style wins over both.
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`Внедрение готово на ${clamped}%`}>
+    <svg width={size} height={size} style={{ width: size, height: size }} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`Внедрение готово на ${clamped}%`}>
       <circle cx={center} cy={center} r={radius} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="2.5" />
       <circle
         cx={center} cy={center} r={radius} fill="none" stroke="var(--lime)" strokeWidth="2.5" strokeLinecap="round"
