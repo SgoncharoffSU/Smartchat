@@ -315,13 +315,13 @@ function Brand() {
 // no text.
 function ReadinessRing({ percent }: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, percent));
-  // Bumped from 30 to 36px overall (found live: "картинка... маловата, надо
-  // немного увеличить" — even after the fontSize fix, the whole graphic
-  // read as small) — fits the collapsed rail's own ~36px content width
-  // (see [data-collapsible="icon"] .app-sidebar [data-sidebar=sidebar]).
-  const size = 36;
+  // 30 -> 36 -> 40px (found live twice: "маловата... ещё увеличь") — a couple
+  // px wider than the collapsed rail's own ~36px content area, which reads
+  // fine here (a ring bleeding slightly into the gutter, not clipped
+  // content/text) rather than staying small enough to never need this again.
+  const size = 40;
   const center = size / 2;
-  const radius = 15;
+  const radius = 16.5;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - clamped / 100);
   return (
@@ -332,7 +332,7 @@ function ReadinessRing({ percent }: { percent: number }) {
         strokeDasharray={circumference} strokeDashoffset={offset}
         transform={`rotate(-90 ${center} ${center})`}
       />
-      <text x={center} y={center + 1} textAnchor="middle" dominantBaseline="middle" fontSize="13" fontWeight="800" fill="#fff">{clamped}</text>
+      <text x={center} y={center + 1} textAnchor="middle" dominantBaseline="middle" fontSize="14" fontWeight="800" fill="#fff">{clamped}</text>
     </svg>
   );
 }
