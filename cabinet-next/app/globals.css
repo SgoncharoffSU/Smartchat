@@ -63,6 +63,19 @@
 [data-collapsible="icon"] .app-sidebar .company-switch,
 [data-collapsible="icon"] .app-sidebar .sidebar-user{justify-content:center;gap:0;padding:0}
 [data-collapsible="icon"] .app-sidebar .sidebar-help-collapsed{display:flex}
+/* Same underlying cascade gap as the comment above (Tailwind's own
+   group-data-[collapsible=icon]:size-8!/p-2! on SidebarMenuButton lose to
+   this plain stylesheet's unconditional min-height:40px/padding:0 11px on
+   [data-sidebar=menu-button] two rules up) — just not yet hit for THIS
+   element, since sidebar.tsx's own component was assumed to self-handle
+   collapse. Found live: nav icons squeezed into a ~10px sliver (48px rail −
+   12px padding on [data-sidebar=sidebar] × 2 − the button's own 11px × 2 —
+   not remotely square) instead of a proper button-sized icon. Sidebar's own
+   side padding shrinks to 8px here too, so a 2rem (32px) button actually
+   centers inside the 48px rail with room either side, matching the icon
+   size Tailwind itself intended. */
+[data-collapsible="icon"] .app-sidebar [data-sidebar=sidebar]{padding-left:8px;padding-right:8px}
+[data-collapsible="icon"] .app-sidebar [data-sidebar=menu-button]{min-height:0;width:2rem;height:2rem;padding:0;justify-content:center}
 
 /* App chrome */
 .app-inset{min-width:0;background:var(--canvas)}.topbar{position:sticky;top:0;z-index:20;min-height:70px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:10px clamp(18px,3vw,42px);background:rgba(242,244,242,.93);backdrop-filter:blur(16px);border-bottom:1px solid rgba(8,21,34,.07)}
