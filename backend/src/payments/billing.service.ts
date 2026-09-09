@@ -164,6 +164,27 @@ export class BillingService {
       this.logger.error(`YooKassa payment ${yookassaPaymentId} succeeded but carries no paymentId metadata`);
       return;
     }
+
+    // Belt-and-suspenders — createPayment sets capture:true with a
+    // server-fixed amount, so YooKassa's own hosted page never lets the
+    // payer edit it and "succeeded" already implies the full requested sum
+    // arrived. Checked anyway rather than assumed: this is the one place a
+    // silent amount mismatch would mean crediting a full plan/top-up for
+    // whatever actually came in, no matter how much smaller. Compared as
+    // numbers, not strings — "990.00" vs "990" are the same amount.
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) {
+      this.logger.error(`YooKassa payment ${yookassaPaymentId} succeeded but Payment row ${paymentId} not found`);
+      return;
+    }
+    const expected = payment.amountRub.toNumber();
+    const received = Number(real.amountRub);
+    if (!Number.isFinite(received) || Math.abs(received - expected) > 0.01) {
+      this.logger.error(
+        `YooKassa payment ${yookassaPaymentId} amount mismatch — expected ${expected} RUB, YooKassa confirms ${real.amountRub} RUB. NOT crediting; left as pending for manual review.`,
+      );
+      return;
+    }
     await this.confirmPayment(paymentId);
   }
 

@@ -8,6 +8,16 @@ export interface YookassaPayment {
   paid: boolean;
   confirmationUrl: string | null;
   metadata: Record<string, string>;
+  // The amount YooKassa itself confirms was actually paid — read back and
+  // compared against what we expected before crediting anything (see
+  // BillingService.verifyAndConfirmPayment). Not exploitable through the
+  // normal checkout flow (capture:true below means YooKassa's own hosted
+  // page shows this amount read-only — a payer can't type in a different
+  // one), but "не сохранилось" isn't the same as "isn't worth checking":
+  // this is the one place real money changes hands, so it gets its own
+  // explicit belt-and-suspenders verification rather than trusting status
+  // alone.
+  amountRub: string;
 }
 
 /**
@@ -93,6 +103,7 @@ export class YookassaService {
       paid: data.paid === true,
       confirmationUrl: data.confirmation?.confirmation_url ?? null,
       metadata: data.metadata ?? {},
+      amountRub: data.amount?.value ?? '0',
     };
   }
 }
