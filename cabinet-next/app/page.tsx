@@ -42,6 +42,7 @@ type View = "dashboard" | "readiness" | "attention" | "dialogs" | "training" | "
 type BotSummary = { id: string; name: string; label: string | null; widgetToken: string; funnelGeneratedAt: string | null; sourceWebsite?: string | null; trialEndsAt?: string | null; subscriptionActive?: boolean; managerLocked?: boolean; managerLockAckNeeded?: boolean };
 type CabinetMe = {
   companyName: string;
+  companyLogoUrl: string | null;
   // Deprecated singular alias (see CabinetService.getMe's own comment) — kept
   // only for call sites not yet updated to bots[] + activeBotId. Prefer
   // reading the ACTIVE bot via bots.find(b => b.id === activeBotId) instead
@@ -314,18 +315,21 @@ function Brand() {
 // no text.
 function ReadinessRing({ percent }: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, percent));
-  const radius = 13;
+  // Thinner ring (was 3) buys the number more room to grow into — found
+  // live: "цифра нечитаемая, слишком мелко" at the old fontSize 8 for a
+  // 2-3 digit number inside a 30-unit circle.
+  const radius = 12.5;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - clamped / 100);
   return (
     <svg width="30" height="30" viewBox="0 0 30 30" role="img" aria-label={`Внедрение готово на ${clamped}%`}>
-      <circle cx="15" cy="15" r={radius} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="3" />
+      <circle cx="15" cy="15" r={radius} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="2.5" />
       <circle
-        cx="15" cy="15" r={radius} fill="none" stroke="var(--lime)" strokeWidth="3" strokeLinecap="round"
+        cx="15" cy="15" r={radius} fill="none" stroke="var(--lime)" strokeWidth="2.5" strokeLinecap="round"
         strokeDasharray={circumference} strokeDashoffset={offset}
         transform="rotate(-90 15 15)"
       />
-      <text x="15" y="16" textAnchor="middle" dominantBaseline="middle" fontSize="8" fontWeight="800" fill="#fff">{clamped}</text>
+      <text x="15" y="16" textAnchor="middle" dominantBaseline="middle" fontSize="11" fontWeight="800" fill="#fff">{clamped}</text>
     </svg>
   );
 }
@@ -2231,7 +2235,7 @@ function TeaserVariantsEditor({ variants, onChange }: { variants: string[]; onCh
   </div>;
 }
 
-function WidgetSettings({ me, activeBotId, analytics, refetchAnalytics }: { me: CabinetMe; activeBotId: string | null; analytics: CabinetAnalytics; refetchAnalytics: () => void }) {
+function WidgetSettings({ me, setMe, activeBotId, analytics, refetchAnalytics }: { me: CabinetMe; setMe: React.Dispatch<React.SetStateAction<CabinetMe>>; activeBotId: string | null; analytics: CabinetAnalytics; refetchAnalytics: () => void }) {
   const botQuery = activeBotId ? `?botId=${activeBotId}` : "";
   type Appearance = {
     name: string; label: string | null; gender: string;
@@ -2249,6 +2253,9 @@ function WidgetSettings({ me, activeBotId, analytics, refetchAnalytics }: { me: 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -2299,6 +2306,23 @@ function WidgetSettings({ me, activeBotId, analytics, refetchAnalytics }: { me: 
       .then((data: Appearance) => setForm((f) => f && { ...f, avatarUrl: data.avatarUrl }))
       .catch((e) => setAvatarError(e instanceof Error && e.message ? e.message : "Не получилось загрузить фото."))
       .finally(() => setAvatarBusy(false));
+  };
+  // Per-company, not per-bot (no botQuery) — same reasoning as
+  // updateCompanyName right below: one logo for the whole account, shared by
+  // every bot the company has. Patches `me` directly (setMe) so the
+  // sidebar's own company-switch avatar updates immediately — that's the
+  // ONE place this logo actually shows, per the founder's own ask ("в
+  // названии бота, где у нас УЧ").
+  const uploadLogo = (file: File) => {
+    setLogoBusy(true);
+    setLogoError(null);
+    const body = new FormData();
+    body.append("file", file);
+    fetch(`/api/cabinet/company/logo`, { method: "POST", body })
+      .then((r) => (r.ok ? r.json() : r.json().catch(() => null).then((b) => Promise.reject(new Error(b?.message)))))
+      .then((data: { companyLogoUrl: string }) => setMe((m) => m && { ...m, companyLogoUrl: data.companyLogoUrl }))
+      .catch((e) => setLogoError(e instanceof Error && e.message ? e.message : "Не получилось загрузить лого."))
+      .finally(() => setLogoBusy(false));
   };
   const generateAvatar = () => {
     setAvatarBusy(true);
@@ -2441,6 +2465,17 @@ function WidgetSettings({ me, activeBotId, analytics, refetchAnalytics }: { me: 
       <div className="settings-section">
         <div className="section-title"><span><Bot /></span><div><h2>Личность бота</h2><p>То, как он представляется посетителю</p></div></div>
         <label><span>Название компании</span><input value={companyName ?? ""} onChange={(e) => setCompanyName(e.target.value)} placeholder="Загружаю…" /></label>
+        <div className="avatar-field">
+          <span>Лого компании</span>
+          <div className="avatar-field-row">
+            <span className="avatar-preview">{me?.companyLogoUrl ? <img src={me.companyLogoUrl} alt="" /> : initials(companyName || "К")}</span>
+            <div className="avatar-field-actions">
+              <Button variant="outline" type="button" disabled={logoBusy} onClick={() => logoInputRef.current?.click()}><Upload />{logoBusy ? "Секунду…" : "Загрузить"}</Button>
+            </div>
+            <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ""; }} />
+          </div>
+          {logoError && <p className="form-error">{logoError}</p>}
+        </div>
         <div className="two-fields">
           <label><span>Имя бота</span><input value={form?.name ?? ""} onChange={(e) => setForm((f) => f && { ...f, name: e.target.value })} placeholder="Загружаю…" /></label>
           <label><span>Пол бота</span><Select value={form?.gender ?? "female"} onValueChange={(v) => setForm((f) => f && { ...f, gender: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="male">Мужской</SelectItem><SelectItem value="female">Женский</SelectItem></SelectContent></Select></label>
@@ -3185,10 +3220,10 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
   return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
 }
 
-function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, activeBotId, period, changePeriod, customFrom, customTo, changeCustomRange, crmDealToOpen, setCrmDealToOpen, readiness }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; customFrom: string | null; customTo: string | null; changeCustomRange: (from: string, to: string) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void; readiness: ReadinessData | null }) {
+function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, setMe, activeBotId, period, changePeriod, customFrom, customTo, changeCustomRange, crmDealToOpen, setCrmDealToOpen, readiness }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; setMe: React.Dispatch<React.SetStateAction<CabinetMe>>; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; customFrom: string | null; customTo: string | null; changeCustomRange: (from: string, to: string) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void; readiness: ReadinessData | null }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} customFrom={customFrom} customTo={customTo} onCustomRange={changeCustomRange} />, readiness: <Readiness setView={setView} readiness={readiness} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests setView={setView} activeBotId={activeBotId} />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />, scenario: <Scenario activeBotId={activeBotId} />,
-  }), [setView, onAction, analytics, refetchAnalytics, me, activeBotId, period, changePeriod, customFrom, customTo, changeCustomRange, crmDealToOpen, setCrmDealToOpen, readiness]);
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} customFrom={customFrom} customTo={customTo} onCustomRange={changeCustomRange} />, readiness: <Readiness setView={setView} readiness={readiness} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests setView={setView} activeBotId={activeBotId} />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} setMe={setMe} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />, scenario: <Scenario activeBotId={activeBotId} />,
+  }), [setView, onAction, analytics, refetchAnalytics, me, setMe, activeBotId, period, changePeriod, customFrom, customTo, changeCustomRange, crmDealToOpen, setCrmDealToOpen, readiness]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
 
@@ -3354,7 +3389,7 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{visibleNav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")} onOpenProfile={() => setProfileOpen(true)}/><TrialBar onBilling={() => setView("billing")} trialEndsAt={activeBot ? activeBot.trialEndsAt ?? null : undefined} subscriptionActive={activeBot?.subscriptionActive}/><ManagerLockBar locked={activeBot?.managerLocked}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} customFrom={customFrom} customTo={customTo} changeCustomRange={changeCustomRange} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{me?.companyLogoUrl ? <img src={me.companyLogoUrl} alt="" /> : initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{visibleNav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")} onOpenProfile={() => setProfileOpen(true)}/><TrialBar onBilling={() => setView("billing")} trialEndsAt={activeBot ? activeBot.trialEndsAt ?? null : undefined} subscriptionActive={activeBot?.subscriptionActive}/><ManagerLockBar locked={activeBot?.managerLocked}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} setMe={setMe} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} customFrom={customFrom} customTo={customTo} changeCustomRange={changeCustomRange} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
     <BotSwitcherDialog open={botSwitcherOpen} onClose={() => setBotSwitcherOpen(false)} bots={me?.bots ?? []} activeBotId={activeBot?.id ?? null} onSelect={(id) => { setActiveBotId(id); setBotSwitcherOpen(false); }} onCreated={(bot) => { refetchMe(); setActiveBotId(bot.id); setBotSwitcherOpen(false); }} />
     <ProfileSheet open={profileOpen} onOpenChange={setProfileOpen} rawUserName={me?.userName ?? null} userEmail={me?.userEmail ?? null} roleLabel={roleLabel} companyName={companyName} impersonating={me?.impersonating} onNameSaved={(name) => setMe((prev) => (prev ? { ...prev, userName: name } : prev))} />
     <AckManagerLockDialog open={Boolean(activeBot?.managerLockAckNeeded)} botId={activeBot?.id ?? null} onAcknowledge={() => setMe((prev) => (prev && activeBot ? { ...prev, bots: prev.bots.map((b) => (b.id === activeBot.id ? { ...b, managerLockAckNeeded: false } : b)) } : prev))} />

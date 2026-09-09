@@ -480,6 +480,28 @@ export class CabinetController {
     return this.cabinet.updateCompanyName(req.companyId, body.name);
   }
 
+  // Same disk-upload convention as the bot avatar upload above — image only,
+  // capped at 5MB (a small sidebar avatar, not a document). Company data,
+  // not bot configuration, so it's blocked during support impersonation like
+  // updateCompanyName right above it, not just AuthGuard.
+  @Post('company/logo')
+  @UseGuards(AuthGuard, BlockDuringImpersonationGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: UPLOADS_DIR,
+        filename: (_req, file, cb) => cb(null, `${randomUUID()}${extname(file.originalname)}`),
+      }),
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'].includes(file.mimetype)),
+    }),
+  )
+  async uploadCompanyLogo(@Req() req: AuthedRequest, @UploadedFile() file: Express.Multer.File | undefined) {
+    if (!file) throw new BadRequestException('Файл не получен — проверьте тип (JPEG/PNG/WEBP/GIF/SVG) и размер (до 5 МБ)');
+    const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'https://chat.glavinstrument.com';
+    return this.cabinet.setCompanyLogo(req.companyId, `${publicBaseUrl}/uploads/${file.filename}`);
+  }
+
   // The real profile card (name + email + role + logout) — see
   // CabinetService.updateUserName's own comment for what this replaces.
   // Also genuinely broken during impersonation on top of being account

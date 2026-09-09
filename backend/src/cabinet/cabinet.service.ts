@@ -395,6 +395,7 @@ export class CabinetService {
     const primary = bots[0];
     return {
       companyName: company.name,
+      companyLogoUrl: company.logoUrl,
       trialEndsAt: primary?.trialEndsAt ?? null,
       subscriptionActive: primary?.subscriptionActive ?? false,
       tariffPlan: primary?.tariffPlan ?? null,
@@ -678,6 +679,14 @@ export class CabinetService {
     const trimmed = this.validateDisplayName(name, 'Название компании');
     await this.prisma.company.update({ where: { id: companyId }, data: { name: trimmed } });
     return { companyName: trimmed };
+  }
+
+  // The file's already on disk by the time this runs — see
+  // CabinetController.uploadCompanyLogo, same multer convention as the bot
+  // avatar upload right next to it.
+  async setCompanyLogo(companyId: string, logoUrl: string) {
+    await this.prisma.company.update({ where: { id: companyId }, data: { logoUrl } });
+    return { companyLogoUrl: logoUrl };
   }
 
   /**

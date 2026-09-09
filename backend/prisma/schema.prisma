@@ -10,6 +10,14 @@ datasource db {
 model Company {
   id                 String    @id @default(uuid())
   name               String
+  // Shown as the sidebar's own company-switch avatar instead of the
+  // initials-in-a-circle fallback (initials(companyName)) — found live: "я
+  // бы добавил возможность устанавливать лого... в названии бота, где у нас
+  // УЧ". Upload-only, same disk convention as Bot.avatarUrl (see
+  // CabinetController.uploadCompanyLogo) — no AI generation here, a company
+  // logo is a specific asset the owner already has, unlike a bot persona
+  // photo.
+  logoUrl            String?   @map("logo_url")
   // Set on auto-provisioning, cleared (kept, actually) once claimed via
   // /cabinet/register — registeredAt distinguishes "claimed" from "pending".
   registrationToken  String?   @unique @map("registration_token")
