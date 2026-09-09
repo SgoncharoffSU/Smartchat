@@ -87,14 +87,13 @@
    centers inside the 48px rail with room either side, matching the icon
    size Tailwind itself intended. */
 [data-collapsible="icon"] .app-sidebar [data-sidebar=sidebar]{padding-left:6px;padding-right:6px}
-/* Available width here is only 32px (48px rail − 6px×2 sidebar padding −
-   2px×2 [data-sidebar=group]'s own unconditional padding), so a 30px button
-   centered with margin:auto had just 1px slack per side — any subpixel
-   rounding reads as the ring's right edge touching/"срезается". Shrinking
-   the button to 28px and biasing the margin left gives real clearance on
-   the right without the icon (centered inside the button by
-   justify-content, unaffected by this) moving relative to its own ring. */
-[data-collapsible="icon"] .app-sidebar [data-sidebar=menu-button]{min-height:0;width:1.75rem;height:1.75rem;padding:0;justify-content:center;margin:0 3px 0 1px}
+/* The rail itself (--sidebar-width-icon in sidebar.tsx) was only 48px,
+   leaving this button just ~1px of margin slack on each side inside the
+   6px×2 sidebar padding + 2px×2 group padding — any subpixel rounding read
+   as the active ring's right edge getting clipped. Widened the rail itself
+   by 5px instead of biasing the button's margin, so it centers with real
+   room either side. */
+[data-collapsible="icon"] .app-sidebar [data-sidebar=menu-button]{min-height:0;width:1.75rem;height:1.75rem;padding:0;justify-content:center;margin:0 auto}
 /* Two margin-direction guesses ("прилипает"/"криво стоит") both failed to
    fix the ring-vs-icon misalignment because the real cause wasn't the
    button's position at all: NavMenuItem always renders <item.icon/><span>
