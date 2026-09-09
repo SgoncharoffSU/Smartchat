@@ -640,6 +640,76 @@ export class CabinetService {
   }
 
   /**
+   * Dashboard's "История изменений" used to be 3 hardcoded rows, the same
+   * for every account (found live: disagreed with what actually happened on
+   * the bot). No audit-log table exists — rather than build one, this
+   * derives real events from timestamps that already exist: knowledge base
+   * entries, finished autotest runs, and escalations verified into the
+   * knowledge base. Merged and sorted, newest first.
+   */
+  async getActivity(companyId: string, botId?: string) {
+    const bot = await this.findOwnedBot(companyId, botId);
+    const TAKE = 5;
+
+    const [entries, runs, verified] = await Promise.all([
+      this.prisma.knowledgeEntry.findMany({
+        where: { botId: bot.id },
+        orderBy: { createdAt: 'desc' },
+        take: TAKE,
+        select: { id: true, question: true, answer: true, source: true, createdAt: true },
+      }),
+      this.prisma.testRun.findMany({
+        where: { botId: bot.id, finishedAt: { not: null } },
+        orderBy: { finishedAt: 'desc' },
+        take: TAKE,
+        select: { id: true, finishedAt: true, results: { select: { verdict: true } } },
+      }),
+      this.prisma.escalation.findMany({
+        where: { botId: bot.id, verifiedAt: { not: null } },
+        orderBy: { verifiedAt: 'desc' },
+        take: TAKE,
+        select: { id: true, question: true, verifiedAt: true },
+      }),
+    ]);
+
+    type Event = { key: string; icon: 'knowledge' | 'test' | 'quality'; title: string; description: string; time: string };
+    const events: Event[] = [
+      ...entries.map((e): Event => {
+        const text = e.question ?? e.answer;
+        return {
+          key: `kb-${e.id}`,
+          icon: 'knowledge',
+          title: e.source === 'site' ? 'Бот изучил страницу сайта' : 'Добавлена запись в базу знаний',
+          description: text.length > 80 ? `${text.slice(0, 80)}…` : text,
+          time: e.createdAt.toISOString(),
+        };
+      }),
+      ...runs.map((r): Event => {
+        const total = r.results.length;
+        const passed = r.results.filter((res) => res.verdict === 'pass').length;
+        return {
+          key: `run-${r.id}`,
+          icon: 'test',
+          title: 'Завершена проверка ответов',
+          description: total > 0 ? `${passed} из ${total} сценариев пройдены` : 'Сценарии ещё не добавлены',
+          time: (r.finishedAt as Date).toISOString(),
+        };
+      }),
+      ...verified.map((v): Event => ({
+        key: `verified-${v.id}`,
+        icon: 'quality',
+        title: 'Ответ проверен и добавлен в базу знаний',
+        description: v.question.length > 80 ? `${v.question.slice(0, 80)}…` : v.question,
+        time: (v.verifiedAt as Date).toISOString(),
+      })),
+    ]
+      .sort((a, b) => (a.time < b.time ? 1 : -1))
+      .slice(0, TAKE);
+
+    return { events };
+  }
+
+  /**
    * Variants are stored as the full pinned instruction ("Твоя первая реплика
    * должна быть РОВНО такой, без изменений: \"<hook>\" Не добавляй..."), not
    * the bare hook text — the A/B/C/D report shows the actual phrase, not the

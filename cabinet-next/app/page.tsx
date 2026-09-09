@@ -698,7 +698,7 @@ function fmtRangeLabel(iso: string): string {
   return `${d}.${String(m).padStart(2, "0")}.${y}`;
 }
 
-function Dashboard({ setView, onAction, analytics, period, onPeriodChange, customFrom, customTo, onCustomRange, readiness }: { setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; period: AnalyticsPeriod; onPeriodChange: (p: AnalyticsPeriod) => void; customFrom: string | null; customTo: string | null; onCustomRange: (from: string, to: string) => void; readiness: ReadinessData | null }) {
+function Dashboard({ setView, onAction, analytics, period, onPeriodChange, customFrom, customTo, onCustomRange, readiness, activity }: { setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; period: AnalyticsPeriod; onPeriodChange: (p: AnalyticsPeriod) => void; customFrom: string | null; customTo: string | null; onCustomRange: (from: string, to: string) => void; readiness: ReadinessData | null; activity: ActivityData | null }) {
   // "week" here is purely which TAB highlights — period itself stays
   // whatever it really is (including "custom", which matches none of the 4
   // tabs on purpose, so switching to a custom range correctly leaves all
@@ -775,13 +775,32 @@ function Dashboard({ setView, onAction, analytics, period, onPeriodChange, custo
         const pillLabel = !esc ? "Загружаю…" : needsAttention ? "Есть что проверить" : "Всё хорошо";
         return <article className="panel quality-panel"><div className="panel-head"><div><span className="section-label">Качество</span><h2>Ответы под контролем</h2></div><StatusPill tone={pillTone}>{pillLabel}</StatusPill></div><div className="quality-stats"><div><b>{fmtNum(needsAttention)}</b><span>требуют внимания</span></div><div><b>{fmtNum(reviewed)}</b><span>проверено</span></div><div><b>{fmtNum(improved)}</b><span>улучшено</span></div></div><button className="wide-ghost" data-live onClick={() => setView("attention")}>Открыть центр качества</button></article>;
       })()}
-      <article className="panel activity-panel"><div className="panel-head"><div><span className="section-label">История изменений</span><h2>Что происходило с ботом</h2></div><button className="ghost-action" data-live onClick={() => onAction("Вся история активности")}>Показать все <ArrowRight/></button></div><div className="timeline"><div><span className="event-icon green"><Check /></span><p><b>Менеджер обновил базу знаний</b><small>Добавлено 16 записей с сайта</small></p><time>12:40</time></div><div><span className="event-icon blue"><TestTube2 /></span><p><b>Завершена проверка ответов</b><small>44 из 48 сценариев пройдены</small></p><time>11:18</time></div><div><span className="event-icon violet"><Rocket /></span><p><b>Обновлён этап внедрения</b><small>Следующий шаг — тестирование на сайте</small></p><time>вчера</time></div></div></article>
+      <article className="panel activity-panel"><div className="panel-head"><div><span className="section-label">История изменений</span><h2>Что происходило с ботом</h2></div></div><div className="timeline">
+        {/* Used to be 3 hardcoded rows, same for every account (found live:
+            disagreed with the sidebar's real readiness) — real events now,
+            see CabinetService.getActivity. "Показать все" had no real
+            history behind it (PrototypeActionDialog is dead code, never
+            rendered — clicking it already silently did nothing), so it's
+            dropped rather than wired to fake data. */}
+        {!activity ? <p className="timeline-empty">Загружаю…</p> : activity.events.length === 0 ? <p className="timeline-empty">Пока нет событий.</p> : activity.events.map((e) => {
+          const { icon: Icon, tone } = ACTIVITY_ICON[e.icon];
+          return <div key={e.key}><span className={`event-icon ${tone}`}><Icon /></span><p><b>{e.title}</b><small>{e.description}</small></p><time>{fmtDialogDate(e.time)}</time></div>;
+        })}
+      </div></article>
     </section>
   </>;
 }
 
 type ReadinessStep = { key: string; title: string; nextStepTitle?: string; description: string; weight: number; completed: boolean };
 type ReadinessData = { percent: number; steps: ReadinessStep[]; nextStep: ReadinessStep | null };
+
+type ActivityEvent = { key: string; icon: "knowledge" | "test" | "quality"; title: string; description: string; time: string };
+type ActivityData = { events: ActivityEvent[] };
+const ACTIVITY_ICON: Record<ActivityEvent["icon"], { icon: React.ElementType; tone: string }> = {
+  knowledge: { icon: Check, tone: "green" },
+  test: { icon: TestTube2, tone: "blue" },
+  quality: { icon: Rocket, tone: "violet" },
+};
 
 // Used to be a hardcoded array shared by every account — 75%, "17 записей",
 // done/not-done, none of it tied to anything real (found live: "1. Заявка на
@@ -3233,10 +3252,10 @@ function PrototypeActionDialog({ action, onClose }: { action: string | null; onC
   return <Dialog open={Boolean(action)} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="prototype-dialog"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Демонстрационное состояние интерфейса. Данные аккаунта не изменяются.</DialogDescription></DialogHeader>{isHistory ? <div className="prototype-history">{[["Новая заявка", "Анна · 12:41", Target],["База знаний обновлена", "16 записей · 12:40", Database],["Версия v7 опубликована", "Олег · вчера", History],["Telegram подключён", "26 августа", Send]].map(([name,detail,Icon]) => <div key={String(name)}><span><Icon/></span><p><b>{String(name)}</b><small>{String(detail)}</small></p><ArrowRight/></div>)}</div> : isExport ? <div className="prototype-options"><button><Download/><p><b>Excel</b><small>Диалоги, статусы и контакты</small></p><ArrowRight/></button><button><Download/><p><b>CSV</b><small>Для загрузки в CRM</small></p><ArrowRight/></button><button><Download/><p><b>PDF-отчёт</b><small>Итоги выбранного периода</small></p><ArrowRight/></button></div> : <div className="prototype-form"><label><span>Название</span><input placeholder="Введите название"/></label><label><span>Комментарий</span><textarea placeholder="Добавьте детали, если нужно"/></label><div className="prototype-note"><ShieldCheck/><span>Перед сохранением вы увидите итог и сможете отменить действие.</span></div></div>}<DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button>{!isHistory && <Button className="primary-action" onClick={onClose}>{isExport ? "Скачать" : "Продолжить"}<ArrowRight/></Button>}</DialogFooter></DialogContent></Dialog>;
 }
 
-function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, setMe, activeBotId, period, changePeriod, customFrom, customTo, changeCustomRange, crmDealToOpen, setCrmDealToOpen, readiness }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; setMe: React.Dispatch<React.SetStateAction<CabinetMe>>; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; customFrom: string | null; customTo: string | null; changeCustomRange: (from: string, to: string) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void; readiness: ReadinessData | null }) {
+function AppContent({ view, setView, onAction, analytics, companyName, refetchAnalytics, me, setMe, activeBotId, period, changePeriod, customFrom, customTo, changeCustomRange, crmDealToOpen, setCrmDealToOpen, readiness, activity }: { view: View; setView: (v: View) => void; onAction: (label: string) => void; analytics: CabinetAnalytics; companyName: string; refetchAnalytics: () => void; me: CabinetMe; setMe: React.Dispatch<React.SetStateAction<CabinetMe>>; activeBotId: string | null; period: AnalyticsPeriod; changePeriod: (p: AnalyticsPeriod) => void; customFrom: string | null; customTo: string | null; changeCustomRange: (from: string, to: string) => void; crmDealToOpen: string | null; setCrmDealToOpen: (id: string | null) => void; readiness: ReadinessData | null; activity: ActivityData | null }) {
   const pages: Record<View, React.ReactNode> = useMemo(() => ({
-    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} customFrom={customFrom} customTo={customTo} onCustomRange={changeCustomRange} readiness={readiness} />, readiness: <Readiness setView={setView} readiness={readiness} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests setView={setView} activeBotId={activeBotId} />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} setMe={setMe} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />, scenario: <Scenario activeBotId={activeBotId} />,
-  }), [setView, onAction, analytics, refetchAnalytics, me, setMe, activeBotId, period, changePeriod, customFrom, customTo, changeCustomRange, crmDealToOpen, setCrmDealToOpen, readiness]);
+    dashboard: <Dashboard setView={setView} onAction={onAction} analytics={analytics} period={period} onPeriodChange={changePeriod} customFrom={customFrom} customTo={customTo} onCustomRange={changeCustomRange} readiness={readiness} activity={activity} />, readiness: <Readiness setView={setView} readiness={readiness} />, attention: <Attention analytics={analytics} onProcessed={refetchAnalytics} />, dialogs: <Dialogs setView={setView} onOpenDeal={setCrmDealToOpen} activeBotId={activeBotId} />, training: <Training me={me} activeBotId={activeBotId} />, tests: <AutoTests setView={setView} activeBotId={activeBotId} />, knowledge: <Knowledge activeBotId={activeBotId} />, widget: <WidgetSettings me={me} setMe={setMe} activeBotId={activeBotId} analytics={analytics} refetchAnalytics={refetchAnalytics} />, install: <Installation />, integrations: <Integrations />, crm: <CRM me={me} dealToOpen={crmDealToOpen} onDealOpened={() => setCrmDealToOpen(null)} />, billing: <Billing/>, team: <Team />, support: <Support />, scenario: <Scenario activeBotId={activeBotId} />,
+  }), [setView, onAction, analytics, refetchAnalytics, me, setMe, activeBotId, period, changePeriod, customFrom, customTo, changeCustomRange, crmDealToOpen, setCrmDealToOpen, readiness, activity]);
   return <><PageHeader view={view} onPrimary={onAction} companyName={companyName}/>{pages[view]}</>;
 }
 
@@ -3373,6 +3392,21 @@ export default function Home() {
       if (data) setReadiness(data);
     });
   }, [activeBot?.id]);
+  // Обзор's "История изменений" was 3 hardcoded rows, the same for every
+  // account — same fetch-once-in-Home()/requestId-guard pattern as readiness
+  // right above, backed by CabinetService.getActivity (derived from real
+  // knowledge-entry/test-run/escalation timestamps, no new table).
+  const [activity, setActivity] = useState<ActivityData | null>(null);
+  const activityRequestId = useRef(0);
+  useEffect(() => {
+    const requestId = ++activityRequestId.current;
+    setActivity(null);
+    if (!activeBot?.id) return;
+    fetchJsonWithRetry<ActivityData>(`/api/cabinet/activity?botId=${activeBot.id}`).then((data) => {
+      if (requestId !== activityRequestId.current) return;
+      if (data) setActivity(data);
+    });
+  }, [activeBot?.id]);
   if (signedOut) {
     return <div className="dialogs-empty-conv" style={{ padding: 40 }}>Сессия не найдена, перенаправляю на вход…</div>;
   }
@@ -3402,7 +3436,7 @@ export default function Home() {
   // страница") — buttons that already navigate somewhere (sidebar items,
   // setView calls elsewhere in this file) keep working via their own
   // handlers; anything else just does nothing now instead of a fake dialog.
-  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{me?.companyLogoUrl ? <img src={me.companyLogoUrl} alt="" /> : initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{visibleNav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")} onOpenProfile={() => setProfileOpen(true)}/><TrialBar onBilling={() => setView("billing")} trialEndsAt={activeBot ? activeBot.trialEndsAt ?? null : undefined} subscriptionActive={activeBot?.subscriptionActive}/><ManagerLockBar locked={activeBot?.managerLocked}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} setMe={setMe} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} customFrom={customFrom} customTo={customTo} changeCustomRange={changeCustomRange} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness}/></main></SidebarInset></SidebarProvider></TooltipProvider>
+  return <div className="prototype-root"><TooltipProvider><SidebarProvider><Sidebar collapsible="icon" className="app-sidebar"><SidebarHeader><Brand /><button className="company-switch" data-live onClick={() => setBotSwitcherOpen(true)}><span>{me?.companyLogoUrl ? <img src={me.companyLogoUrl} alt="" /> : initials(companyName)}</span><div><b>{companyName}</b><small>{botDomain}</small></div><ChevronDown /></button></SidebarHeader><SidebarContent>{visibleNav.map(group => <SidebarGroup key={group.label}><SidebarGroupLabel>{group.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{group.items.map(item => <NavMenuItem key={item.id} item={item} view={view} setView={setView} badge={navBadge(item)} />)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarFooter><div className="sidebar-help"><Zap /><span><b>Внедрение идёт</b><small>Готово {readinessPercent ?? 0}%</small></span></div><div className="sidebar-help-collapsed" title={`Внедрение готово на ${readinessPercent ?? 0}%`}><ReadinessRing percent={readinessPercent ?? 0} /></div></SidebarFooter><SidebarRail /></Sidebar><SidebarInset className="app-inset"><Topbar onBotSwitch={() => setBotSwitcherOpen(true)} botLabel={botLabel} userName={userName} userInitial={initials(userName)} roleLabel={roleLabel} analytics={analytics} onOpenAttention={() => setView("attention")} onOpenProfile={() => setProfileOpen(true)}/><TrialBar onBilling={() => setView("billing")} trialEndsAt={activeBot ? activeBot.trialEndsAt ?? null : undefined} subscriptionActive={activeBot?.subscriptionActive}/><ManagerLockBar locked={activeBot?.managerLocked}/><main className="workspace"><AppContent view={view} setView={setView} onAction={setAction} analytics={analytics} companyName={companyName} refetchAnalytics={refetchAnalytics} me={me} setMe={setMe} activeBotId={activeBot?.id ?? null} period={period} changePeriod={changePeriod} customFrom={customFrom} customTo={customTo} changeCustomRange={changeCustomRange} crmDealToOpen={crmDealToOpen} setCrmDealToOpen={setCrmDealToOpen} readiness={readiness} activity={activity}/></main></SidebarInset></SidebarProvider></TooltipProvider>
     <BotSwitcherDialog open={botSwitcherOpen} onClose={() => setBotSwitcherOpen(false)} bots={me?.bots ?? []} activeBotId={activeBot?.id ?? null} onSelect={(id) => { setActiveBotId(id); setBotSwitcherOpen(false); }} onCreated={(bot) => { refetchMe(); setActiveBotId(bot.id); setBotSwitcherOpen(false); }} />
     <ProfileSheet open={profileOpen} onOpenChange={setProfileOpen} rawUserName={me?.userName ?? null} userEmail={me?.userEmail ?? null} roleLabel={roleLabel} companyName={companyName} impersonating={me?.impersonating} onNameSaved={(name) => setMe((prev) => (prev ? { ...prev, userName: name } : prev))} />
     <AckManagerLockDialog open={Boolean(activeBot?.managerLockAckNeeded)} botId={activeBot?.id ?? null} onAcknowledge={() => setMe((prev) => (prev && activeBot ? { ...prev, bots: prev.bots.map((b) => (b.id === activeBot.id ? { ...b, managerLockAckNeeded: false } : b)) } : prev))} />

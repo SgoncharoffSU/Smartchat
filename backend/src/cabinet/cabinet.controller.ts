@@ -179,6 +179,12 @@ export class CabinetController {
     return this.cabinet.getEmbedSnippet(req.companyId, botId);
   }
 
+  @Get('activity')
+  @UseGuards(AuthGuard)
+  getActivity(@Req() req: AuthedRequest, @Query('botId') botId?: string) {
+    return this.cabinet.getActivity(req.companyId, botId);
+  }
+
   @Get('analytics')
   @UseGuards(AuthGuard)
   getAnalytics(
